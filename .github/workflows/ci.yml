@@ -63,7 +63,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           script: |
-            cd /opt/ticketing-support
+            cd /home/${{ secrets.SERVER_USER }}/ticketing-support
             git pull https://github.com/IntermedicHCIS/ticketing-support.git main
             docker compose -f docker-compose.prod.yml build --no-cache web
             docker compose -f docker-compose.prod.yml up -d --no-deps web
