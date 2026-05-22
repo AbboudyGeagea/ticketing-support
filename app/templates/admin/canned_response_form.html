@@ -1,0 +1,35 @@
+{% extends 'base_agent.html' %}
+{% block title %}{% if item %}Edit Canned Response{% else %}New Canned Response{% endif %}{% endblock %}
+{% block page_title %}{% if item %}Edit Canned Response{% else %}New Canned Response{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.canned_responses') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <form method="POST" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Title *</label>
+        {{ form.title(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        {% if form.title.errors %}<p class="text-red-500 text-xs mt-1">{{ form.title.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Response Body *</label>
+        {{ form.body(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", rows=8) }}
+        {% if form.body.errors %}<p class="text-red-500 text-xs mt-1">{{ form.body.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-6 flex items-center gap-2">
+        {{ form.is_shared(class="rounded border-slate-300 text-primary") }}
+        <label class="text-sm text-slate-700">{{ form.is_shared.label.text }}</label>
+      </div>
+      <div class="flex gap-3">
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">Save</button>
+        <a href="{{ url_for('admin.canned_responses') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

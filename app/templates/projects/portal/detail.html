@@ -1,0 +1,152 @@
+{% extends "base_portal.html" %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<!-- Back link -->
+<div class="mb-4">
+  <a href="{{ url_for('projects.portal_list') }}" class="text-sm text-primary hover:underline flex items-center gap-1">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+    </svg>
+    All Projects
+  </a>
+</div>
+
+<!-- Project header -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 mb-6">
+  <div class="flex items-start justify-between gap-3 mb-3">
+    <h1 class="text-xl font-semibold text-slate-800">{{ project.name }}</h1>
+    <span class="flex-shrink-0 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
+      {% if project.status == 'planning' %}bg-slate-100 text-slate-600
+      {% elif project.status == 'active' %}bg-green-100 text-green-800
+      {% elif project.status == 'on_hold' %}bg-yellow-100 text-yellow-800
+      {% else %}bg-blue-100 text-blue-800{% endif %}">
+      {{ project.status_label }}
+    </span>
+  </div>
+  {% if project.description %}
+    <p class="text-sm text-slate-600 leading-relaxed mb-4">{{ project.description }}</p>
+  {% endif %}
+  <div class="flex flex-wrap gap-4 text-sm text-slate-500">
+    {% if project.start_date %}
+      <span>Start: <strong class="text-slate-700">{{ project.start_date.strftime('%b %d, %Y') }}</strong></span>
+    {% endif %}
+    {% if project.end_date %}
+      <span>End: <strong class="text-slate-700">{{ project.end_date.strftime('%b %d, %Y') }}</strong></span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Milestones -->
+{% if milestones %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Milestones</h2>
+  </div>
+  <ul class="divide-y divide-slate-100">
+    {% for ms in milestones %}
+    <li class="px-5 py-3 flex items-center gap-3">
+      <span class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center
+                   {{ 'border-secondary bg-secondary text-white' if ms.status == 'completed' else 'border-slate-300' }}">
+        {% if ms.status == 'completed' %}
+        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+        </svg>
+        {% endif %}
+      </span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-slate-800 {{ 'line-through text-slate-400' if ms.status == 'completed' else '' }}">
+          {{ ms.name }}
+        </p>
+        {% if ms.description %}
+          <p class="text-xs text-slate-400 truncate">{{ ms.description }}</p>
+        {% endif %}
+      </div>
+      {% if ms.due_date %}
+        <span class="text-xs text-slate-400 flex-shrink-0">{{ ms.due_date.strftime('%b %d, %Y') }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Tasks -->
+{% if tasks %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Tasks</h2>
+  </div>
+  <ul class="divide-y divide-slate-100">
+    {% for task in tasks %}
+    <li class="px-5 py-3 flex items-center gap-3">
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
+        {% if task.status == 'done' %}bg-green-100 text-green-800
+        {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-800
+        {% else %}bg-slate-100 text-slate-600{% endif %}">
+        {% if task.status == 'todo' %}To Do
+        {% elif task.status == 'in_progress' %}In Progress
+        {% else %}Done{% endif %}
+      </span>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm text-slate-800 {{ 'line-through text-slate-400' if task.status == 'done' else '' }}">
+          {{ task.title }}
+        </p>
+        {% if task.assignee %}
+          <p class="text-xs text-slate-400">{{ task.assignee.name }}</p>
+        {% endif %}
+      </div>
+      {% if task.due_date %}
+        <span class="text-xs text-slate-400 flex-shrink-0">{{ task.due_date.strftime('%b %d') }}</span>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<!-- Comments -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Comments</h2>
+  </div>
+
+  {% if comments %}
+  <ul class="divide-y divide-slate-100">
+    {% for c in comments %}
+    <li class="px-5 py-4">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          {{ c.author.name[:1].upper() }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm font-medium text-slate-800">{{ c.author.name }}</span>
+            <span class="text-xs text-slate-400">{{ c.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+          </div>
+          <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ c.body }}</p>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="px-5 py-4 text-sm text-slate-400">No comments yet. Be the first to comment.</p>
+  {% endif %}
+
+  <!-- Comment form -->
+  <div class="px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+    <form method="post" action="{{ url_for('projects.portal_comment', project_id=project.id) }}" novalidate>
+      {{ comment_form.hidden_tag() }}
+      <div class="mb-3">
+        {{ comment_form.body(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary h-20 resize-y", placeholder="Write a comment…") }}
+        {% for e in comment_form.body.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ e }}</p>
+        {% endfor %}
+      </div>
+      {{ comment_form.submit(class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors") }}
+    </form>
+  </div>
+</div>
+{% endblock %}

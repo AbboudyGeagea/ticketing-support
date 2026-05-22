@@ -1,0 +1,148 @@
+{% extends "base_agent.html" %}
+
+{% block title %}Projects{% endblock %}
+{% block page_title %}Projects{% endblock %}
+
+{% block header_actions %}
+  <a href="{{ url_for('projects.new_project') }}"
+     class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors">
+    + New Project
+  </a>
+{% endblock %}
+
+{% block content %}
+<style>
+  .badge-planning   { background-color: #f1f5f9; color: #475569; }
+  .badge-active     { background-color: #dcfce7; color: #166534; }
+  .badge-on_hold    { background-color: #fef9c3; color: #854d0e; }
+  .badge-completed  { background-color: #dbeafe; color: #1e40af; }
+</style>
+
+<!-- Filter bar -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-5 flex flex-wrap gap-3 items-center">
+  <form method="get" class="flex flex-wrap gap-3 items-center w-full">
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-slate-600 font-medium">Status:</label>
+      <select name="status" onchange="this.form.submit()"
+              class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="" {% if not status_filter %}selected{% endif %}>All</option>
+        <option value="planning"  {% if status_filter == 'planning'  %}selected{% endif %}>Planning</option>
+        <option value="active"    {% if status_filter == 'active'    %}selected{% endif %}>Active</option>
+        <option value="on_hold"   {% if status_filter == 'on_hold'   %}selected{% endif %}>On Hold</option>
+        <option value="completed" {% if status_filter == 'completed' %}selected{% endif %}>Completed</option>
+      </select>
+    </div>
+
+    {% if current_user.is_admin %}
+    <div class="flex items-center gap-2">
+      <label class="text-sm text-slate-600 font-medium">Hospital:</label>
+      <select name="hospital_id" onchange="this.form.submit()"
+              class="text-sm border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All Hospitals</option>
+        {% for h in hospitals %}
+          <option value="{{ h.id }}" {% if hospital_filter == h.id %}selected{% endif %}>{{ h.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    {% if status_filter or hospital_filter %}
+      <a href="{{ url_for('projects.list_projects') }}"
+         class="text-sm text-slate-500 hover:text-slate-700 underline">Clear filters</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Projects table -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+  {% if projects %}
+  <table class="min-w-full divide-y divide-slate-200">
+    <thead class="bg-slate-50">
+      <tr>
+        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
+        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tasks</th>
+        <th class="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Due Date</th>
+        <th class="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Visible</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for project in projects %}
+      {% set total_tasks = project.tasks.count() %}
+      {% set done_tasks  = project.tasks.filter_by(status='done').count() %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-5 py-3">
+          <a href="{{ url_for('projects.project_detail', project_id=project.id) }}"
+             class="font-medium text-primary hover:underline">{{ project.name }}</a>
+          {% if project.description %}
+            <p class="text-xs text-slate-400 truncate max-w-xs mt-0.5">{{ project.description[:80] }}{% if project.description|length > 80 %}…{% endif %}</p>
+          {% endif %}
+        </td>
+        <td class="px-5 py-3 text-sm text-slate-600">{{ project.hospital.name }}</td>
+        <td class="px-5 py-3">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold badge-{{ project.status }}">
+            {{ project.status_label }}
+          </span>
+        </td>
+        <td class="px-5 py-3 text-sm text-slate-600">
+          {% if total_tasks > 0 %}
+            <div class="flex items-center gap-2">
+              <span>{{ done_tasks }}/{{ total_tasks }}</span>
+              <div class="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                <div class="h-full bg-secondary rounded-full" style="width: {{ (done_tasks / total_tasks * 100)|int }}%"></div>
+              </div>
+            </div>
+          {% else %}
+            <span class="text-slate-400">—</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-3 text-sm text-slate-600">
+          {% if project.end_date %}
+            {{ project.end_date.strftime('%b %d, %Y') }}
+          {% else %}
+            <span class="text-slate-400">—</span>
+          {% endif %}
+        </td>
+        <td class="px-5 py-3 text-center">
+          {% if project.is_customer_visible %}
+            <span title="Visible to customers" class="inline-block w-2.5 h-2.5 rounded-full bg-secondary"></span>
+          {% else %}
+            <span title="Hidden from customers" class="inline-block w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Pagination -->
+  {% if pagination.pages > 1 %}
+  <div class="border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+    <span class="text-sm text-slate-500">
+      Showing {{ ((pagination.page - 1) * pagination.per_page) + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total]|min }} of {{ pagination.total }}
+    </span>
+    <div class="flex gap-1">
+      {% if pagination.has_prev %}
+        <a href="{{ url_for('projects.list_projects', page=pagination.prev_num, status=status_filter, hospital_id=hospital_filter or '') }}"
+           class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50">Prev</a>
+      {% endif %}
+      {% if pagination.has_next %}
+        <a href="{{ url_for('projects.list_projects', page=pagination.next_num, status=status_filter, hospital_id=hospital_filter or '') }}"
+           class="px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="py-16 text-center text-slate-400">
+    <svg class="w-12 h-12 mx-auto mb-3 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+    </svg>
+    <p class="font-medium">No projects yet.</p>
+    <a href="{{ url_for('projects.new_project') }}" class="text-primary hover:underline text-sm mt-1 inline-block">Create your first project</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

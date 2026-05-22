@@ -1,0 +1,116 @@
+{% extends 'base_agent.html' %}
+{% block title %}Tasks{% endblock %}
+{% block page_title %}Tasks{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.task_new') }}"
+   class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+  </svg>
+  New Task
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Filters -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+  <form method="GET" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+      <select name="status" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All</option>
+        <option value="todo" {% if filters.status == 'todo' %}selected{% endif %}>To Do</option>
+        <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+        <option value="done" {% if filters.status == 'done' %}selected{% endif %}>Done</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Queue</label>
+      <select name="assigned" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="me" {% if filters.assigned == 'me' %}selected{% endif %}>Mine</option>
+        <option value="" {% if filters.assigned == '' %}selected{% endif %}>All agents</option>
+      </select>
+    </div>
+    <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Filter</button>
+    <a href="{{ url_for('agent.tasks') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
+  </form>
+</div>
+
+<!-- Table -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 border-b border-slate-200">
+      <tr>
+        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ticket</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned To</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Deadline</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for task in tasks.items %}
+      <tr class="hover:bg-slate-50 cursor-pointer transition-colors"
+          onclick="window.location='{{ url_for('agent.task_detail', task_id=task.id) }}'">
+        <td class="px-5 py-3.5">
+          <p class="font-medium text-slate-800 truncate max-w-xs
+            {% if task.status == 'done' %}line-through text-slate-400{% endif %}">
+            {{ task.title }}
+          </p>
+        </td>
+        <td class="px-4 py-3.5 text-xs font-mono text-slate-500">
+          {% if task.ticket %}
+          <a href="{{ url_for('agent.ticket_detail', ref=task.ticket.ref) }}" onclick="event.stopPropagation()"
+             class="text-primary hover:underline">{{ task.ticket.ref }}</a>
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3.5 text-slate-600">{{ task.assignee.name }}</td>
+        <td class="px-4 py-3.5">
+          <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full badge-{{ task.priority }}">
+            {{ task.priority.title() }}
+          </span>
+        </td>
+        <td class="px-4 py-3.5">
+          <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full
+            {% if task.status == 'done' %}bg-green-100 text-green-700
+            {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ task.status_label }}
+          </span>
+        </td>
+        <td class="px-4 py-3.5 text-xs
+          {% if task.is_overdue %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}">
+          {% if task.deadline %}
+            {% if task.is_overdue %}Overdue · {% endif %}
+            {{ task.deadline.strftime('%b %d, %Y') }}
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">No tasks found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if tasks.pages > 1 %}
+  <div class="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
+    <p class="text-xs text-slate-500">{{ tasks.total }} tasks total</p>
+    <div class="flex gap-1">
+      {% if tasks.has_prev %}
+      <a href="{{ url_for('agent.tasks', page=tasks.prev_num, **filters) }}"
+         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Prev</a>
+      {% endif %}
+      {% if tasks.has_next %}
+      <a href="{{ url_for('agent.tasks', page=tasks.next_num, **filters) }}"
+         class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

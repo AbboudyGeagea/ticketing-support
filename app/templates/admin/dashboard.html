@@ -1,0 +1,51 @@
+{% extends 'base_agent.html' %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block page_title %}Administration{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+  {% set cards = [
+    ('Hospitals', stats.hospitals, 'text-blue-600', 'bg-blue-50', 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4', 'admin.hospitals'),
+    ('Agents', stats.agents, 'text-violet-600', 'bg-violet-50', 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z', 'admin.agents'),
+    ('Customers', stats.customers, 'text-teal-600', 'bg-teal-50', 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z', 'admin.hospitals'),
+    ('Open Tickets', stats.open_tickets, 'text-orange-600', 'bg-orange-50', 'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z', 'agent.tickets'),
+  ] %}
+  {% for label, value, text_cls, bg_cls, icon_path, link in cards %}
+  <a href="{{ url_for(link) }}" class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:border-slate-300 transition-colors">
+    <div class="w-10 h-10 rounded-lg {{ bg_cls }} flex items-center justify-center flex-shrink-0">
+      <svg class="w-5 h-5 {{ text_cls }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-bold text-slate-800">{{ value }}</p>
+      <p class="text-xs text-slate-500 mt-0.5">{{ label }}</p>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+
+<div class="grid grid-cols-2 gap-4">
+  <a href="{{ url_for('admin.hospitals') }}"
+     class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:border-primary transition-colors group">
+    <div class="flex items-center gap-3 mb-2">
+      <svg class="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+      </svg>
+      <h3 class="font-semibold text-slate-800">Manage Hospitals</h3>
+    </div>
+    <p class="text-sm text-slate-500">Add hospitals, manage products, and assign customer users.</p>
+  </a>
+
+  <a href="{{ url_for('admin.agents') }}"
+     class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:border-primary transition-colors group">
+    <div class="flex items-center gap-3 mb-2">
+      <svg class="w-5 h-5 text-slate-400 group-hover:text-primary transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/>
+      </svg>
+      <h3 class="font-semibold text-slate-800">Manage Agents</h3>
+    </div>
+    <p class="text-sm text-slate-500">Create and manage support agent accounts and permissions.</p>
+  </a>
+</div>
+{% endblock %}

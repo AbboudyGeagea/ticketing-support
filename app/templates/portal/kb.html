@@ -1,0 +1,47 @@
+{% extends 'base_portal.html' %}
+{% block title %}Help Center{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold text-slate-800 mb-2">Help Center</h1>
+  <p class="text-slate-500 mb-6 text-sm">Find answers to common questions before submitting a ticket.</p>
+
+  <form method="GET" class="mb-6 flex gap-2">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search articles…"
+           class="flex-1 border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+    <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">Search</button>
+  </form>
+
+  {% if categories %}
+  <div class="flex flex-wrap gap-2 mb-6">
+    <a href="{{ url_for('portal.kb_list') }}"
+       class="text-xs px-3 py-1.5 rounded-full border {% if not category %}bg-primary text-white border-primary{% else %}border-slate-300 text-slate-600 hover:border-primary hover:text-primary{% endif %} transition-colors">All</a>
+    {% for c in categories %}
+    <a href="{{ url_for('portal.kb_list', category=c) }}"
+       class="text-xs px-3 py-1.5 rounded-full border {% if category == c %}bg-primary text-white border-primary{% else %}border-slate-300 text-slate-600 hover:border-primary hover:text-primary{% endif %} transition-colors">{{ c }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if articles %}
+  <div class="space-y-3">
+    {% for a in articles %}
+    <a href="{{ url_for('portal.kb_article', article_id=a.id) }}"
+       class="block bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 hover:border-primary transition-colors">
+      <p class="text-sm font-semibold text-slate-800">{{ a.title }}</p>
+      {% if a.category %}<p class="text-xs text-slate-400 mt-0.5">{{ a.category }}</p>{% endif %}
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="text-center py-12 text-slate-400 text-sm">
+    {% if q %}No articles found for "{{ q }}".{% else %}No articles published yet.{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="mt-8 text-center">
+    <p class="text-sm text-slate-500">Can't find what you need?</p>
+    <a href="{{ url_for('portal.ticket_new') }}" class="mt-2 inline-block bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2.5 rounded-lg text-sm transition-colors">Submit a Ticket</a>
+  </div>
+</div>
+{% endblock %}

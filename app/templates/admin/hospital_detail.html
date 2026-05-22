@@ -1,0 +1,238 @@
+{% extends 'base_agent.html' %}
+{% block title %}{{ hospital.name }}{% endblock %}
+{% block page_title %}{{ hospital.name }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.hospitals') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Hospitals</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Tab Bar -->
+<div class="flex gap-1 border-b border-slate-200 mb-5">
+  {% for tab_id, tab_label in [('users','Users'), ('products','Products'), ('info','Hospital Info')] %}
+  <button onclick="switchTab('{{ tab_id }}')"
+          id="tab-btn-{{ tab_id }}"
+          class="tab-btn px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
+                 {% if active_tab == tab_id %}bg-white border border-b-white border-slate-200 text-primary -mb-px{% else %}text-slate-500 hover:text-slate-800{% endif %}">
+    {{ tab_label }}
+    {% if tab_id == 'users' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ users | length }}</span>{% endif %}
+    {% if tab_id == 'products' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ subscribed_ids | length }}</span>{% endif %}
+  </button>
+  {% endfor %}
+</div>
+
+<!-- ── USERS TAB ─────────────────────────────────────────────────────────── -->
+<div id="tab-users" class="tab-panel {% if active_tab != 'users' %}hidden{% endif %}">
+
+  <!-- Add User Inline -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-4">
+    <button onclick="toggleAddUser()" id="add-user-toggle"
+            class="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-slate-50 transition-colors rounded-xl">
+      <span class="text-sm font-semibold text-slate-800">+ Add New User</span>
+      <svg id="add-user-chevron" class="w-4 h-4 text-slate-400 transition-transform {% if add_error %}rotate-180{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+      </svg>
+    </button>
+    <div id="add-user-form" class="{% if not add_error %}hidden{% endif %} border-t border-slate-100 px-5 pb-5 pt-4">
+      {% if add_error %}
+      <p class="text-red-500 text-sm mb-4 bg-red-50 border border-red-200 rounded-lg px-4 py-2">{{ add_error }}</p>
+      {% endif %}
+      <form method="POST" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="_action" value="add_user">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Full Name *</label>
+            <input type="text" name="name" value="{{ request.form.get('name','') }}" required
+                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Email *</label>
+            <input type="email" name="email" value="{{ request.form.get('email','') }}" required
+                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-500 mb-1">Password * (min 8 chars)</label>
+            <input type="password" name="password" required minlength="8"
+                   class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          </div>
+        </div>
+        {% if hospital_product_list %}
+        <div class="mb-4">
+          <label class="block text-xs font-medium text-slate-500 mb-2">Product Access</label>
+          <div class="flex flex-wrap gap-3">
+            {% for p in hospital_product_list %}
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" name="product_ids" value="{{ p.id }}"
+                     class="rounded border-slate-300 text-primary focus:ring-primary">
+              <span class="text-sm text-slate-700">{{ p.name }}</span>
+            </label>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        <button type="submit"
+                class="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+          Create User
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Users List -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product Access</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for u in users %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 py-3 font-medium text-slate-800">{{ u.name }}</td>
+          <td class="px-4 py-3 text-slate-500 text-xs">{{ u.email }}</td>
+          <td class="px-4 py-3">
+            {% if u.products %}
+            <div class="flex flex-wrap gap-1">
+              {% for p in u.products %}
+              <span class="inline-flex text-xs bg-blue-50 text-blue-700 px-2 py-0.5 rounded">{{ p.name }}</span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <span class="text-xs text-slate-400 italic">None</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3">
+            <span class="text-xs font-medium {% if u.active %}text-green-600{% else %}text-red-500{% endif %}">
+              {{ 'Active' if u.active else 'Inactive' }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex items-center justify-end gap-3">
+              <a href="{{ url_for('admin.user_edit', hospital_id=hospital.id, user_id=u.id) }}"
+                 class="text-primary hover:underline text-xs">Edit</a>
+              {% if u.active %}
+              <form method="POST" action="{{ url_for('admin.user_remove', hospital_id=hospital.id, user_id=u.id) }}"
+                    onsubmit="return confirm('Deactivate {{ u.name }}?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Deactivate</button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="5" class="px-5 py-8 text-center text-slate-400 text-sm">
+            No users yet — use the form above to add the first one.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── PRODUCTS TAB ──────────────────────────────────────────────────────── -->
+<div id="tab-products" class="tab-panel {% if active_tab != 'products' %}hidden{% endif %}">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden max-w-xl">
+
+    {% set unsubscribed = available_products | rejectattr('id', 'in', subscribed_ids) | list %}
+    {% if unsubscribed %}
+    <div class="px-5 py-4 border-b border-slate-100 bg-slate-50">
+      <form method="POST" action="{{ url_for('admin.hospital_product_add', hospital_id=hospital.id) }}" class="flex gap-2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <select name="product_id" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          <option value="">— Add a product —</option>
+          {% for p in unsubscribed %}
+          <option value="{{ p.id }}">{{ p.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Subscribe</button>
+      </form>
+    </div>
+    {% endif %}
+
+    <div class="divide-y divide-slate-100">
+      {% for p in available_products if p.id in subscribed_ids %}
+      <div class="flex items-center justify-between px-5 py-3.5">
+        <div>
+          <p class="text-sm font-medium text-slate-800">{{ p.name }}</p>
+          {% if p.description %}<p class="text-xs text-slate-400 mt-0.5">{{ p.description }}</p>{% endif %}
+        </div>
+        <form method="POST" action="{{ url_for('admin.hospital_product_remove', hospital_id=hospital.id, product_id=p.id) }}"
+              onsubmit="return confirm('Remove {{ p.name }}?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Remove</button>
+        </form>
+      </div>
+      {% else %}
+      <p class="px-5 py-8 text-center text-slate-400 text-sm">No products subscribed yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ── INFO TAB ──────────────────────────────────────────────────────────── -->
+<div id="tab-info" class="tab-panel {% if active_tab != 'info' %}hidden{% endif %}">
+  <div class="max-w-lg">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <dl class="space-y-3 text-sm">
+        {% for label, value in [
+          ('Name', hospital.name),
+          ('Email Domain', hospital.email_domain or '—'),
+          ('Phone', hospital.phone or '—'),
+          ('Address', hospital.address or '—'),
+        ] %}
+        <div class="flex gap-4">
+          <dt class="w-32 text-slate-400 flex-shrink-0">{{ label }}</dt>
+          <dd class="text-slate-800 font-medium">{{ value }}</dd>
+        </div>
+        {% endfor %}
+        <div class="flex gap-4">
+          <dt class="w-32 text-slate-400 flex-shrink-0">Status</dt>
+          <dd class="{% if hospital.active %}text-green-600{% else %}text-red-500{% endif %} font-medium">
+            {{ 'Active' if hospital.active else 'Inactive' }}
+          </dd>
+        </div>
+      </dl>
+      <div class="mt-5 pt-4 border-t border-slate-100">
+        <a href="{{ url_for('admin.hospital_edit', hospital_id=hospital.id) }}"
+           class="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors inline-block">
+          Edit Hospital
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('tab-' + id).classList.remove('hidden');
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    b.classList.remove('bg-white','border','border-b-white','border-slate-200','text-primary','-mb-px');
+    b.classList.add('text-slate-500');
+  });
+  const btn = document.getElementById('tab-btn-' + id);
+  btn.classList.add('bg-white','border','border-b-white','border-slate-200','text-primary','-mb-px');
+  btn.classList.remove('text-slate-500');
+}
+
+function toggleAddUser() {
+  const form = document.getElementById('add-user-form');
+  const chevron = document.getElementById('add-user-chevron');
+  form.classList.toggle('hidden');
+  chevron.classList.toggle('rotate-180');
+}
+</script>
+{% endblock %}

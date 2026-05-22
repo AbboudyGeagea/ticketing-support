@@ -1,0 +1,111 @@
+{% extends 'base_agent.html' %}
+{% block title %}Automation{% endblock %}
+{% block page_title %}Automation{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- SLA Policies -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">SLA Policies</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Response and resolution targets per priority. Checked every 15 min.</p>
+      </div>
+      <a href="{{ url_for('admin.sla_policy_new') }}"
+         class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">+ New</a>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for p in sla_policies %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+        <div class="flex items-center gap-3">
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full badge-{{ p.priority }}">{{ p.priority.title() }}</span>
+          <span class="text-sm text-slate-600">
+            Response {{ p.response_hours }}h · Resolve {{ p.resolve_hours }}h
+          </span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs {% if p.is_active %}text-green-600{% else %}text-slate-400{% endif %}">{{ 'Active' if p.is_active else 'Inactive' }}</span>
+          <a href="{{ url_for('admin.sla_policy_edit', policy_id=p.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.sla_policy_delete', policy_id=p.id) }}" class="inline"
+                onsubmit="return confirm('Delete this policy?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-6 text-sm text-slate-400 text-center">No SLA policies configured.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Auto-assign Rules -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">Auto-assign Rules</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Automatically assign tickets to agents based on hospital, product, or priority.</p>
+      </div>
+      <a href="{{ url_for('admin.assignment_rule_new') }}"
+         class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">+ New</a>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for r in rules %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+        <div class="text-sm text-slate-700">
+          {% if r.hospital %}{{ r.hospital.name }}{% else %}Any hospital{% endif %} ·
+          {% if r.product %}{{ r.product.name }}{% else %}Any product{% endif %} ·
+          {% if r.priority %}{{ r.priority.title() }}{% else %}Any priority{% endif %}
+          → <span class="font-medium">{{ r.agent.name }}</span>
+        </div>
+        <div class="flex items-center gap-3">
+          <span class="text-xs font-mono text-slate-400">#{{ r.rule_order }}</span>
+          <a href="{{ url_for('admin.assignment_rule_edit', rule_id=r.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.assignment_rule_delete', rule_id=r.id) }}" class="inline"
+                onsubmit="return confirm('Delete this rule?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-6 text-sm text-slate-400 text-center">No assignment rules yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Canned Responses -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">Canned Responses</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Reusable reply snippets agents can insert into ticket replies.</p>
+      </div>
+      <a href="{{ url_for('admin.canned_response_new') }}"
+         class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">+ New</a>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for c in canned %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+        <div>
+          <p class="text-sm font-medium text-slate-800">{{ c.title }}</p>
+          <p class="text-xs text-slate-400 mt-0.5 truncate max-w-md">{{ c.body[:100] }}{% if c.body|length > 100 %}…{% endif %}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="{{ url_for('admin.canned_response_edit', response_id=c.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.canned_response_delete', response_id=c.id) }}" class="inline"
+                onsubmit="return confirm('Delete this response?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-6 text-sm text-slate-400 text-center">No canned responses yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,67 @@
+{% extends 'base_agent.html' %}
+{% block title %}Shared Installations{% endblock %}
+{% block page_title %}Shared Installations{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.shared_installation_new') }}"
+   class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+  + New Shared Installation
+</a>
+{% endblock %}
+
+{% block content %}
+
+<div class="bg-blue-50 border border-blue-200 rounded-xl px-5 py-4 mb-5 text-sm text-blue-800">
+  <strong>What is a Shared Installation?</strong>
+  When two or more hospitals share the same physical server for a product (e.g. RH and SJH share one PACS server),
+  create a shared installation here. Portal users assigned to that product at any of those hospitals will see each other's tickets.
+  Hospitals with no shared installation are completely isolated — total privacy by default.
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 border-b border-slate-200">
+      <tr>
+        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospitals</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Created</th>
+        <th class="px-4 py-3"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for inst in installations %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-5 py-3.5 font-medium text-slate-800">{{ inst.name }}</td>
+        <td class="px-4 py-3.5">
+          <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+            {{ inst.product.name }}
+          </span>
+        </td>
+        <td class="px-4 py-3.5 text-slate-600">
+          {% for h in inst.hospitals %}
+          <span class="inline-flex text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded mr-1">{{ h.name }}</span>
+          {% endfor %}
+        </td>
+        <td class="px-4 py-3.5 text-slate-400 text-xs">{{ inst.created_at.strftime('%b %d, %Y') }}</td>
+        <td class="px-4 py-3.5 text-right">
+          <a href="{{ url_for('admin.shared_installation_edit', inst_id=inst.id) }}"
+             class="text-primary hover:underline text-xs mr-3">Edit</a>
+          <form method="POST" action="{{ url_for('admin.shared_installation_delete', inst_id=inst.id) }}"
+                class="inline" onsubmit="return confirm('Delete this shared installation?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-500 hover:text-red-700 text-xs">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-5 py-10 text-center text-slate-400 text-sm">
+          No shared installations configured. All hospitals are fully isolated.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

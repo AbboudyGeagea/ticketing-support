@@ -1,0 +1,22 @@
+{% extends 'base_agent.html' %}
+{% block title %}{{ article.title }}{% endblock %}
+{% block page_title %}{{ article.title }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.kb_article_edit', article_id=article.id) }}"
+   class="border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium px-4 py-2 rounded-lg transition-colors">Edit</a>
+<a href="{{ url_for('agent.kb_list') }}" class="text-slate-500 hover:text-slate-800 text-sm ml-2 transition-colors">← Back to KB</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
+    <div class="flex items-center gap-3 mb-4 text-xs text-slate-400">
+      {% if article.category %}<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">{{ article.category }}</span>{% endif %}
+      <span>Updated {{ article.updated_at.strftime('%b %d, %Y') }}</span>
+      <span>{{ article.views }} views</span>
+    </div>
+    <div class="prose prose-sm max-w-none text-slate-700 leading-relaxed whitespace-pre-wrap">{{ article.body }}</div>
+  </div>
+</div>
+{% endblock %}

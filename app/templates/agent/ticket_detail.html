@@ -1,0 +1,363 @@
+{% extends 'base_agent.html' %}
+{% block title %}{{ ticket.ref }}{% endblock %}
+{% block page_title %}
+  <span class="font-mono text-base text-slate-500 mr-2">{{ ticket.ref }}</span>
+  <span class="text-slate-800 font-semibold text-base truncate max-w-lg">{{ ticket.subject }}</span>
+{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.ticket_print', ref=ticket.ref) }}" target="_blank"
+   class="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1 transition-colors border border-slate-200 px-3 py-1.5 rounded-lg hover:bg-slate-50">
+  🖨 Print
+</a>
+<a href="{{ url_for('agent.tickets') }}"
+   class="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1 transition-colors">
+  ← Back to tickets
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-5">
+
+  <!-- Left: Conversation -->
+  <div class="xl:col-span-2 space-y-4">
+
+    <!-- Messages -->
+    {% for msg in messages %}
+    <div class="rounded-xl border shadow-sm
+      {% if msg.is_internal %}bg-amber-50 border-amber-200{% else %}bg-white border-slate-200{% endif %}">
+      <div class="flex items-center justify-between px-5 py-3 border-b
+        {% if msg.is_internal %}border-amber-200{% else %}border-slate-100{% endif %}">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
+            {{ (msg.sender_name or msg.sender_email or '?')[:1].upper() }}
+          </div>
+          <div>
+            <span class="text-sm font-medium text-slate-800">{{ msg.sender_name or msg.sender_email }}</span>
+            {% if msg.is_internal %}
+            <span class="ml-2 bg-amber-200 text-amber-800 text-xs px-1.5 py-0.5 rounded font-medium">Internal Note</span>
+            {% endif %}
+          </div>
+        </div>
+        <span class="text-xs text-slate-400">{{ msg.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+      </div>
+      <div class="px-5 py-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{{ msg.body }}</div>
+      {% set msg_atts = msg.attachments.all() %}
+      {% if msg_atts %}
+      <div class="px-5 pb-4 mt-2 flex flex-wrap gap-2">
+        {% for att in msg_atts %}
+        <a href="{{ url_for('agent.download_attachment', att_id=att.id) }}"
+           class="inline-flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded border border-slate-200 transition-colors">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+          </svg>
+          {{ att.original_name }}
+          <span class="text-slate-400">({{ (att.size / 1024)|round(1) }}KB)</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <!-- Reply Form -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-sm font-semibold text-slate-700 mb-3">Add Reply</h4>
+      <form method="POST" action="{{ url_for('agent.ticket_reply', ref=ticket.ref) }}" enctype="multipart/form-data" novalidate>
+        {{ reply_form.hidden_tag() }}
+        <div class="mb-2 flex items-center gap-2">
+          <select id="canned-select" class="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-600 focus:outline-none flex-1">
+            <option value="">Insert canned response…</option>
+          </select>
+          <button type="button" onclick="insertCanned()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-lg transition-colors">Insert</button>
+        </div>
+        {{ reply_form.body(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none", rows=5, placeholder="Type your reply…") }}
+        <div class="mt-3">
+          <label class="block text-xs font-medium text-slate-600 mb-1">Attach file (optional)</label>
+          <input type="file" name="attachment" class="block w-full text-sm text-slate-500 file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-medium file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200">
+          <p class="text-xs text-slate-400 mt-1">PDF, DOCX, XLSX, PNG, JPG, up to 10MB</p>
+        </div>
+        <div class="flex items-center justify-between mt-3">
+          <label class="flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
+            {{ reply_form.is_internal(class="rounded border-slate-300 text-amber-500") }}
+            <span>Internal note (not visible to customer)</span>
+          </label>
+          <button type="submit"
+                  class="bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+            Send Reply
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- History -->
+    {% if history %}
+    <details class="bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
+      <summary class="px-5 py-3 text-sm font-medium text-slate-600 cursor-pointer select-none">
+        Ticket History ({{ history | length }})
+      </summary>
+      <div class="divide-y divide-slate-100">
+        {% for h in history %}
+        <div class="px-5 py-2.5 flex items-center justify-between text-xs text-slate-500">
+          <span>
+            <span class="font-medium">{{ h.agent.name if h.agent else 'System' }}</span>
+            — {{ h.action.replace('_', ' ').title() }}
+            {% if h.old_value %}<span class="line-through text-slate-400">{{ h.old_value }}</span>{% endif %}
+            {% if h.new_value %}→ <span class="text-slate-700 font-medium">{{ h.new_value }}</span>{% endif %}
+          </span>
+          <span>{{ h.created_at.strftime('%b %d, %H:%M') }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+
+  <!-- Right: Actions + Info -->
+  <div class="space-y-4">
+
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</h4>
+
+      <!-- Pull / Assign to self -->
+      <form method="POST" action="{{ url_for('agent.ticket_pull', ref=ticket.ref) }}">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="w-full text-left text-sm font-medium text-primary hover:text-primary-dark flex items-center gap-2 py-1.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          Pull to my queue
+        </button>
+      </form>
+
+      <!-- Create Task (quick inline) -->
+      <details class="group">
+        <summary class="w-full text-left text-sm font-medium text-secondary hover:text-secondary-dark flex items-center gap-2 py-1.5 cursor-pointer transition-colors list-none">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+          </svg>
+          Create task from ticket
+        </summary>
+        <form method="POST" action="{{ url_for('agent.ticket_create_task', ref=ticket.ref) }}" class="mt-2 space-y-2">
+          {{ reply_form.hidden_tag() }}
+          <input type="text" name="title" value="{{ ticket.subject }}"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                 placeholder="Task title" required>
+          <select name="agent_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+            {% for a in agents %}
+            <option value="{{ a.id }}" {% if ticket.assigned_to == a.id %}selected{% endif %}>{{ a.name }}</option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="w-full bg-secondary hover:bg-secondary-dark text-white text-sm font-medium py-2 rounded-lg transition-colors">
+            Create &amp; Link Task
+          </button>
+        </form>
+      </details>
+
+      <!-- Reopen -->
+      {% if ticket.status == 'closed' %}
+      <form method="POST" action="{{ url_for('agent.ticket_reopen', ref=ticket.ref) }}">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="w-full text-left text-sm font-medium text-orange-600 hover:text-orange-800 flex items-center gap-2 py-1.5 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+          </svg>
+          Reopen ticket
+        </button>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- Status -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Status</h4>
+      <form method="POST" action="{{ url_for('agent.ticket_status', ref=ticket.ref) }}" class="flex gap-2">
+        {{ status_form.hidden_tag() }}
+        <select name="status" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          {% for s in ticket_status_map.values() | sort(attribute='order') %}
+          <option value="{{ s.slug }}" {% if ticket.status == s.slug %}selected{% endif %}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors">Set</button>
+      </form>
+    </div>
+
+    <!-- Priority -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Priority</h4>
+      <form method="POST" action="{{ url_for('agent.ticket_priority', ref=ticket.ref) }}" class="flex gap-2">
+        {{ priority_form.hidden_tag() }}
+        <select name="priority" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          {% for p in ['low','medium','high','urgent'] %}
+          <option value="{{ p }}" {% if ticket.priority == p %}selected{% endif %}>{{ p.title() }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors">Set</button>
+      </form>
+    </div>
+
+    <!-- Assign -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Assign To</h4>
+      <form method="POST" action="{{ url_for('agent.ticket_assign', ref=ticket.ref) }}" class="flex gap-2">
+        {{ assign_form.hidden_tag() }}
+        <select name="agent_id" class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          <option value="0">— Unassign —</option>
+          {% for a in agents %}
+          <option value="{{ a.id }}" {% if ticket.assigned_to == a.id %}selected{% endif %}>{{ a.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors">Assign</button>
+      </form>
+    </div>
+
+    <!-- Ticket Info -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Details</h4>
+      <dl class="space-y-2 text-sm">
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Hospital</dt>
+          <dd class="text-slate-800 font-medium">{{ ticket.hospital.name }}</dd>
+        </div>
+        {% if ticket.product %}
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Product</dt>
+          <dd class="text-slate-800 font-medium">{{ ticket.product.name }}</dd>
+        </div>
+        {% endif %}
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Source</dt>
+          <dd class="text-slate-800 font-medium uppercase text-xs">{{ ticket.source }}</dd>
+        </div>
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Created</dt>
+          <dd class="text-slate-800 text-xs">{{ ticket.created_at.strftime('%b %d, %Y %H:%M') }}</dd>
+        </div>
+        {% if ticket.closed_at %}
+        <div class="flex justify-between">
+          <dt class="text-slate-500">Closed</dt>
+          <dd class="text-slate-800 text-xs">{{ ticket.closed_at.strftime('%b %d, %Y %H:%M') }}</dd>
+        </div>
+        {% endif %}
+      </dl>
+    </div>
+
+    <!-- Linked Tasks -->
+    {% if tasks %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Linked Tasks</h4>
+      <div class="space-y-2">
+        {% for task in tasks %}
+        <a href="{{ url_for('agent.task_detail', task_id=task.id) }}"
+           class="flex items-center gap-2 text-sm text-slate-700 hover:text-primary transition-colors">
+          <span class="w-2 h-2 rounded-full flex-shrink-0
+            {% if task.status == 'done' %}bg-green-400
+            {% elif task.status == 'in_progress' %}bg-yellow-400
+            {% else %}bg-slate-300{% endif %}"></span>
+          <span class="truncate {% if task.status == 'done' %}line-through text-slate-400{% endif %}">{{ task.title }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- RustDesk Remote Support -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">RustDesk Remote Support</h4>
+      {% if ticket.hospital.rustdesk_server_url %}
+      <p class="text-xs text-slate-400 mb-2">Server: <span class="font-mono text-slate-600">{{ ticket.hospital.rustdesk_server_url }}</span></p>
+      {% endif %}
+      {% if ticket.rustdesk_peer_id %}
+      <a href="rustdesk://connect/{{ ticket.rustdesk_peer_id }}"
+         class="w-full mb-3 flex items-center justify-center gap-2 bg-secondary hover:bg-secondary-dark text-white font-semibold px-4 py-2.5 rounded-lg text-sm transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+        </svg>
+        Connect via RustDesk
+      </a>
+      <p class="text-xs text-slate-400 mb-3">Device ID: <span class="font-mono font-medium text-slate-700">{{ ticket.rustdesk_peer_id }}</span></p>
+      {% endif %}
+      <form method="POST" action="{{ url_for('agent.ticket_rustdesk', ref=ticket.ref) }}">
+        {{ reply_form.hidden_tag() }}
+        <input type="text" name="rustdesk_peer_id" value="{{ ticket.rustdesk_peer_id or '' }}"
+               placeholder="Device ID (e.g. 123456789)"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary mb-2">
+        <button type="submit" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-2 rounded-lg text-xs transition-colors">
+          {{ 'Update' if ticket.rustdesk_peer_id else 'Set' }} Device ID
+        </button>
+      </form>
+    </div>
+
+    <!-- Escalation -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Escalation</h4>
+      {% if ticket.escalation_url %}
+      <a href="{{ ticket.escalation_url }}" target="_blank" rel="noopener noreferrer"
+         class="text-xs text-primary hover:underline break-all block mb-2">{{ ticket.escalation_url }}</a>
+      {% endif %}
+      {% if ticket.escalation_number %}
+      <p class="text-xs text-slate-500 mb-3">Ticket #: <span class="font-mono font-medium text-slate-700">{{ ticket.escalation_number }}</span></p>
+      {% endif %}
+      <form method="POST" action="{{ url_for('agent.ticket_escalation', ref=ticket.ref) }}">
+        {{ reply_form.hidden_tag() }}
+        <input type="url" name="escalation_url" value="{{ ticket.escalation_url or '' }}"
+               placeholder="Ticket URL"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-2">
+        <input type="text" name="escalation_number" value="{{ ticket.escalation_number or '' }}"
+               placeholder="Ticket Number"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-2">
+        <button type="submit" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-2 rounded-lg text-xs transition-colors">
+          {{ 'Update' if ticket.escalation_url or ticket.escalation_number else 'Save' }} Escalation
+        </button>
+      </form>
+    </div>
+
+    <!-- Merge Ticket -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Merge Into Another Ticket</h4>
+      <form method="POST" action="{{ url_for('agent.ticket_merge', ref=ticket.ref) }}"
+            onsubmit="return confirm('Merge {{ ticket.ref }} into the target ticket? This cannot be undone.')">
+        {{ reply_form.hidden_tag() }}
+        <input type="text" name="merge_into_ref" placeholder="Target ref (e.g. TKT-202506-00001)"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary mb-2"
+               required>
+        <button type="submit" class="w-full bg-red-50 hover:bg-red-100 text-red-700 font-medium px-3 py-2 rounded-lg text-xs border border-red-200 transition-colors">
+          Merge &amp; Close This Ticket
+        </button>
+      </form>
+    </div>
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Load canned responses
+fetch('{{ url_for("agent.canned_responses_list") }}')
+  .then(r => r.json())
+  .then(data => {
+    const sel = document.getElementById('canned-select');
+    data.forEach(item => {
+      const opt = new Option(item.title, item.body);
+      sel.appendChild(opt);
+    });
+  })
+  .catch(() => {});
+
+function insertCanned() {
+  const sel = document.getElementById('canned-select');
+  const body = document.querySelector('textarea[name="body"]');
+  if (sel.value && body) {
+    const pos = body.selectionStart;
+    const text = body.value;
+    body.value = text.slice(0, pos) + (pos > 0 ? '\n\n' : '') + sel.value + text.slice(pos);
+    body.focus();
+    sel.selectedIndex = 0;
+  }
+}
+</script>
+{% endblock %}

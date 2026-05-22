@@ -1,0 +1,49 @@
+{% extends 'base_agent.html' %}
+{% block title %}{% if edit_agent %}Edit Agent{% else %}New Agent{% endif %}{% endblock %}
+{% block page_title %}{% if edit_agent %}Edit Agent{% else %}Add Agent{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.agents') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <form method="POST" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Full Name *</label>
+        {{ form.name(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors[0] }}</p>{% endif %}
+      </div>
+      {% if not edit_agent %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Email *</label>
+        {{ form.email(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        {% if form.email.errors %}<p class="text-red-500 text-xs mt-1">{{ form.email.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Password *</label>
+        {{ form.password(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="Minimum 8 characters") }}
+        {% if form.password.errors %}<p class="text-red-500 text-xs mt-1">{{ form.password.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Role *</label>
+        {{ form.role(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+      </div>
+      {% else %}
+      <div class="mb-5 flex items-center gap-2">
+        {{ form.active(class="rounded border-slate-300 text-primary") }}
+        <label class="text-sm text-slate-700">Active</label>
+      </div>
+      {% endif %}
+      <div class="flex gap-3">
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
+          {% if edit_agent %}Save Changes{% else %}Create Agent{% endif %}
+        </button>
+        <a href="{{ url_for('admin.agents') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

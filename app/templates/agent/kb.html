@@ -1,0 +1,65 @@
+{% extends 'base_agent.html' %}
+{% block title %}Knowledge Base{% endblock %}
+{% block page_title %}Knowledge Base{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.kb_article_new') }}" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">+ Write Article</a>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-5">
+
+  <!-- Sidebar: categories -->
+  {% if categories %}
+  <div class="w-44 flex-shrink-0">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Categories</p>
+      <a href="{{ url_for('agent.kb_list') }}"
+         class="block text-sm py-1 {% if not category %}text-primary font-medium{% else %}text-slate-600 hover:text-primary{% endif %}">
+        All articles
+      </a>
+      {% for c in categories %}
+      <a href="{{ url_for('agent.kb_list', category=c) }}"
+         class="block text-sm py-1 {% if category == c %}text-primary font-medium{% else %}text-slate-600 hover:text-primary{% endif %}">
+        {{ c }}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- Main content -->
+  <div class="flex-1 min-w-0">
+    <!-- Search bar -->
+    <form method="GET" class="mb-5 flex gap-2">
+      <input type="text" name="q" value="{{ q }}" placeholder="Search articles…"
+             class="flex-1 border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      {% if category %}<input type="hidden" name="category" value="{{ category }}">{% endif %}
+      <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2.5 rounded-lg transition-colors">Search</button>
+    </form>
+
+    {% if articles %}
+    <div class="space-y-3">
+      {% for a in articles %}
+      <a href="{{ url_for('agent.kb_article', article_id=a.id) }}"
+         class="block bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-4 hover:border-primary transition-colors">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-sm font-semibold text-slate-800">{{ a.title }}</p>
+            {% if a.category %}
+            <span class="text-xs text-slate-400">{{ a.category }}</span>
+            {% endif %}
+          </div>
+          <span class="text-xs text-slate-400 flex-shrink-0">{{ a.views }} views</span>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-5 py-10 text-center text-slate-400 text-sm">
+      {% if q %}No articles matching "{{ q }}".{% else %}No published articles yet.{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

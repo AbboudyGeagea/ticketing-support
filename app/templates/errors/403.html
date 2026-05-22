@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>403 Forbidden — Intermedic Ticketing</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: '#1B4F8A',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+    <div class="max-w-md w-full mx-auto px-6 py-12 text-center">
+        <div class="mb-8">
+            <div class="inline-flex items-center justify-center w-24 h-24 rounded-full bg-blue-50 border-2 border-blue-100 mb-6">
+                <svg class="w-12 h-12 text-brand" style="color:#1B4F8A" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-9a3 3 0 100-6 3 3 0 000 6zm0 0v3"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M9 12h6"/>
+                </svg>
+            </div>
+            <div class="text-7xl font-extrabold mb-2" style="color:#1B4F8A">403</div>
+            <h1 class="text-2xl font-bold text-gray-800 mb-3">Access Forbidden</h1>
+            <p class="text-gray-500 text-base leading-relaxed">
+                You don't have permission to access this page.
+                If you believe this is a mistake, please contact your administrator.
+            </p>
+        </div>
+        <div class="border-t border-gray-200 pt-6">
+            <a href="/"
+               class="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-white font-semibold text-sm transition-opacity hover:opacity-90"
+               style="background-color:#1B4F8A">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+                </svg>
+                Go to Dashboard
+            </a>
+        </div>
+        <p class="mt-8 text-xs text-gray-400">Intermedic Ticketing System</p>
+    </div>
+</body>
+</html>

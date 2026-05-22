@@ -1,0 +1,39 @@
+{% extends 'base_agent.html' %}
+{% block title %}{% if policy %}Edit SLA Policy{% else %}New SLA Policy{% endif %}{% endblock %}
+{% block page_title %}{% if policy %}Edit SLA Policy{% else %}New SLA Policy{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.sla_policies') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back to Policies</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-md">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <form method="POST" novalidate>
+      {{ form.hidden_tag() }}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Priority *</label>
+        {{ form.priority(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+      </div>
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">First Response (hours) *</label>
+        {{ form.response_hours(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. 1 or 0.5 for 30 min") }}
+        {% if form.response_hours.errors %}<p class="text-red-500 text-xs mt-1">{{ form.response_hours.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Resolution (hours) *</label>
+        {{ form.resolve_hours(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. 8 or 24") }}
+        {% if form.resolve_hours.errors %}<p class="text-red-500 text-xs mt-1">{{ form.resolve_hours.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-6 flex items-center gap-2">
+        {{ form.is_active(class="rounded border-slate-300 text-primary") }}
+        <label class="text-sm text-slate-700">Active</label>
+      </div>
+      <div class="flex gap-3">
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">Save Policy</button>
+        <a href="{{ url_for('admin.sla_policies') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

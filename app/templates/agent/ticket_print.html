@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ ticket.ref }} — Print</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111; margin: 0; padding: 24px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    .meta { color: #555; font-size: 12px; margin: 0 0 20px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+    .badge-status { background: #dbeafe; color: #1e40af; }
+    .badge-priority { background: #fee2e2; color: #991b1b; }
+    hr { border: none; border-top: 1px solid #ddd; margin: 16px 0; }
+    .msg { margin: 0 0 16px; padding: 12px; border: 1px solid #ddd; border-radius: 6px; }
+    .msg-header { font-size: 11px; color: #555; margin: 0 0 8px; }
+    .msg-internal { background: #fffbeb; border-color: #fde68a; }
+    .msg-body { white-space: pre-wrap; line-height: 1.5; }
+    @media print { .no-print { display: none; } }
+  </style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:16px;">
+  <button onclick="window.print()" style="background:#1B4F8A;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Print / Save PDF</button>
+  <button onclick="window.close()" style="margin-left:8px;background:#f1f5f9;border:1px solid #ddd;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+</div>
+
+<h1>{{ ticket.ref }} — {{ ticket.subject }}</h1>
+<div class="meta">
+  <span class="badge badge-status">{{ ticket.status_label }}</span>
+  <span class="badge badge-priority" style="margin-left:4px;">{{ ticket.priority_label }}</span>
+  &nbsp;·&nbsp; Hospital: {{ ticket.hospital.name }}
+  {% if ticket.product %}&nbsp;·&nbsp; Product: {{ ticket.product.name }}{% endif %}
+  &nbsp;·&nbsp; Source: {{ ticket.source.upper() }}
+  &nbsp;·&nbsp; Created: {{ ticket.created_at.strftime('%Y-%m-%d %H:%M') }}
+  {% if ticket.assignee %}&nbsp;·&nbsp; Assigned: {{ ticket.assignee.name }}{% endif %}
+</div>
+
+<hr>
+<h2 style="font-size:14px;margin:0 0 12px;">Conversation</h2>
+
+{% for msg in messages %}
+<div class="msg {% if msg.is_internal %}msg-internal{% endif %}">
+  <div class="msg-header">
+    <strong>{{ msg.sender_name or msg.sender_email or 'Unknown' }}</strong>
+    {% if msg.is_internal %}<em>(Internal Note)</em>{% endif %}
+    &nbsp;·&nbsp; {{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}
+  </div>
+  <div class="msg-body">{{ msg.body }}</div>
+</div>
+{% endfor %}
+
+<hr>
+<div class="meta" style="font-size:11px;">
+  Printed from Intermedic Support — {{ now.strftime('%Y-%m-%d %H:%M') }} UTC
+</div>
+</body>
+</html>

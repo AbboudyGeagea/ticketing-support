@@ -1,0 +1,78 @@
+{% extends 'base_agent.html' %}
+{% block title %}Templates{% endblock %}
+{% block page_title %}Templates{% endblock %}
+
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+  <!-- Ticket Templates -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">Ticket Templates</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Pre-fill ticket forms for common requests</p>
+      </div>
+      <a href="{{ url_for('admin.ticket_template_new') }}"
+         class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">+ New</a>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for t in ticket_templates %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+        <div>
+          <p class="text-sm font-medium text-slate-800">{{ t.name }}</p>
+          <p class="text-xs text-slate-400 mt-0.5">
+            {% if t.category %}<span class="mr-2">{{ t.category }}</span>{% endif %}
+            <span class="{% if t.is_active %}text-green-600{% else %}text-slate-400{% endif %}">
+              {{ 'Active' if t.is_active else 'Inactive' }}
+            </span>
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="{{ url_for('admin.ticket_template_edit', tmpl_id=t.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.ticket_template_delete', tmpl_id=t.id) }}" class="inline"
+                onsubmit="return confirm('Delete this template?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-6 text-sm text-slate-400 text-center">No ticket templates yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Project Templates -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <div>
+        <h3 class="text-sm font-semibold text-slate-800">Project Templates</h3>
+        <p class="text-xs text-slate-400 mt-0.5">Reusable project structures with tasks</p>
+      </div>
+      <a href="{{ url_for('admin.project_template_new') }}"
+         class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">+ New</a>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for t in project_templates %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50">
+        <div>
+          <p class="text-sm font-medium text-slate-800">{{ t.name }}</p>
+          <p class="text-xs text-slate-400 mt-0.5">{{ t.tasks | length }} task{{ 's' if t.tasks | length != 1 else '' }}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="{{ url_for('admin.project_template_edit', tmpl_id=t.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.project_template_delete', tmpl_id=t.id) }}" class="inline"
+                onsubmit="return confirm('Delete this template?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <p class="px-5 py-6 text-sm text-slate-400 text-center">No project templates yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

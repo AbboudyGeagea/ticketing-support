@@ -1,0 +1,13 @@
+{% macro status_badge(slug, status_map) %}
+{% set s = status_map.get(slug) %}
+{% if s %}
+<span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full"
+      style="background-color: {{ s.color }}22; color: {{ s.color }}; border: 1px solid {{ s.color }}44;">
+  {{ s.label }}
+</span>
+{% else %}
+<span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
+  {{ slug | replace('_', ' ') | title }}
+</span>
+{% endif %}
+{% endmacro %}

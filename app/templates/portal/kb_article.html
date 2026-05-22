@@ -1,0 +1,21 @@
+{% extends 'base_portal.html' %}
+{% block title %}{{ article.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8">
+  <a href="{{ url_for('portal.kb_list') }}" class="text-sm text-primary hover:underline">← Help Center</a>
+
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-8 mt-4">
+    <h1 class="text-xl font-bold text-slate-800 mb-2">{{ article.title }}</h1>
+    {% if article.category %}
+    <span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded mb-4">{{ article.category }}</span>
+    {% endif %}
+    <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">{{ article.body }}</div>
+  </div>
+
+  <div class="mt-6 text-center">
+    <p class="text-sm text-slate-500 mb-3">Did this answer your question?</p>
+    <a href="{{ url_for('portal.ticket_new') }}" class="text-sm text-primary hover:underline">No — submit a support ticket</a>
+  </div>
+</div>
+{% endblock %}

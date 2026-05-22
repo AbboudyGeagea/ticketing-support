@@ -1,0 +1,70 @@
+{% extends 'base_portal.html' %}
+{% from '_macros.html' import status_badge %}
+{% block title %}My Tickets{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h2 class="text-xl font-bold text-slate-800">My Tickets</h2>
+  <a href="{{ url_for('portal.ticket_new') }}"
+     class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+    + New Ticket
+  </a>
+</div>
+
+<!-- Status filter tabs -->
+<div class="flex gap-2 mb-5">
+  {% set tab_statuses = [('', 'All'), ('open', 'Open'), ('in_progress', 'In Progress'), ('pending', 'Pending'), ('resolved', 'Resolved'), ('closed', 'Closed')] %}
+  {% for val, label in tab_statuses %}
+  <a href="{{ url_for('portal.tickets', status=val) }}"
+     class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
+     {% if status_filter == val %}bg-primary text-white{% else %}bg-white text-slate-600 border border-slate-300 hover:bg-slate-50{% endif %}">
+    {{ label }}
+  </a>
+  {% endfor %}
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  {% if tickets.items %}
+  <div class="divide-y divide-slate-100">
+    {% for t in tickets.items %}
+    <a href="{{ url_for('portal.ticket_detail', ref=t.ref) }}"
+       class="flex items-center gap-4 px-5 py-4 hover:bg-slate-50 transition-colors">
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-slate-800 truncate">{{ t.subject }}</p>
+        <p class="text-xs text-slate-400 mt-0.5">
+          {{ t.ref }}
+          {% if t.product %} · {{ t.product.name }}{% endif %}
+          · {{ t.created_at.strftime('%b %d, %Y') }}
+        </p>
+      </div>
+      <div class="flex items-center gap-3 flex-shrink-0">
+        {{ status_badge(t.status, ticket_status_map) }}
+        <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if tickets.pages > 1 %}
+  <div class="flex justify-center gap-2 px-5 py-4 border-t border-slate-100">
+    {% if tickets.has_prev %}
+    <a href="{{ url_for('portal.tickets', page=tickets.prev_num, status=status_filter) }}"
+       class="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">Previous</a>
+    {% endif %}
+    {% if tickets.has_next %}
+    <a href="{{ url_for('portal.tickets', page=tickets.next_num, status=status_filter) }}"
+       class="px-4 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">Next</a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div class="px-5 py-12 text-center">
+    <p class="text-slate-400 text-sm">No tickets found.</p>
+    <a href="{{ url_for('portal.ticket_new') }}" class="text-primary hover:underline text-sm mt-2 inline-block">Open your first ticket →</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

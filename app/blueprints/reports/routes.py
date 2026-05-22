@@ -1,0 +1,174 @@
+from datetime import datetime, timedelta
+from flask import render_template, request, abort
+from flask_login import login_required, current_user
+from sqlalchemy import func
+from app.blueprints.reports import bp
+from app.models.ticket import Ticket, TicketMessage
+from app.models.user import User
+from app.models.hospital import Hospital
+from app.extensions import db
+from functools import wraps
+
+
+def agent_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_agent:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── KPI Reports Dashboard ─────────────────────────────────────────────────────
+
+@bp.route("/")
+@login_required
+@agent_required
+def dashboard():
+    days = request.args.get("days", 30, type=int)
+    if days not in (7, 30, 90):
+        days = 30
+    start_date = datetime.utcnow() - timedelta(days=days)
+
+    # Metric 1 — Ticket Volume trend (daily counts over period)
+    daily_counts = (
+        db.session.query(func.date(Ticket.created_at), func.count(Ticket.id))
+        .filter(Ticket.created_at >= start_date)
+        .group_by(func.date(Ticket.created_at))
+        .order_by(func.date(Ticket.created_at))
+        .all()
+    )
+    chart_dates = [str(r[0]) for r in daily_counts]
+    chart_values = [r[1] for r in daily_counts]
+
+    # Total tickets in period
+    total_tickets = sum(chart_values)
+
+    # Metric 2 — Average TAT (hours) for tickets closed in period
+    avg_tat_raw = (
+        db.session.query(
+            func.avg(func.extract("epoch", Ticket.closed_at - Ticket.created_at) / 3600)
+        )
+        .filter(Ticket.closed_at >= start_date, Ticket.closed_at.isnot(None))
+        .scalar()
+    )
+    avg_tat = round(avg_tat_raw, 1) if avg_tat_raw is not None else None
+
+    # Metric 3 — TAT trend by week (weekly avg TAT in hours)
+    weekly_tat = (
+        db.session.query(
+            func.date_trunc("week", Ticket.closed_at).label("week"),
+            func.avg(func.extract("epoch", Ticket.closed_at - Ticket.created_at) / 3600).label("avg_tat"),
+        )
+        .filter(Ticket.closed_at >= start_date, Ticket.closed_at.isnot(None))
+        .group_by(func.date_trunc("week", Ticket.closed_at))
+        .order_by(func.date_trunc("week", Ticket.closed_at))
+        .all()
+    )
+    tat_weeks = [str(r[0])[:10] for r in weekly_tat]
+    tat_values = [round(r[1], 1) if r[1] is not None else 0 for r in weekly_tat]
+
+    # Metric 4 — Agent Activity
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).order_by(User.name).all()
+
+    agent_activity = []
+    for agent in agents:
+        resolved = (
+            Ticket.query.filter(
+                Ticket.assigned_to == agent.id,
+                Ticket.status.in_(["resolved", "closed"]),
+                Ticket.updated_at >= start_date,
+            ).count()
+        )
+        replies = (
+            db.session.query(func.count(TicketMessage.id))
+            .filter(
+                TicketMessage.sender_id == agent.id,
+                TicketMessage.is_internal == False,
+                TicketMessage.created_at >= start_date,
+            )
+            .scalar()
+        ) or 0
+        agent_activity.append({
+            "name": agent.name,
+            "resolved": resolved,
+            "replies": replies,
+        })
+
+    # Metric 5 — By Status (current snapshot)
+    status_counts = (
+        db.session.query(Ticket.status, func.count(Ticket.id))
+        .group_by(Ticket.status)
+        .all()
+    )
+    status_data = [{"name": s, "value": c} for s, c in status_counts]
+
+    # Metric 6 — By Priority (current snapshot)
+    priority_counts = (
+        db.session.query(Ticket.priority, func.count(Ticket.id))
+        .group_by(Ticket.priority)
+        .all()
+    )
+    priority_data = [{"name": p, "value": c} for p, c in priority_counts]
+
+    # Metric 7 — SLA Breach rate
+    sla_breached = Ticket.query.filter(
+        Ticket.status.in_(["open", "in_progress"]),
+        Ticket.created_at < datetime.utcnow() - timedelta(hours=24),
+    ).count()
+    total_open = Ticket.query.filter(
+        Ticket.status.in_(["open", "in_progress"])
+    ).count()
+    breach_rate = round(sla_breached / total_open * 100, 1) if total_open > 0 else 0
+
+    # Metric 8 — Resolution rate (for tickets created in period)
+    resolved_count = Ticket.query.filter(
+        Ticket.created_at >= start_date,
+        Ticket.status.in_(["resolved", "closed"]),
+    ).count()
+    total_count = Ticket.query.filter(Ticket.created_at >= start_date).count()
+    resolution_rate = round(resolved_count / total_count * 100, 1) if total_count > 0 else 0
+
+    # Metric 9 — Tickets by hospital (top 8, in period)
+    hosp_counts = (
+        db.session.query(Hospital.name, func.count(Ticket.id))
+        .join(Ticket, Ticket.hospital_id == Hospital.id)
+        .filter(Ticket.created_at >= start_date)
+        .group_by(Hospital.name)
+        .order_by(func.count(Ticket.id).desc())
+        .limit(8)
+        .all()
+    )
+    hosp_names = [r[0] for r in hosp_counts]
+    hosp_values = [r[1] for r in hosp_counts]
+
+    # Metric 10 — Tickets by source (in period)
+    source_counts = (
+        db.session.query(Ticket.source, func.count(Ticket.id))
+        .filter(Ticket.created_at >= start_date)
+        .group_by(Ticket.source)
+        .all()
+    )
+    source_data = [{"name": s or "unknown", "value": c} for s, c in source_counts]
+
+    return render_template(
+        "agent/reports.html",
+        days=days,
+        total_tickets=total_tickets,
+        avg_tat=avg_tat,
+        breach_rate=breach_rate,
+        resolution_rate=resolution_rate,
+        chart_dates=chart_dates,
+        chart_values=chart_values,
+        tat_weeks=tat_weeks,
+        tat_values=tat_values,
+        agent_activity=agent_activity,
+        status_data=status_data,
+        priority_data=priority_data,
+        hosp_names=hosp_names,
+        hosp_values=hosp_values,
+        source_data=source_data,
+    )

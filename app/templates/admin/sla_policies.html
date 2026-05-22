@@ -1,0 +1,74 @@
+{% extends 'base_agent.html' %}
+{% block title %}SLA Policies{% endblock %}
+{% block page_title %}SLA Policies{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.sla_policy_new') }}"
+   class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+  + New Policy
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700">
+  SLA policies set response and resolution time targets per priority. The Celery worker checks for breaches every 15 minutes and notifies the assigned agent.
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-slate-50 border-b border-slate-200">
+      <tr>
+        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">First Response</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Resolution</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+        <th class="px-4 py-3 w-28"></th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-100">
+      {% for p in policies %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-5 py-3.5">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold
+            {% if p.priority == 'urgent' %}bg-red-100 text-red-700
+            {% elif p.priority == 'high' %}bg-orange-100 text-orange-700
+            {% elif p.priority == 'medium' %}bg-blue-100 text-blue-700
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ p.priority.title() }}
+          </span>
+        </td>
+        <td class="px-4 py-3.5 text-slate-700 font-medium">
+          {% if p.response_hours < 1 %}{{ (p.response_hours * 60)|int }} min{% else %}{{ p.response_hours }}h{% endif %}
+        </td>
+        <td class="px-4 py-3.5 text-slate-700 font-medium">
+          {% if p.resolve_hours < 1 %}{{ (p.resolve_hours * 60)|int }} min{% else %}{{ p.resolve_hours }}h{% endif %}
+        </td>
+        <td class="px-4 py-3.5">
+          {% if p.is_active %}
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
+          {% else %}
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Inactive</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3.5 text-right space-x-2">
+          <a href="{{ url_for('admin.sla_policy_edit', policy_id=p.id) }}"
+             class="text-primary hover:underline text-xs font-medium">Edit</a>
+          <form method="POST" action="{{ url_for('admin.sla_policy_delete', policy_id=p.id) }}"
+                class="inline" onsubmit="return confirm('Delete this SLA policy?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-red-500 hover:underline text-xs font-medium">Delete</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" class="px-5 py-10 text-center text-slate-400 text-sm">
+          No SLA policies yet.
+          <a href="{{ url_for('admin.sla_policy_new') }}" class="text-primary hover:underline ml-1">Add one →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

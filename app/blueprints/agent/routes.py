@@ -1,0 +1,886 @@
+import os
+import json
+from datetime import datetime, timedelta
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
+from flask_login import login_required, current_user
+from sqlalchemy import or_, func, nulls_last
+from app.blueprints.agent import bp
+from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm
+from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES
+from app.models.task import Task, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE
+from app.models.product import Product
+from app.models.user import User
+from app.models.hospital import Hospital
+from app.extensions import db
+from app.services.email_outbound import notify_customer_reply
+from functools import wraps
+
+
+def agent_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_agent:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+
+@bp.route("/")
+@login_required
+@agent_required
+def dashboard():
+    now = datetime.utcnow()
+    thirty_days_ago = now - timedelta(days=30)
+
+    # Stat cards
+    open_count = Ticket.query.filter(Ticket.status.notin_(["closed", "resolved"])).count()
+    my_count = Ticket.query.filter_by(assigned_to=current_user.id).filter(
+        Ticket.status.notin_(["closed"])
+    ).count()
+    overdue_tasks = Task.query.filter_by(assigned_to=current_user.id).filter(
+        Task.status != TASK_DONE,
+        Task.deadline < now,
+    ).count()
+    sla_at_risk = Ticket.query.filter(
+        Ticket.status.notin_(["closed", "resolved"]),
+        Ticket.sla_response_due.isnot(None),
+        Ticket.sla_response_due > now,
+        Ticket.sla_response_due <= now + timedelta(hours=1),
+        Ticket.first_response_at.is_(None),
+    ).count() + Ticket.query.filter(
+        Ticket.status.notin_(["closed", "resolved"]),
+        Ticket.sla_resolve_due.isnot(None),
+        Ticket.sla_resolve_due > now,
+        Ticket.sla_resolve_due <= now + timedelta(hours=1),
+    ).count()
+    resolved_today = Ticket.query.filter(
+        Ticket.status == "resolved",
+        Ticket.updated_at >= now.replace(hour=0, minute=0, second=0),
+    ).count()
+
+    # ECharts: ticket volume last 30 days
+    daily_counts = (
+        db.session.query(func.date(Ticket.created_at), func.count(Ticket.id))
+        .filter(Ticket.created_at >= thirty_days_ago)
+        .group_by(func.date(Ticket.created_at))
+        .order_by(func.date(Ticket.created_at))
+        .all()
+    )
+    chart_dates = [str(r[0]) for r in daily_counts]
+    chart_values = [r[1] for r in daily_counts]
+
+    # ECharts: by status
+    status_counts = (
+        db.session.query(Ticket.status, func.count(Ticket.id))
+        .group_by(Ticket.status)
+        .all()
+    )
+    status_data = [{"name": s, "value": c} for s, c in status_counts]
+
+    # ECharts: by hospital
+    hosp_counts = (
+        db.session.query(Hospital.name, func.count(Ticket.id))
+        .join(Ticket, Ticket.hospital_id == Hospital.id)
+        .filter(Ticket.status.notin_(["closed"]))
+        .group_by(Hospital.name)
+        .order_by(func.count(Ticket.id).desc())
+        .limit(8)
+        .all()
+    )
+    hosp_names = [r[0] for r in hosp_counts]
+    hosp_values = [r[1] for r in hosp_counts]
+
+    # Recent tickets
+    recent_tickets = (
+        Ticket.query.filter(Ticket.status.notin_(["closed"]))
+        .order_by(Ticket.updated_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    # My tasks
+    my_tasks = (
+        Task.query.filter_by(assigned_to=current_user.id)
+        .filter(Task.status != TASK_DONE)
+        .order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    return render_template(
+        "agent/dashboard.html",
+        open_count=open_count,
+        my_count=my_count,
+        overdue_tasks=overdue_tasks,
+        sla_at_risk=sla_at_risk,
+        resolved_today=resolved_today,
+        chart_dates=chart_dates,
+        chart_values=chart_values,
+        status_data=status_data,
+        hosp_names=hosp_names,
+        hosp_values=hosp_values,
+        recent_tickets=recent_tickets,
+        my_tasks=my_tasks,
+    )
+
+
+# ── Ticket List ───────────────────────────────────────────────────────────────
+
+@bp.route("/tickets")
+@login_required
+@agent_required
+def tickets():
+    page = request.args.get("page", 1, type=int)
+    status_filter = request.args.get("status", "")
+    priority_filter = request.args.get("priority", "")
+    hospital_filter = request.args.get("hospital_id", 0, type=int)
+    assigned_filter = request.args.get("assigned", "")
+    search = request.args.get("q", "").strip()
+
+    query = Ticket.query
+
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if priority_filter:
+        query = query.filter_by(priority=priority_filter)
+    if hospital_filter:
+        query = query.filter_by(hospital_id=hospital_filter)
+    if assigned_filter == "me":
+        query = query.filter_by(assigned_to=current_user.id)
+    elif assigned_filter == "unassigned":
+        query = query.filter(Ticket.assigned_to.is_(None))
+    if search:
+        query = query.filter(
+            or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
+        )
+
+    tickets_page = query.order_by(Ticket.updated_at.desc()).paginate(page=page, per_page=25)
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+
+    from app.models.saved_filter import SavedFilter
+    import json as _json
+    saved_filters = SavedFilter.query.filter_by(user_id=current_user.id).order_by(SavedFilter.name).all()
+    for sf in saved_filters:
+        sf.params = _json.loads(sf.filter_params)
+
+    return render_template(
+        "agent/tickets.html",
+        tickets=tickets_page,
+        hospitals=hospitals,
+        statuses=ALL_STATUSES,
+        priorities=ALL_PRIORITIES,
+        filters={
+            "status": status_filter,
+            "priority": priority_filter,
+            "hospital_id": hospital_filter,
+            "assigned": assigned_filter,
+            "q": search,
+        },
+        saved_filters=saved_filters,
+    )
+
+
+# ── Agent creates ticket ──────────────────────────────────────────────────────
+
+@bp.route("/tickets/new", methods=["GET", "POST"])
+@login_required
+@agent_required
+def ticket_new():
+    form = NewTicketForm()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    form.hospital_id.choices = [(h.id, h.name) for h in hospitals]
+
+    # Choices populated dynamically; set defaults for validation
+    form.customer_id.choices = [(0, "— No reporter —")]
+    form.product_id.choices = [(0, "— Select product —")]
+
+    if form.validate_on_submit():
+        hospital = Hospital.query.get_or_404(form.hospital_id.data)
+        # Re-validate dynamic choices
+        valid_customer_ids = {u.id for u in hospital.users.filter_by(role="customer").all()}
+        valid_product_ids = {p.id for p in hospital.products}
+
+        customer_id = form.customer_id.data if form.customer_id.data in valid_customer_ids else None
+        product_id = form.product_id.data if form.product_id.data in valid_product_ids else None
+
+        if product_id is None:
+            form.product_id.errors = ["Please select a product."]
+            return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
+
+        from app.models.ticket import Ticket, TicketMessage
+        ticket = Ticket(
+            hospital_id=hospital.id,
+            product_id=product_id,
+            created_by=customer_id,
+            assigned_to=current_user.id,
+            subject=form.subject.data,
+            priority=form.priority.data,
+            status="open",
+            source="agent",
+        )
+        db.session.add(ticket)
+        db.session.flush()
+        ticket.ref = f"TKT-{datetime.utcnow().year}{datetime.utcnow().month:02d}-{ticket.id:05d}"
+
+        msg = TicketMessage(
+            ticket_id=ticket.id,
+            sender_id=current_user.id,
+            sender_name=current_user.name,
+            sender_email=current_user.email,
+            body=form.body.data,
+            is_internal=False,
+        )
+        db.session.add(msg)
+
+        try:
+            from app.services.auto_assign import apply_auto_assignment
+            apply_auto_assignment(ticket)
+        except Exception:
+            pass
+
+        try:
+            from app.services.sla_service import apply_sla
+            apply_sla(ticket)
+        except Exception:
+            pass
+
+        db.session.commit()
+
+        try:
+            from app.services.email_outbound import notify_agents_new_ticket
+            notify_agents_new_ticket(ticket)
+        except Exception:
+            pass
+
+        flash(f"Ticket {ticket.ref} created.", "success")
+        return redirect(url_for("agent.ticket_detail", ref=ticket.ref))
+
+    return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
+
+
+@bp.route("/api/hospitals/<int:hospital_id>/customers")
+@login_required
+@agent_required
+def api_hospital_customers(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    customers = hospital.users.filter_by(role="customer", active=True).order_by(User.name).all()
+    return jsonify([{"id": u.id, "name": u.name, "email": u.email} for u in customers])
+
+
+@bp.route("/api/hospitals/<int:hospital_id>/products")
+@login_required
+@agent_required
+def api_hospital_products(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    products = [p for p in hospital.products if p.active]
+    products.sort(key=lambda p: p.name)
+    return jsonify([{"id": p.id, "name": p.name} for p in products])
+
+
+# ── Ticket Detail ─────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>")
+@login_required
+@agent_required
+def ticket_detail(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    messages = ticket.messages.all()
+    history = ticket.history.all()
+    tasks = ticket.tasks.order_by(Task.created_at.desc()).all()
+    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+
+    reply_form = ReplyForm()
+    status_form = StatusForm(status=ticket.status)
+    priority_form = PriorityForm(priority=ticket.priority)
+    assign_form = AssignForm()
+    assign_form.agent_id.choices = [(0, "— Unassign —")] + [(a.id, a.name) for a in agents]
+    assign_form.agent_id.data = ticket.assigned_to or 0
+
+    return render_template(
+        "agent/ticket_detail.html",
+        ticket=ticket,
+        messages=messages,
+        history=history,
+        tasks=tasks,
+        agents=agents,
+        reply_form=reply_form,
+        status_form=status_form,
+        priority_form=priority_form,
+        assign_form=assign_form,
+    )
+
+
+@bp.route("/tickets/<ref>/reply", methods=["POST"])
+@login_required
+@agent_required
+def ticket_reply(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    form = ReplyForm()
+    if form.validate_on_submit():
+        msg = TicketMessage(
+            ticket_id=ticket.id,
+            sender_id=current_user.id,
+            sender_name=current_user.name,
+            sender_email=current_user.email,
+            body=form.body.data,
+            is_internal=form.is_internal.data,
+        )
+        db.session.add(msg)
+        db.session.flush()  # get msg.id
+
+        file = request.files.get("attachment")
+        if file and file.filename:
+            from app.services.file_service import save_attachment
+            from app.models.attachment import TicketAttachment
+            try:
+                stored_name, original_name, mimetype, size = save_attachment(file, ticket.id)
+                att = TicketAttachment(
+                    ticket_id=ticket.id,
+                    message_id=msg.id,
+                    uploaded_by=current_user.id,
+                    filename=stored_name,
+                    original_name=original_name,
+                    mimetype=mimetype,
+                    size=size,
+                )
+                db.session.add(att)
+            except ValueError as e:
+                flash(str(e), "warning")
+
+        _log_history(ticket, current_user.id, "reply", None,
+                     "internal note" if form.is_internal.data else "public reply")
+
+        ticket.updated_at = datetime.utcnow()
+        if ticket.status == "resolved" and not form.is_internal.data:
+            ticket.status = "in_progress"
+
+        # Record first agent response for SLA tracking
+        if not form.is_internal.data and ticket.first_response_at is None:
+            ticket.first_response_at = datetime.utcnow()
+
+        db.session.commit()
+
+        if not form.is_internal.data:
+            try:
+                notify_customer_reply(ticket, msg)
+            except Exception:
+                pass
+
+        flash("Reply sent.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/status", methods=["POST"])
+@login_required
+@agent_required
+def ticket_status(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    new_status = request.form.get("status")
+    if new_status in ALL_STATUSES and new_status != ticket.status:
+        old = ticket.status
+        ticket.status = new_status
+        ticket.updated_at = datetime.utcnow()
+        if new_status == "closed":
+            ticket.closed_at = datetime.utcnow()
+        elif old == "closed":
+            ticket.closed_at = None
+        _log_history(ticket, current_user.id, "status_change", old, new_status)
+        db.session.commit()
+        # Notify customer of status change
+        if ticket.creator:
+            try:
+                from app.services.email_outbound import notify_customer_status_change, notify_customer_resolved_confirmation
+                notify_customer_status_change(ticket)
+                if new_status == "resolved":
+                    notify_customer_resolved_confirmation(ticket)
+            except Exception:
+                pass
+        flash(f"Status changed to {new_status}.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/priority", methods=["POST"])
+@login_required
+@agent_required
+def ticket_priority(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    new_priority = request.form.get("priority")
+    if new_priority in ALL_PRIORITIES and new_priority != ticket.priority:
+        old = ticket.priority
+        ticket.priority = new_priority
+        ticket.updated_at = datetime.utcnow()
+        _log_history(ticket, current_user.id, "priority_change", old, new_priority)
+        db.session.commit()
+        flash(f"Priority changed to {new_priority}.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/assign", methods=["POST"])
+@login_required
+@agent_required
+def ticket_assign(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    agent_id = request.form.get("agent_id", 0, type=int)
+    old_assignee = ticket.assigned_to
+    ticket.assigned_to = agent_id if agent_id else None
+    ticket.updated_at = datetime.utcnow()
+    _log_history(ticket, current_user.id, "assigned",
+                 str(old_assignee) if old_assignee else "none",
+                 str(agent_id) if agent_id else "none")
+    db.session.commit()
+    flash("Ticket assigned.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/pull", methods=["POST"])
+@login_required
+@agent_required
+def ticket_pull(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    old_assignee = ticket.assigned_to
+    ticket.assigned_to = current_user.id
+    ticket.updated_at = datetime.utcnow()
+    _log_history(ticket, current_user.id, "assigned",
+                 str(old_assignee) if old_assignee else "none",
+                 str(current_user.id))
+    db.session.commit()
+    flash("Ticket pulled to your queue.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/reopen", methods=["POST"])
+@login_required
+@agent_required
+def ticket_reopen(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    old = ticket.status
+    ticket.status = "open"
+    ticket.closed_at = None
+    ticket.updated_at = datetime.utcnow()
+    _log_history(ticket, current_user.id, "status_change", old, "open")
+    db.session.commit()
+    flash("Ticket reopened.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── Ticket → Task conversion ──────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/create-task", methods=["POST"])
+@login_required
+@agent_required
+def ticket_create_task(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    agent_id = request.form.get("agent_id", type=int) or current_user.id
+    title = request.form.get("title", ticket.subject).strip() or ticket.subject
+    task = Task(
+        ticket_id=ticket.id,
+        created_by=current_user.id,
+        assigned_to=agent_id,
+        title=title,
+        description=f"Created from ticket {ticket.ref}",
+        priority=ticket.priority,
+        status=TASK_TODO,
+    )
+    db.session.add(task)
+    db.session.commit()
+    flash(f'Task "{task.title}" created and linked to {ticket.ref}.', "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── Tasks ─────────────────────────────────────────────────────────────────────
+
+@bp.route("/tasks")
+@login_required
+@agent_required
+def tasks():
+    page = request.args.get("page", 1, type=int)
+    status_filter = request.args.get("status", "")
+    assigned_filter = request.args.get("assigned", "me")
+
+    query = Task.query
+    if assigned_filter == "me":
+        query = query.filter_by(assigned_to=current_user.id)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+
+    tasks_page = query.order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc()).paginate(page=page, per_page=25)
+    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+
+    return render_template("agent/tasks.html", tasks=tasks_page, agents=agents,
+                           filters={"status": status_filter, "assigned": assigned_filter})
+
+
+@bp.route("/tasks/new", methods=["GET", "POST"])
+@login_required
+@agent_required
+def task_new():
+    form = TaskForm()
+    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+    form.assigned_to.choices = [(a.id, a.name) for a in agents]
+    ticket_ref = request.args.get("ticket_ref")
+    linked_ticket = Ticket.query.filter_by(ref=ticket_ref).first() if ticket_ref else None
+
+    if form.validate_on_submit():
+        task = Task(
+            ticket_id=linked_ticket.id if linked_ticket else None,
+            created_by=current_user.id,
+            assigned_to=form.assigned_to.data,
+            title=form.title.data,
+            description=form.description.data,
+            priority=form.priority.data,
+            status=form.status.data,
+            deadline=form.deadline.data,
+            reminder_at=form.reminder_at.data,
+        )
+        db.session.add(task)
+        db.session.commit()
+        flash("Task created.", "success")
+        if linked_ticket:
+            return redirect(url_for("agent.ticket_detail", ref=linked_ticket.ref))
+        return redirect(url_for("agent.tasks"))
+
+    return render_template("agent/task_form.html", form=form, task=None, linked_ticket=linked_ticket)
+
+
+@bp.route("/tasks/<int:task_id>", methods=["GET", "POST"])
+@login_required
+@agent_required
+def task_detail(task_id):
+    task = Task.query.get_or_404(task_id)
+    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+    form = TaskForm(obj=task)
+    form.assigned_to.choices = [(a.id, a.name) for a in agents]
+
+    if form.validate_on_submit():
+        task.title = form.title.data
+        task.description = form.description.data
+        task.assigned_to = form.assigned_to.data
+        task.priority = form.priority.data
+        task.status = form.status.data
+        task.deadline = form.deadline.data
+        task.reminder_at = form.reminder_at.data
+        if form.reminder_at.data:
+            task.reminder_sent = False
+        db.session.commit()
+        flash("Task updated.", "success")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    return render_template("agent/task_form.html", form=form, task=task,
+                           linked_ticket=task.ticket)
+
+
+# ── Attachments ───────────────────────────────────────────────────────────────
+
+@bp.route("/attachments/<int:att_id>/download")
+@login_required
+@agent_required
+def download_attachment(att_id):
+    from app.models.attachment import TicketAttachment
+    att = TicketAttachment.query.get_or_404(att_id)
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], str(att.ticket_id))
+    return send_from_directory(upload_dir, att.filename, as_attachment=True, download_name=att.original_name)
+
+
+# ── Bulk Actions ──────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/bulk", methods=["POST"])
+@login_required
+@agent_required
+def ticket_bulk():
+    """Bulk action on selected tickets: assign_me, close, resolve, set_status."""
+    ticket_ids = request.form.getlist("ticket_ids", type=int)
+    action = request.form.get("action", "")
+    if not ticket_ids:
+        flash("No tickets selected.", "warning")
+        return redirect(url_for("agent.tickets"))
+
+    tickets = Ticket.query.filter(Ticket.id.in_(ticket_ids)).all()
+    count = len(tickets)
+
+    for ticket in tickets:
+        if action == "assign_me":
+            ticket.assigned_to = current_user.id
+            _log_history(ticket, current_user.id, "assigned", str(ticket.assigned_to or "none"), str(current_user.id))
+        elif action in ("close", "resolve", "open", "in_progress", "pending"):
+            status_map = {"close": "closed", "resolve": "resolved",
+                          "open": "open", "in_progress": "in_progress", "pending": "pending"}
+            new_status = status_map.get(action, action)
+            if new_status != ticket.status:
+                old = ticket.status
+                ticket.status = new_status
+                if new_status == "closed":
+                    from datetime import datetime as _dt
+                    ticket.closed_at = _dt.utcnow()
+                _log_history(ticket, current_user.id, "status_change", old, new_status)
+        ticket.updated_at = __import__("datetime").datetime.utcnow()
+
+    db.session.commit()
+    flash(f"Updated {count} ticket(s).", "success")
+    return redirect(url_for("agent.tickets"))
+
+
+# ── Merge ─────────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/merge", methods=["POST"])
+@login_required
+@agent_required
+def ticket_merge(ref):
+    """Merge this ticket into another. Moves all messages to target, closes source."""
+    from app.models.ticket import TicketMessage
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    target_ref = request.form.get("merge_into_ref", "").strip().upper()
+    if not target_ref or target_ref == ref:
+        flash("Invalid target ticket reference.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+
+    target = Ticket.query.filter_by(ref=target_ref).first()
+    if not target:
+        flash(f"Ticket {target_ref} not found.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+
+    # Move messages and attachments
+    TicketMessage.query.filter_by(ticket_id=ticket.id).update({"ticket_id": target.id})
+    from app.models.attachment import TicketAttachment
+    TicketAttachment.query.filter_by(ticket_id=ticket.id).update({"ticket_id": target.id})
+
+    # Close source with merge note
+    old = ticket.status
+    ticket.status = "closed"
+    ticket.closed_at = datetime.utcnow()
+    _log_history(ticket, current_user.id, "merged", old, f"→ {target_ref}")
+    _log_history(target, current_user.id, "merged_from", None, ref)
+
+    db.session.commit()
+    flash(f"Ticket {ref} merged into {target_ref}.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=target_ref))
+
+
+# ── Print ─────────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/print")
+@login_required
+@agent_required
+def ticket_print(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    messages = ticket.messages.all()
+    return render_template("agent/ticket_print.html", ticket=ticket, messages=messages, now=datetime.utcnow())
+
+
+# ── RustDesk ──────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/rustdesk", methods=["POST"])
+@login_required
+@agent_required
+def ticket_rustdesk(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    peer_id = request.form.get("rustdesk_peer_id", "").strip()
+    ticket.rustdesk_peer_id = peer_id or None
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("RustDesk Device ID updated.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── Escalation ────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/escalation", methods=["POST"])
+@login_required
+@agent_required
+def ticket_escalation(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    ticket.escalation_url = request.form.get("escalation_url", "").strip() or None
+    ticket.escalation_number = request.form.get("escalation_number", "").strip() or None
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Escalation details updated.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── Availability ──────────────────────────────────────────────────────────────
+
+@bp.route("/availability", methods=["POST"])
+@login_required
+@agent_required
+def toggle_availability():
+    current_user.is_available = not current_user.is_available
+    db.session.commit()
+    status = "available" if current_user.is_available else "away"
+    flash(f"You are now marked as {status}.", "info")
+    return redirect(request.referrer or url_for("agent.dashboard"))
+
+
+# ── Knowledge Base ────────────────────────────────────────────────────────────
+
+@bp.route("/kb")
+@login_required
+@agent_required
+def kb_list():
+    from app.models.kb_article import KBArticle
+    q = request.args.get("q", "").strip()
+    category = request.args.get("category", "")
+    query = KBArticle.query.filter_by(is_published=True)
+    if q:
+        query = query.filter(
+            db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
+        )
+    if category:
+        query = query.filter_by(category=category)
+    articles = query.order_by(KBArticle.category, KBArticle.title).all()
+    categories = db.session.query(KBArticle.category).filter(
+        KBArticle.is_published == True, KBArticle.category.isnot(None)
+    ).distinct().order_by(KBArticle.category).all()
+    categories = [c[0] for c in categories]
+    return render_template("agent/kb.html", articles=articles, q=q,
+                           category=category, categories=categories)
+
+
+@bp.route("/kb/<int:article_id>")
+@login_required
+@agent_required
+def kb_article(article_id):
+    from app.models.kb_article import KBArticle
+    article = KBArticle.query.get_or_404(article_id)
+    if not article.is_published and not current_user.is_admin:
+        abort(404)
+    article.views += 1
+    from app.extensions import db as _db
+    _db.session.commit()
+    return render_template("agent/kb_article.html", article=article)
+
+
+@bp.route("/kb/search")
+@login_required
+@agent_required
+def kb_search_json():
+    """JSON endpoint for inserting KB articles into ticket replies."""
+    from app.models.kb_article import KBArticle
+    q = request.args.get("q", "").strip()
+    results = KBArticle.query.filter_by(is_published=True).filter(
+        db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
+    ).order_by(KBArticle.title).limit(10).all()
+    return jsonify([{"id": a.id, "title": a.title, "url": url_for("agent.kb_article", article_id=a.id)} for a in results])
+
+
+# ── CSV Export ────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/export")
+@login_required
+@agent_required
+def tickets_export():
+    import csv
+    import io
+    from flask import Response, stream_with_context
+
+    status_filter = request.args.get("status", "")
+    priority_filter = request.args.get("priority", "")
+    hospital_filter = request.args.get("hospital_id", 0, type=int)
+    assigned_filter = request.args.get("assigned", "")
+    search = request.args.get("q", "").strip()
+
+    query = Ticket.query
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    if priority_filter:
+        query = query.filter_by(priority=priority_filter)
+    if hospital_filter:
+        query = query.filter_by(hospital_id=hospital_filter)
+    if assigned_filter == "me":
+        query = query.filter_by(assigned_to=current_user.id)
+    elif assigned_filter == "unassigned":
+        query = query.filter(Ticket.assigned_to.is_(None))
+    if search:
+        query = query.filter(
+            db.or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
+        )
+    query = query.order_by(Ticket.updated_at.desc())
+
+    def generate():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(["Ref", "Subject", "Hospital", "Product", "Status", "Priority",
+                         "Assigned To", "Created", "Updated", "SLA Breached"])
+        yield buf.getvalue()
+        for t in query.yield_per(200):
+            buf.seek(0)
+            buf.truncate()
+            writer.writerow([
+                t.ref, t.subject,
+                t.hospital.name if t.hospital else "",
+                t.product.name if t.product else "",
+                t.status, t.priority,
+                t.assignee.name if t.assignee else "",
+                t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else "",
+                t.updated_at.strftime("%Y-%m-%d %H:%M") if t.updated_at else "",
+                "Yes" if t.sla_breached else "No",
+            ])
+            yield buf.getvalue()
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=tickets.csv"},
+    )
+
+
+# ── Canned Responses ──────────────────────────────────────────────────────────
+
+@bp.route("/canned-responses")
+@login_required
+@agent_required
+def canned_responses_list():
+    """Return canned responses as JSON for the reply form dropdown."""
+    from app.models.canned_response import CannedResponse
+    items = CannedResponse.query.filter(
+        db.or_(CannedResponse.is_shared == True, CannedResponse.created_by == current_user.id)
+    ).order_by(CannedResponse.title).all()
+    return jsonify([{"id": r.id, "title": r.title, "body": r.body} for r in items])
+
+
+# ── Saved Filters ─────────────────────────────────────────────────────────────
+
+@bp.route("/saved-filters", methods=["POST"])
+@login_required
+@agent_required
+def save_filter():
+    """Save current filter params as a named view."""
+    from app.models.saved_filter import SavedFilter
+    name = request.form.get("filter_name", "").strip()
+    params = {k: v for k, v in request.form.items()
+              if k in ("status", "priority", "hospital_id", "assigned", "q") and v}
+    if not name:
+        flash("Please enter a name for this filter.", "warning")
+        return redirect(url_for("agent.tickets", **params))
+    sf = SavedFilter(user_id=current_user.id, name=name, filter_params=json.dumps(params))
+    db.session.add(sf)
+    db.session.commit()
+    flash(f'Filter "{name}" saved.', "success")
+    return redirect(url_for("agent.tickets", **params))
+
+
+@bp.route("/saved-filters/<int:filter_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def delete_saved_filter(filter_id):
+    from app.models.saved_filter import SavedFilter
+    sf = SavedFilter.query.get_or_404(filter_id)
+    if sf.user_id != current_user.id:
+        abort(403)
+    db.session.delete(sf)
+    db.session.commit()
+    flash("Filter deleted.", "success")
+    return redirect(url_for("agent.tickets"))
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _log_history(ticket, changed_by_id, action, old_value, new_value):
+    entry = TicketHistory(
+        ticket_id=ticket.id,
+        changed_by=changed_by_id,
+        action=action,
+        old_value=old_value,
+        new_value=new_value,
+    )
+    db.session.add(entry)

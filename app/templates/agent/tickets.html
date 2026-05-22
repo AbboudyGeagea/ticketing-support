@@ -1,0 +1,237 @@
+{% extends 'base_agent.html' %}
+{% from '_macros.html' import status_badge %}
+{% block title %}Tickets{% endblock %}
+{% block page_title %}Tickets{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.ticket_new') }}"
+   class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+  + New Ticket
+</a>
+<a href="{{ url_for('agent.tickets_export', **filters) }}"
+   class="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1.5 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors ml-2">
+  Export CSV
+</a>
+<a href="{{ url_for('agent.tickets', assigned='unassigned') }}"
+   class="text-slate-600 hover:text-slate-900 text-sm font-medium flex items-center gap-1.5 border border-slate-300 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors ml-2">
+  Unassigned
+</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Saved Views -->
+{% if saved_filters %}
+<div class="flex flex-wrap gap-2 mb-3">
+  <span class="text-xs text-slate-500 self-center">Saved views:</span>
+  {% for sf in saved_filters %}
+  <a href="{{ url_for('agent.tickets', **sf.params) }}"
+     class="inline-flex items-center gap-1.5 text-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
+    {{ sf.name }}
+    <form method="POST" action="{{ url_for('agent.delete_saved_filter', filter_id=sf.id) }}" class="inline" onsubmit="return confirm('Delete this filter?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" class="text-slate-300 hover:text-red-400 ml-1">×</button>
+    </form>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Filters -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+  <form method="GET" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Subject or ref…"
+             class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-48">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
+      <select name="status" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All</option>
+        {% for s in ticket_status_map.values() | sort(attribute='order') %}
+        <option value="{{ s.slug }}" {% if filters.status == s.slug %}selected{% endif %}>{{ s.label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Priority</label>
+      <select name="priority" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All</option>
+        {% for p in priorities %}
+        <option value="{{ p }}" {% if filters.priority == p %}selected{% endif %}>{{ p.title() }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Hospital</label>
+      <select name="hospital_id" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="0">All hospitals</option>
+        {% for h in hospitals %}
+        <option value="{{ h.id }}" {% if filters.hospital_id == h.id %}selected{% endif %}>{{ h.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Assigned</label>
+      <select name="assigned" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">Everyone</option>
+        <option value="me" {% if filters.assigned == 'me' %}selected{% endif %}>Mine</option>
+        <option value="unassigned" {% if filters.assigned == 'unassigned' %}selected{% endif %}>Unassigned</option>
+      </select>
+    </div>
+    <button type="submit"
+            class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Filter
+    </button>
+    <a href="{{ url_for('agent.tickets') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Save view</label>
+      <div class="flex gap-1">
+        <input type="text" name="filter_name" placeholder="View name…" form="save-filter-form"
+               class="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-28">
+        <button type="submit" form="save-filter-form"
+                class="border border-slate-300 bg-white text-slate-600 text-sm px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">Save</button>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Save Filter Form (hidden, referenced by the Save button above) -->
+<form id="save-filter-form" method="POST" action="{{ url_for('agent.save_filter') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% for k, v in filters.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+</form>
+
+<!-- Bulk Action Bar -->
+<div id="bulk-bar" class="hidden bg-primary text-white rounded-xl px-5 py-3 mb-4 flex items-center gap-3">
+  <span class="text-sm font-medium" id="bulk-count">0 selected</span>
+  <div class="flex-1"></div>
+  <select name="action" form="bulk-form" class="bg-primary border border-blue-400 text-white text-sm rounded-lg px-3 py-1.5 focus:outline-none">
+    <option value="">— Choose action —</option>
+    <option value="assign_me">Assign to me</option>
+    <option value="in_progress">Set In Progress</option>
+    <option value="resolve">Set Resolved</option>
+    <option value="close">Close tickets</option>
+  </select>
+  <button type="submit" form="bulk-form" class="bg-white text-primary font-semibold px-4 py-1.5 rounded-lg text-sm hover:bg-blue-50 transition-colors">
+    Apply
+  </button>
+  <button type="button" onclick="clearSelection()" class="text-blue-200 hover:text-white text-sm transition-colors">Cancel</button>
+</div>
+
+<!-- Table wrapped in bulk-form -->
+<form id="bulk-form" method="POST" action="{{ url_for('agent.ticket_bulk') }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr>
+          <th class="px-3 py-3 w-8">
+            <input type="checkbox" id="select-all" class="rounded border-slate-300">
+          </th>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ref</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Subject</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assignee</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Updated</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for t in tickets.items %}
+        <tr class="hover:bg-slate-50 transition-colors cursor-pointer"
+            onclick="window.location='{{ url_for('agent.ticket_detail', ref=t.ref) }}'">
+          <td class="px-3 py-3.5" onclick="event.stopPropagation()">
+            <input type="checkbox" name="ticket_ids" value="{{ t.id }}" class="ticket-checkbox rounded border-slate-300">
+          </td>
+          <td class="px-5 py-3.5 font-mono text-xs text-slate-500">{{ t.ref }}</td>
+          <td class="px-4 py-3.5">
+            <p class="font-medium text-slate-800 truncate max-w-xs">{{ t.subject }}</p>
+            <p class="text-xs text-slate-400 mt-0.5">
+              {{ t.source.upper() }}
+              {% if t.creator %} · {{ t.creator.name }}{% endif %}
+            </p>
+          </td>
+          <td class="px-4 py-3.5 text-slate-600">{{ t.hospital.name }}</td>
+          <td class="px-4 py-3.5 text-slate-500 text-xs">{{ t.product.name if t.product else '—' }}</td>
+          <td class="px-4 py-3.5">
+            {{ status_badge(t.status, ticket_status_map) }}
+            {% if t.sla_status == 'breached' %}
+            <span class="ml-1 inline-flex text-xs font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">SLA</span>
+            {% elif t.sla_status == 'at_risk' %}
+            <span class="ml-1 inline-flex text-xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">!</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3.5">
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full badge-{{ t.priority }}">
+              {{ t.priority_label }}
+            </span>
+          </td>
+          <td class="px-4 py-3.5 text-slate-500 text-xs">
+            {{ t.assignee.name if t.assignee else '—' }}
+          </td>
+          <td class="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
+            {{ t.updated_at.strftime('%b %d, %H:%M') if t.updated_at else t.created_at.strftime('%b %d, %H:%M') }}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="px-5 py-10 text-center text-slate-400 text-sm">No tickets match your filters.</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    {% if tickets.pages > 1 %}
+    <div class="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
+      <p class="text-xs text-slate-500">
+        Showing {{ tickets.per_page * (tickets.page - 1) + 1 }}–{{ [tickets.per_page * tickets.page, tickets.total] | min }} of {{ tickets.total }}
+      </p>
+      <div class="flex gap-1">
+        {% if tickets.has_prev %}
+        <a href="{{ url_for('agent.tickets', page=tickets.prev_num, **filters) }}"
+           class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Prev</a>
+        {% endif %}
+        {% if tickets.has_next %}
+        <a href="{{ url_for('agent.tickets', page=tickets.next_num, **filters) }}"
+           class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('select-all').addEventListener('change', function() {
+  document.querySelectorAll('.ticket-checkbox').forEach(cb => cb.checked = this.checked);
+  updateBulkBar();
+});
+document.querySelectorAll('.ticket-checkbox').forEach(cb => {
+  cb.addEventListener('change', updateBulkBar);
+});
+function updateBulkBar() {
+  const checked = document.querySelectorAll('.ticket-checkbox:checked').length;
+  const bar = document.getElementById('bulk-bar');
+  const count = document.getElementById('bulk-count');
+  if (checked > 0) {
+    bar.classList.remove('hidden');
+    count.textContent = checked + ' selected';
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+function clearSelection() {
+  document.querySelectorAll('.ticket-checkbox, #select-all').forEach(cb => cb.checked = false);
+  document.getElementById('bulk-bar').classList.add('hidden');
+}
+</script>
+{% endblock %}

@@ -1,0 +1,248 @@
+{% extends "base_agent.html" %}
+
+{% block title %}{{ project.name }}{% endblock %}
+{% block page_title %}{{ project.name }}{% endblock %}
+
+{% block header_actions %}
+  <a href="{{ url_for('projects.edit_project', project_id=project.id) }}"
+     class="bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors">
+    Edit
+  </a>
+  {% if current_user.is_admin %}
+  <form method="post" action="{{ url_for('projects.delete_project', project_id=project.id) }}" class="inline">
+    {{ comment_form.hidden_tag() }}
+    <button type="submit"
+            onclick="return confirm('Delete this project and all its data? This cannot be undone.')"
+            class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">
+      Delete
+    </button>
+  </form>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<style>
+  .badge-planning   { background-color: #f1f5f9; color: #475569; }
+  .badge-active     { background-color: #dcfce7; color: #166534; }
+  .badge-on_hold    { background-color: #fef9c3; color: #854d0e; }
+  .badge-completed  { background-color: #dbeafe; color: #1e40af; }
+  .badge-todo       { background-color: #f1f5f9; color: #475569; }
+  .badge-in_progress{ background-color: #fef9c3; color: #854d0e; }
+  .badge-done       { background-color: #dcfce7; color: #166534; }
+  .badge-low        { background-color: #f1f5f9; color: #475569; }
+  .badge-medium     { background-color: #dbeafe; color: #1e40af; }
+  .badge-high       { background-color: #ffedd5; color: #9a3412; }
+  .badge-urgent     { background-color: #fee2e2; color: #991b1b; }
+</style>
+
+<!-- Project info card -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+  <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+    <div>
+      <p class="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Hospital</p>
+      <p class="text-slate-800 font-medium">{{ project.hospital.name }}</p>
+    </div>
+    <div>
+      <p class="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Status</p>
+      <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold badge-{{ project.status }}">
+        {{ project.status_label }}
+      </span>
+    </div>
+    <div>
+      <p class="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">Start Date</p>
+      <p class="text-slate-800">{{ project.start_date.strftime('%b %d, %Y') if project.start_date else '—' }}</p>
+    </div>
+    <div>
+      <p class="text-slate-400 text-xs uppercase tracking-wider font-semibold mb-1">End Date</p>
+      <p class="text-slate-800">{{ project.end_date.strftime('%b %d, %Y') if project.end_date else '—' }}</p>
+    </div>
+  </div>
+  {% if project.description %}
+  <p class="mt-4 text-sm text-slate-600 leading-relaxed">{{ project.description }}</p>
+  {% endif %}
+  <div class="mt-4 flex items-center gap-2">
+    {% if project.is_customer_visible %}
+      <span class="inline-flex items-center gap-1.5 text-xs text-secondary font-medium">
+        <span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>
+        Visible to hospital customers
+      </span>
+    {% else %}
+      <span class="inline-flex items-center gap-1.5 text-xs text-slate-400 font-medium">
+        <span class="w-2 h-2 rounded-full bg-slate-300 inline-block"></span>
+        Hidden from customers
+      </span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Milestones section -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Milestones</h2>
+    <a href="{{ url_for('projects.new_milestone', project_id=project.id) }}"
+       class="text-sm text-primary hover:underline font-medium">+ Add Milestone</a>
+  </div>
+  {% if milestones %}
+  <ul class="divide-y divide-slate-100">
+    {% for ms in milestones %}
+    <li class="px-5 py-3 flex items-center gap-4">
+      <form method="post" action="{{ url_for('projects.toggle_milestone', project_id=project.id, ms_id=ms.id) }}">
+        {{ comment_form.hidden_tag() }}
+        <button type="submit" title="{{ 'Mark pending' if ms.status == 'completed' else 'Mark completed' }}"
+                class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors
+                       {{ 'border-secondary bg-secondary text-white' if ms.status == 'completed' else 'border-slate-300 hover:border-secondary' }}">
+          {% if ms.status == 'completed' %}
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+          </svg>
+          {% endif %}
+        </button>
+      </form>
+      <div class="flex-1 min-w-0">
+        <p class="text-sm font-medium text-slate-800 {{ 'line-through text-slate-400' if ms.status == 'completed' else '' }}">{{ ms.name }}</p>
+        {% if ms.description %}
+          <p class="text-xs text-slate-400 truncate">{{ ms.description }}</p>
+        {% endif %}
+      </div>
+      {% if ms.due_date %}
+        <span class="text-xs text-slate-400 flex-shrink-0">{{ ms.due_date.strftime('%b %d, %Y') }}</span>
+      {% endif %}
+      <form method="post" action="{{ url_for('projects.delete_milestone', project_id=project.id, ms_id=ms.id) }}"
+            onsubmit="return confirm('Delete this milestone?')">
+        {{ comment_form.hidden_tag() }}
+        <button type="submit" class="text-slate-300 hover:text-red-500 transition-colors flex-shrink-0" title="Delete">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="px-5 py-6 text-sm text-slate-400 text-center">No milestones yet.</p>
+  {% endif %}
+</div>
+
+<!-- Tasks section -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Tasks</h2>
+    <div class="flex items-center gap-3">
+      {% if templates %}
+      <form method="POST" action="{{ url_for('projects.apply_template', project_id=project.id) }}" class="flex gap-2">
+        {{ comment_form.hidden_tag() }}
+        <select name="template_id" class="border border-slate-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-primary">
+          <option value="">Apply template…</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}">{{ t.name }} ({{ t.tasks | length }})</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">Apply</button>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('projects.new_project_task', project_id=project.id) }}"
+         class="text-sm text-primary hover:underline font-medium">+ Add Task</a>
+    </div>
+  </div>
+  {% if tasks %}
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-slate-100">
+      <thead class="bg-slate-50">
+        <tr>
+          <th class="px-5 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
+          <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
+          <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Assignee</th>
+          <th class="px-4 py-2.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Due</th>
+          <th class="px-4 py-2.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Action</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for task in tasks %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 py-3">
+            <a href="{{ url_for('projects.edit_project_task', project_id=project.id, task_id=task.id) }}"
+               class="text-sm font-medium text-slate-800 hover:text-primary">{{ task.title }}</a>
+          </td>
+          <td class="px-4 py-3">
+            <form method="post" action="{{ url_for('projects.update_task_status', project_id=project.id, task_id=task.id) }}"
+                  class="flex items-center gap-1">
+              {{ comment_form.hidden_tag() }}
+              <select name="status" onchange="this.form.submit()"
+                      class="text-xs border-0 bg-transparent focus:outline-none cursor-pointer font-medium badge-{{ task.status }} rounded px-1.5 py-0.5">
+                <option value="todo"        {% if task.status == 'todo'        %}selected{% endif %}>To Do</option>
+                <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>In Progress</option>
+                <option value="done"        {% if task.status == 'done'        %}selected{% endif %}>Done</option>
+              </select>
+            </form>
+          </td>
+          <td class="px-4 py-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium badge-{{ task.priority }}">
+              {{ task.priority|title }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-600">
+            {{ task.assignee.name if task.assignee else '—' }}
+          </td>
+          <td class="px-4 py-3 text-sm text-slate-600">
+            {{ task.due_date.strftime('%b %d, %Y') if task.due_date else '—' }}
+          </td>
+          <td class="px-4 py-3 text-right">
+            <a href="{{ url_for('projects.edit_project_task', project_id=project.id, task_id=task.id) }}"
+               class="text-xs text-slate-400 hover:text-primary">Edit</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="px-5 py-6 text-sm text-slate-400 text-center">No tasks yet.</p>
+  {% endif %}
+</div>
+
+<!-- Comments section -->
+<div class="bg-white rounded-xl shadow-sm border border-slate-200">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Comments</h2>
+  </div>
+
+  {% if comments %}
+  <ul class="divide-y divide-slate-100">
+    {% for c in comments %}
+    <li class="px-5 py-4">
+      <div class="flex items-start gap-3">
+        <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          {{ c.author.name[:1].upper() }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-sm font-medium text-slate-800">{{ c.author.name }}</span>
+            <span class="text-xs text-slate-400">{{ c.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+          </div>
+          <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ c.body }}</p>
+        </div>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="px-5 py-4 text-sm text-slate-400">No comments yet.</p>
+  {% endif %}
+
+  <!-- Comment form -->
+  <div class="px-5 py-4 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+    <form method="post" action="{{ url_for('projects.post_comment', project_id=project.id) }}" novalidate>
+      {{ comment_form.hidden_tag() }}
+      <div class="mb-3">
+        {{ comment_form.body(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary h-20 resize-y", placeholder="Write a comment…") }}
+        {% for e in comment_form.body.errors %}
+          <p class="text-xs text-red-600 mt-1">{{ e }}</p>
+        {% endfor %}
+      </div>
+      {{ comment_form.submit(class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors") }}
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,52 @@
+{% extends 'base_agent.html' %}
+{% block title %}{% if inst %}Edit Shared Installation{% else %}New Shared Installation{% endif %}{% endblock %}
+{% block page_title %}{% if inst %}Edit Shared Installation{% else %}New Shared Installation{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('admin.shared_installations') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <form method="POST" novalidate>
+      {{ form.hidden_tag() }}
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Installation Name *</label>
+        {{ form.name(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary",
+                     placeholder="e.g. PACS Cluster — RH / SJH") }}
+        {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors[0] }}</p>{% endif %}
+      </div>
+
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Product *</label>
+        {{ form.product_id(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        {% if form.product_id.errors %}<p class="text-red-500 text-xs mt-1">{{ form.product_id.errors[0] }}</p>{% endif %}
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Hospitals (select at least 2) *</label>
+        <div class="border border-slate-300 rounded-lg divide-y divide-slate-100 overflow-hidden max-h-72 overflow-y-auto">
+          {% for h_id, h_name in form.hospital_ids.choices %}
+          <label class="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer">
+            <input type="checkbox" name="hospital_ids" value="{{ h_id }}"
+                   {% if h_id in (form.hospital_ids.data or []) %}checked{% endif %}
+                   class="rounded border-slate-300 text-primary focus:ring-primary">
+            <span class="text-sm text-slate-700">{{ h_name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="text-xs text-slate-400 mt-1">Only hospitals sharing the same physical server should be grouped here.</p>
+      </div>
+
+      <div class="flex gap-3">
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
+          {% if inst %}Save Changes{% else %}Create{% endif %}
+        </button>
+        <a href="{{ url_for('admin.shared_installations') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
