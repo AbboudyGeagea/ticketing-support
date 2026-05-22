@@ -1,0 +1,78 @@
+{% extends 'base_agent.html' %}
+{% block title %}{% if sprint %}Edit Sprint{% else %}New Sprint{% endif %}{% endblock %}
+{% block page_title %}{% if sprint %}Edit Sprint{% else %}New Sprint{% endif %}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.sprints') }}"
+   class="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1 transition-colors">
+  &#8592; Back to sprints
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+
+    <form method="POST" novalidate>
+      {{ form.hidden_tag() }}
+
+      <!-- Name -->
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Sprint Name *</label>
+        {{ form.name(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. Sprint 3 – May 2026") }}
+        {% if form.name.errors %}
+          <p class="text-red-500 text-xs mt-1">{{ form.name.errors[0] }}</p>
+        {% endif %}
+      </div>
+
+      <!-- Goal -->
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">
+          Sprint Goal
+          <span class="text-slate-400 font-normal">(optional)</span>
+        </label>
+        {{ form.goal(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none", rows=3, placeholder="What should this sprint achieve?") }}
+      </div>
+
+      <!-- Dates -->
+      <div class="grid grid-cols-2 gap-4 mb-5">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Start Date *</label>
+          {{ form.start_date(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          {% if form.start_date.errors %}
+            <p class="text-red-500 text-xs mt-1">{{ form.start_date.errors[0] }}</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">End Date *</label>
+          {{ form.end_date(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          {% if form.end_date.errors %}
+            <p class="text-red-500 text-xs mt-1">{{ form.end_date.errors[0] }}</p>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
+        {{ form.status(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+      </div>
+
+      <!-- Actions -->
+      <div class="flex items-center gap-3">
+        <button type="submit"
+                class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
+          {% if sprint %}Update Sprint{% else %}Create Sprint{% endif %}
+        </button>
+        {% if sprint %}
+          <a href="{{ url_for('agent.sprint_detail', sprint_id=sprint.id) }}"
+             class="text-slate-500 hover:text-slate-800 text-sm transition-colors">Cancel</a>
+        {% else %}
+          <a href="{{ url_for('agent.sprints') }}"
+             class="text-slate-500 hover:text-slate-800 text-sm transition-colors">Cancel</a>
+        {% endif %}
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

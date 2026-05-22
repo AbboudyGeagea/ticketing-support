@@ -60,6 +60,13 @@
             {% if task.status == 'done' %}line-through text-slate-400{% endif %}">
             {{ task.title }}
           </p>
+          {% if task.progress and task.progress > 0 %}
+          <div class="w-full bg-slate-200 rounded-full h-1 mt-1.5">
+            <div class="h-1 rounded-full
+              {% if task.progress == 100 %}bg-green-500{% elif task.progress >= 50 %}bg-primary{% else %}bg-yellow-400{% endif %}"
+                 style="width: {{ task.progress }}%"></div>
+          </div>
+          {% endif %}
         </td>
         <td class="px-4 py-3.5 text-xs font-mono text-slate-500">
           {% if task.ticket %}

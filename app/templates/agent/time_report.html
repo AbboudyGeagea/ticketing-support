@@ -1,0 +1,120 @@
+{% extends 'base_agent.html' %}
+{% block title %}Time Report{% endblock %}
+{% block page_title %}Time Report{% endblock %}
+
+{% macro fmt_minutes(m) %}{{ (m // 60) }}h {{ (m % 60) }}m{% endmacro %}
+
+{% block content %}
+
+<!-- Filter bar -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+  <form method="GET" class="flex flex-wrap gap-3 items-end">
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Agent</label>
+      <select name="agent_id"
+              class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="0">All agents</option>
+        {% for agent in agents %}
+        <option value="{{ agent.id }}" {% if filters.agent_id == agent.id %}selected{% endif %}>
+          {{ agent.name }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">From</label>
+      <input type="date" name="start_date" value="{{ filters.start_date }}"
+             class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">To</label>
+      <input type="date" name="end_date" value="{{ filters.end_date }}"
+             class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+    </div>
+    <button type="submit"
+            class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Filter
+    </button>
+    <a href="{{ url_for('reports.time_report') }}"
+       class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">
+      Reset
+    </a>
+  </form>
+</div>
+
+<!-- Summary cards -->
+<div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-5">
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Total Hours</p>
+    <p class="text-3xl font-bold text-slate-800">{{ fmt_minutes(total_minutes) }}</p>
+  </div>
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">Entries</p>
+    <p class="text-3xl font-bold text-slate-800">{{ entries|length }}</p>
+  </div>
+</div>
+
+{% if grouped %}
+<!-- Grouped by agent -->
+{% for agent_name, agent_entries in grouped %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-4">
+  <!-- Agent header row -->
+  <div class="flex items-center justify-between px-5 py-3 bg-slate-50 border-b border-slate-200">
+    <div class="flex items-center gap-2">
+      <div class="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+        {{ agent_name[:1].upper() }}
+      </div>
+      <span class="text-sm font-semibold text-slate-800">{{ agent_name }}</span>
+    </div>
+    <span class="text-xs font-medium text-slate-500">
+      Subtotal:
+      <span class="text-slate-700 font-semibold">
+        {{ fmt_minutes(agent_entries | sum(attribute='minutes')) }}
+      </span>
+      &middot; {{ agent_entries|length }} entries
+    </span>
+  </div>
+
+  <table class="w-full text-sm">
+    <thead class="border-b border-slate-100">
+      <tr>
+        <th class="text-left px-5 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Date</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Duration</th>
+        <th class="text-left px-4 py-2.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Note</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-slate-50">
+      {% for entry in agent_entries %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
+          {{ entry.logged_at.strftime('%b %d, %Y') }}
+        </td>
+        <td class="px-4 py-3">
+          <a href="{{ url_for('agent.task_detail', task_id=entry.task.id) }}"
+             class="text-primary hover:underline text-sm font-medium truncate max-w-xs block">
+            {{ entry.task.title }}
+          </a>
+        </td>
+        <td class="px-4 py-3">
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 whitespace-nowrap">
+            {{ fmt_minutes(entry.minutes) }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-xs text-slate-500 max-w-xs truncate">
+          {{ entry.note or '—' }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 text-sm">
+  No time entries found for the selected filters.
+</div>
+{% endif %}
+
+{% endblock %}

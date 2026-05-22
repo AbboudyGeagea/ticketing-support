@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import StringField, TextAreaField, SelectField, BooleanField, SubmitField, DateTimeLocalField
+from wtforms import StringField, TextAreaField, SelectField, BooleanField, SubmitField, DateTimeLocalField, DateField
 from wtforms.validators import DataRequired, Optional, Length
 
 
@@ -49,6 +49,19 @@ class PriorityForm(FlaskForm):
         ("urgent", "Urgent"),
     ])
     submit = SubmitField("Update Priority")
+
+
+class SprintForm(FlaskForm):
+    name = StringField("Sprint Name", validators=[DataRequired(), Length(max=200)])
+    goal = TextAreaField("Sprint Goal", validators=[Optional()])
+    start_date = DateField("Start Date", validators=[DataRequired()])
+    end_date = DateField("End Date", validators=[DataRequired()])
+    status = SelectField("Status", choices=[
+        ("planned", "Planned"),
+        ("active", "Active"),
+        ("completed", "Completed"),
+    ], default="planned")
+    submit = SubmitField("Save Sprint")
 
 
 class TaskForm(FlaskForm):

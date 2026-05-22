@@ -1,0 +1,106 @@
+{% extends 'base_agent.html' %}
+{% block title %}Workload{% endblock %}
+{% block page_title %}Workload{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.workload', week=week_offset - 1) }}"
+   class="text-slate-500 hover:text-slate-800 text-sm px-3 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors flex items-center gap-1">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+  </svg>
+  Prev
+</a>
+<span class="text-sm font-medium text-slate-700 px-2">
+  {{ week_start.strftime('%b %-d') }} – {{ week_end.strftime('%-d, %Y') }}
+</span>
+<a href="{{ url_for('agent.workload', week=week_offset + 1) }}"
+   class="text-slate-500 hover:text-slate-800 text-sm px-3 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors flex items-center gap-1">
+  Next
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+  </svg>
+</a>
+{% if week_offset != 0 %}
+<a href="{{ url_for('agent.workload') }}"
+   class="text-primary hover:text-primary-dark text-sm font-medium transition-colors">
+  This week
+</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+  {% for agent in agents %}
+  {% set agent_tasks = tasks_by_agent.get(agent.id, []) %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
+
+    <!-- Agent header -->
+    <div class="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
+      <div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+        {{ agent.name[:1].upper() }}
+      </div>
+      <div class="flex-1 min-w-0">
+        <p class="font-semibold text-slate-800 text-sm truncate">{{ agent.name }}</p>
+        <p class="text-xs text-slate-400">{{ agent.role.title() }}</p>
+      </div>
+      <span class="text-xs font-semibold px-2 py-0.5 rounded-full
+        {% if agent_tasks|length == 0 %}bg-slate-100 text-slate-500
+        {% elif agent_tasks|length >= 5 %}bg-red-100 text-red-700
+        {% else %}bg-blue-100 text-blue-700{% endif %}">
+        {{ agent_tasks|length }} task{{ 's' if agent_tasks|length != 1 else '' }}
+      </span>
+    </div>
+
+    <!-- Task list -->
+    <div class="flex-1 divide-y divide-slate-50">
+      {% if agent_tasks %}
+        {% for task in agent_tasks %}
+        <a href="{{ url_for('agent.task_detail', task_id=task.id) }}"
+           class="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition-colors group">
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-slate-800 truncate group-hover:text-primary transition-colors
+              {% if task.status == 'done' %}line-through text-slate-400{% endif %}">
+              {{ task.title }}
+            </p>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full badge-{{ task.priority }}">
+                {{ task.priority.title() }}
+              </span>
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full
+                {% if task.status == 'done' %}bg-green-100 text-green-700
+                {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-700
+                {% else %}bg-slate-100 text-slate-600{% endif %}">
+                {{ task.status_label }}
+              </span>
+              {% if task.deadline %}
+              <span class="text-xs {% if task.is_overdue %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}">
+                {{ task.deadline.strftime('%b %-d') }}
+              </span>
+              {% endif %}
+            </div>
+          </div>
+          <svg class="w-4 h-4 text-slate-300 group-hover:text-slate-500 flex-shrink-0 mt-0.5 transition-colors"
+               fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+          </svg>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="px-5 py-8 text-center">
+          <p class="text-sm text-slate-400">No tasks this week</p>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+  {% endfor %}
+
+  {% if not agents %}
+  <div class="col-span-full bg-white rounded-xl border border-slate-200 shadow-sm px-8 py-16 text-center">
+    <p class="text-slate-400">No agents found.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

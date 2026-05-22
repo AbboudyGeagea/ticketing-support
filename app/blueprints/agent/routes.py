@@ -1,13 +1,13 @@
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func, nulls_last
 from app.blueprints.agent import bp
-from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm
+from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
 from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES
-from app.models.task import Task, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE
+from app.models.task import Task, TaskChecklist, TaskDependency, TimeEntry, Sprint, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE, ALL_TASK_STATUSES
 from app.models.product import Product
 from app.models.user import User
 from app.models.hospital import Hospital
@@ -563,12 +563,161 @@ def task_detail(task_id):
         task.reminder_at = form.reminder_at.data
         if form.reminder_at.data:
             task.reminder_sent = False
+        try:
+            p = int(request.form.get("progress", task.progress or 0))
+            task.progress = max(0, min(100, p))
+        except (TypeError, ValueError):
+            pass
         db.session.commit()
         flash("Task updated.", "success")
         return redirect(url_for("agent.task_detail", task_id=task_id))
 
-    return render_template("agent/task_form.html", form=form, task=task,
-                           linked_ticket=task.ticket)
+    subtasks = task.subtasks.all()
+    checklist_items = task.checklists.all()
+    time_entries = task.time_entries.order_by(TimeEntry.logged_at.desc()).all()
+    return render_template("agent/task_detail.html", form=form, task=task,
+                           linked_ticket=task.ticket, subtasks=subtasks,
+                           checklist_items=checklist_items, agents=agents,
+                           time_entries=time_entries)
+
+
+@bp.route("/tasks/<int:task_id>/subtasks", methods=["POST"])
+@login_required
+@agent_required
+def task_add_subtask(task_id):
+    task = Task.query.get_or_404(task_id)
+    title = request.form.get("title", "").strip()
+    assigned_to_raw = request.form.get("assigned_to", "")
+    if not title:
+        flash("Subtask title is required.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+    try:
+        assigned_to = int(assigned_to_raw)
+    except (TypeError, ValueError):
+        assigned_to = task.assigned_to
+    subtask = Task(
+        parent_id=task.id,
+        ticket_id=task.ticket_id,
+        created_by=current_user.id,
+        assigned_to=assigned_to,
+        title=title,
+        status=TASK_TODO,
+        priority=task.priority,
+    )
+    db.session.add(subtask)
+    db.session.commit()
+    flash("Subtask added.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/subtasks/<int:sub_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def task_delete_subtask(task_id, sub_id):
+    subtask = Task.query.get_or_404(sub_id)
+    if subtask.parent_id != task_id:
+        abort(404)
+    db.session.delete(subtask)
+    db.session.commit()
+    flash("Subtask deleted.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/checklist", methods=["POST"])
+@login_required
+@agent_required
+def task_add_checklist(task_id):
+    task = Task.query.get_or_404(task_id)
+    text = request.form.get("text", "").strip()
+    if not text:
+        flash("Checklist item text is required.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+    item = TaskChecklist(task_id=task.id, text=text)
+    db.session.add(item)
+    db.session.commit()
+    flash("Checklist item added.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/checklist/<int:item_id>/toggle", methods=["POST"])
+@login_required
+@agent_required
+def task_toggle_checklist(task_id, item_id):
+    item = TaskChecklist.query.get_or_404(item_id)
+    if item.task_id != task_id:
+        abort(404)
+    item.is_done = not item.is_done
+    db.session.commit()
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/checklist/<int:item_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def task_delete_checklist(task_id, item_id):
+    item = TaskChecklist.query.get_or_404(item_id)
+    if item.task_id != task_id:
+        abort(404)
+    db.session.delete(item)
+    db.session.commit()
+    flash("Checklist item deleted.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/progress", methods=["POST"])
+@login_required
+@agent_required
+def task_update_progress(task_id):
+    task = Task.query.get_or_404(task_id)
+    try:
+        p = int(request.form.get("progress", 0))
+        task.progress = max(0, min(100, p))
+    except (TypeError, ValueError):
+        flash("Invalid progress value.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+    db.session.commit()
+    flash("Progress updated.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+# ── Time Entries ──────────────────────────────────────────────────────────────
+
+@bp.route("/tasks/<int:task_id>/time", methods=["POST"])
+@login_required
+@agent_required
+def task_log_time(task_id):
+    task = Task.query.get_or_404(task_id)
+    hours = request.form.get("hours", 0, type=int)
+    minutes = request.form.get("minutes", 0, type=int)
+    note = request.form.get("note", "").strip() or None
+    total_minutes = hours * 60 + minutes
+    if total_minutes <= 0:
+        flash("Please enter a time greater than 0.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+    entry = TimeEntry(
+        task_id=task.id,
+        logged_by=current_user.id,
+        minutes=total_minutes,
+        note=note,
+    )
+    db.session.add(entry)
+    db.session.commit()
+    flash(f"Logged {hours}h {minutes}m on this task.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/time/<int:entry_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def task_delete_time(task_id, entry_id):
+    task = Task.query.get_or_404(task_id)
+    entry = TimeEntry.query.get_or_404(entry_id)
+    if entry.task_id != task.id:
+        abort(404)
+    db.session.delete(entry)
+    db.session.commit()
+    flash("Time entry deleted.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
 
 
 # ── Attachments ───────────────────────────────────────────────────────────────
@@ -871,6 +1020,236 @@ def delete_saved_filter(filter_id):
     db.session.commit()
     flash("Filter deleted.", "success")
     return redirect(url_for("agent.tickets"))
+
+
+# ── Sprints ───────────────────────────────────────────────────────────────────
+
+@bp.route("/sprints")
+@login_required
+@agent_required
+def sprints():
+    all_sprints = Sprint.query.order_by(Sprint.start_date.desc()).all()
+    return render_template("agent/sprints.html", sprints=all_sprints)
+
+
+@bp.route("/sprints/new", methods=["GET", "POST"])
+@login_required
+@agent_required
+def sprint_new():
+    form = SprintForm()
+    if form.validate_on_submit():
+        sprint = Sprint(
+            name=form.name.data,
+            goal=form.goal.data or None,
+            start_date=datetime.combine(form.start_date.data, dt_time.min),
+            end_date=datetime.combine(form.end_date.data, dt_time.min),
+            status=form.status.data,
+            created_by=current_user.id,
+        )
+        db.session.add(sprint)
+        db.session.commit()
+        flash(f'Sprint "{sprint.name}" created.', "success")
+        return redirect(url_for("agent.sprint_detail", sprint_id=sprint.id))
+    return render_template("agent/sprint_form.html", form=form, sprint=None)
+
+
+@bp.route("/sprints/<int:sprint_id>/edit", methods=["GET", "POST"])
+@login_required
+@agent_required
+def sprint_edit(sprint_id):
+    sprint = Sprint.query.get_or_404(sprint_id)
+    form = SprintForm(obj=sprint)
+    # DateField expects date objects; convert datetime -> date for pre-population
+    if request.method == "GET":
+        form.start_date.data = sprint.start_date.date() if sprint.start_date else None
+        form.end_date.data = sprint.end_date.date() if sprint.end_date else None
+    if form.validate_on_submit():
+        sprint.name = form.name.data
+        sprint.goal = form.goal.data or None
+        sprint.start_date = datetime.combine(form.start_date.data, dt_time.min)
+        sprint.end_date = datetime.combine(form.end_date.data, dt_time.min)
+        sprint.status = form.status.data
+        db.session.commit()
+        flash(f'Sprint "{sprint.name}" updated.', "success")
+        return redirect(url_for("agent.sprint_detail", sprint_id=sprint.id))
+    return render_template("agent/sprint_form.html", form=form, sprint=sprint)
+
+
+@bp.route("/sprints/<int:sprint_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def sprint_delete(sprint_id):
+    sprint = Sprint.query.get_or_404(sprint_id)
+    # Detach tasks before deleting
+    Task.query.filter_by(sprint_id=sprint.id).update({"sprint_id": None})
+    name = sprint.name
+    db.session.delete(sprint)
+    db.session.commit()
+    flash(f'Sprint "{name}" deleted.', "success")
+    return redirect(url_for("agent.sprints"))
+
+
+@bp.route("/sprints/<int:sprint_id>")
+@login_required
+@agent_required
+def sprint_detail(sprint_id):
+    sprint = Sprint.query.get_or_404(sprint_id)
+    tasks = sprint.tasks.order_by(Task.created_at.desc()).all()
+    total = len(tasks)
+    done_count = sum(1 for t in tasks if t.status == TASK_DONE)
+    progress_pct = int((done_count / total) * 100) if total else 0
+    # Tasks not yet in this sprint (for adding)
+    available_tasks = Task.query.filter(
+        Task.sprint_id.is_(None),
+        Task.status != TASK_DONE,
+    ).order_by(Task.created_at.desc()).limit(100).all()
+    return render_template(
+        "agent/sprint_detail.html",
+        sprint=sprint,
+        tasks=tasks,
+        total=total,
+        done_count=done_count,
+        progress_pct=progress_pct,
+        available_tasks=available_tasks,
+    )
+
+
+@bp.route("/sprints/<int:sprint_id>/add-task/<int:task_id>", methods=["POST"])
+@login_required
+@agent_required
+def sprint_add_task(sprint_id, task_id):
+    sprint = Sprint.query.get_or_404(sprint_id)
+    task = Task.query.get_or_404(task_id)
+    task.sprint_id = sprint.id
+    db.session.commit()
+    flash(f'Task "{task.title}" added to sprint.', "success")
+    return redirect(url_for("agent.sprint_detail", sprint_id=sprint_id))
+
+
+@bp.route("/sprints/<int:sprint_id>/remove-task/<int:task_id>", methods=["POST"])
+@login_required
+@agent_required
+def sprint_remove_task(sprint_id, task_id):
+    sprint = Sprint.query.get_or_404(sprint_id)
+    task = Task.query.get_or_404(task_id)
+    if task.sprint_id == sprint.id:
+        task.sprint_id = None
+        db.session.commit()
+        flash(f'Task "{task.title}" removed from sprint.', "success")
+    return redirect(url_for("agent.sprint_detail", sprint_id=sprint_id))
+
+
+# ── Task Dependencies ─────────────────────────────────────────────────────────
+
+def _has_circular_dependency(task_id, depends_on_id):
+    """Return True if adding task_id -> depends_on_id would create a cycle."""
+    visited = set()
+    stack = [depends_on_id]
+    while stack:
+        current = stack.pop()
+        if current == task_id:
+            return True
+        if current in visited:
+            continue
+        visited.add(current)
+        # Find all tasks that `current` depends on
+        deps = TaskDependency.query.filter_by(task_id=current).all()
+        for d in deps:
+            stack.append(d.depends_on_id)
+    return False
+
+
+@bp.route("/tasks/<int:task_id>/dependencies", methods=["POST"])
+@login_required
+@agent_required
+def task_add_dependency(task_id):
+    task = Task.query.get_or_404(task_id)
+    depends_on_id = request.form.get("depends_on_id", type=int)
+
+    if not depends_on_id:
+        flash("Please enter a valid task ID.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    if depends_on_id == task_id:
+        flash("A task cannot depend on itself.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    depends_on_task = Task.query.get(depends_on_id)
+    if not depends_on_task:
+        flash(f"Task #{depends_on_id} not found.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    # Check duplicate
+    existing = TaskDependency.query.filter_by(task_id=task_id, depends_on_id=depends_on_id).first()
+    if existing:
+        flash("This dependency already exists.", "warning")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    # Check for circular dependency
+    if _has_circular_dependency(task_id, depends_on_id):
+        flash("Cannot add this dependency — it would create a circular chain.", "danger")
+        return redirect(url_for("agent.task_detail", task_id=task_id))
+
+    dep = TaskDependency(task_id=task_id, depends_on_id=depends_on_id)
+    db.session.add(dep)
+    db.session.commit()
+    flash(f'Dependency on task #{depends_on_id} "{depends_on_task.title}" added.', "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+@bp.route("/tasks/<int:task_id>/dependencies/<int:dep_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def task_delete_dependency(task_id, dep_id):
+    Task.query.get_or_404(task_id)
+    dep = TaskDependency.query.get_or_404(dep_id)
+    if dep.task_id != task_id:
+        abort(404)
+    db.session.delete(dep)
+    db.session.commit()
+    flash("Dependency removed.", "success")
+    return redirect(url_for("agent.task_detail", task_id=task_id))
+
+
+# ── Workload ──────────────────────────────────────────────────────────────────
+
+@bp.route("/workload")
+@login_required
+@agent_required
+def workload():
+    week_offset = request.args.get("week", 0, type=int)
+    today = datetime.utcnow().date()
+    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
+    week_end = week_start + timedelta(days=6)
+
+    week_start_dt = datetime.combine(week_start, dt_time.min)
+    week_end_dt = datetime.combine(week_end, dt_time.max)
+
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).order_by(User.name).all()
+
+    # Tasks with deadline in the selected week, not done
+    week_tasks = Task.query.filter(
+        Task.status != TASK_DONE,
+        Task.deadline >= week_start_dt,
+        Task.deadline <= week_end_dt,
+    ).all()
+
+    tasks_by_agent = {agent.id: [] for agent in agents}
+    for task in week_tasks:
+        if task.assigned_to in tasks_by_agent:
+            tasks_by_agent[task.assigned_to].append(task)
+
+    return render_template(
+        "agent/workload.html",
+        agents=agents,
+        tasks_by_agent=tasks_by_agent,
+        week_start=week_start,
+        week_end=week_end,
+        week_offset=week_offset,
+    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

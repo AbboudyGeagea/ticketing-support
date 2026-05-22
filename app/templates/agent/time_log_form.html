@@ -1,0 +1,77 @@
+{% macro fmt_minutes(m) %}{{ (m // 60) }}h {{ (m % 60) }}m{% endmacro %}
+
+<!-- Log Time Card -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mt-5">
+  <h4 class="text-sm font-semibold text-slate-700 mb-4">Log Time</h4>
+
+  <form method="POST" action="{{ url_for('agent.task_log_time', task_id=task.id) }}" novalidate>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="flex gap-3 mb-3">
+      <div class="flex-1">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Hours</label>
+        <input type="number" name="hours" min="0" max="99" value="0"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+      <div class="flex-1">
+        <label class="block text-xs font-medium text-slate-500 mb-1">Minutes</label>
+        <input type="number" name="minutes" min="0" max="59" step="15" value="0"
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+    </div>
+
+    <div class="mb-3">
+      <label class="block text-xs font-medium text-slate-500 mb-1">Note <span class="font-normal text-slate-400">(optional)</span></label>
+      <textarea name="note" rows="2" maxlength="500"
+                placeholder="What did you work on?"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"></textarea>
+    </div>
+
+    <button type="submit"
+            class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Log Time
+    </button>
+  </form>
+
+  {% if time_entries %}
+  <div class="mt-5 border-t border-slate-100 pt-4 space-y-2">
+    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+      Logged entries
+      <span class="font-normal normal-case text-slate-400 ml-1">
+        (total: {{ fmt_minutes(task.total_logged_minutes) }})
+      </span>
+    </p>
+    {% for entry in time_entries %}
+    <div class="flex items-start justify-between gap-3 py-2 border-b border-slate-50 last:border-0">
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-slate-700">{{ entry.user.name }}</span>
+          <span class="text-xs text-slate-400">{{ entry.logged_at.strftime('%b %d, %Y') }}</span>
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
+            {{ fmt_minutes(entry.minutes) }}
+          </span>
+        </div>
+        {% if entry.note %}
+        <p class="text-xs text-slate-500 mt-0.5 truncate">{{ entry.note }}</p>
+        {% endif %}
+      </div>
+      <form method="POST"
+            action="{{ url_for('agent.task_delete_time', task_id=task.id, entry_id=entry.id) }}"
+            onsubmit="return confirm('Delete this time entry?')">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+                class="text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"
+                title="Delete entry">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="mt-4 text-xs text-slate-400 italic">No time logged yet for this task.</p>
+  {% endif %}
+</div>

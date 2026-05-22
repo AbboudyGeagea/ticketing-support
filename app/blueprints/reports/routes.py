@@ -4,6 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.blueprints.reports import bp
 from app.models.ticket import Ticket, TicketMessage
+from app.models.task import Task, TimeEntry
 from app.models.user import User
 from app.models.hospital import Hospital
 from app.extensions import db
@@ -171,4 +172,71 @@ def dashboard():
         hosp_names=hosp_names,
         hosp_values=hosp_values,
         source_data=source_data,
+    )
+
+
+# ── Time Report ───────────────────────────────────────────────────────────────
+
+@bp.route("/time")
+@login_required
+@agent_required
+def time_report():
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).order_by(User.name).all()
+
+    agent_id_filter = request.args.get("agent_id", 0, type=int)
+    start_date_str = request.args.get("start_date", "")
+    end_date_str = request.args.get("end_date", "")
+
+    query = (
+        db.session.query(TimeEntry)
+        .join(TimeEntry.user)
+        .join(TimeEntry.task)
+        .order_by(TimeEntry.logged_at.desc())
+    )
+
+    if agent_id_filter:
+        query = query.filter(TimeEntry.logged_by == agent_id_filter)
+
+    start_date = None
+    end_date = None
+    if start_date_str:
+        try:
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
+            query = query.filter(TimeEntry.logged_at >= start_date)
+        except ValueError:
+            pass
+    if end_date_str:
+        try:
+            end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
+            # include the whole end day
+            query = query.filter(TimeEntry.logged_at < end_date + timedelta(days=1))
+        except ValueError:
+            pass
+
+    entries = query.all()
+
+    total_minutes = sum(e.minutes for e in entries)
+
+    # Group by agent
+    from collections import defaultdict
+    by_agent = defaultdict(list)
+    for e in entries:
+        by_agent[e.user.name].append(e)
+    # Sort agent names
+    grouped = sorted(by_agent.items(), key=lambda x: x[0])
+
+    return render_template(
+        "agent/time_report.html",
+        entries=entries,
+        grouped=grouped,
+        total_minutes=total_minutes,
+        agents=agents,
+        filters={
+            "agent_id": agent_id_filter,
+            "start_date": start_date_str,
+            "end_date": end_date_str,
+        },
     )

@@ -20,6 +20,7 @@ def create_app(config_class=Config):
 
     from app.models import product  # noqa: F401 — product defines hospital_products table first
     from app.models import user, hospital, ticket, task, attachment, project  # noqa: F401
+    from app.models.task import TaskChecklist, TimeEntry, TaskDependency, Sprint  # noqa: F401
     from app.models import canned_response, assignment_rule, saved_filter, csat_feedback, webhook_config  # noqa: F401
     from app.models import kb_article, ticket_template, sla_policy  # noqa: F401
     from app.models import shared_installation, ticket_status  # noqa: F401

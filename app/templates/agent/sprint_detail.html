@@ -1,0 +1,175 @@
+{% extends 'base_agent.html' %}
+{% block title %}{{ sprint.name }}{% endblock %}
+{% block page_title %}{{ sprint.name }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('agent.sprints') }}"
+   class="text-slate-500 hover:text-slate-800 text-sm flex items-center gap-1 transition-colors">
+  &#8592; All Sprints
+</a>
+<a href="{{ url_for('agent.sprint_edit', sprint_id=sprint.id) }}"
+   class="bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+  Edit Sprint
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Sprint info card -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+    <div class="flex flex-wrap items-start gap-4">
+
+      <!-- Status badge + dates -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 mb-2">
+          {% if sprint.status == 'active' %}
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full bg-green-100 text-green-700">Active</span>
+          {% elif sprint.status == 'completed' %}
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Completed</span>
+          {% else %}
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">Planned</span>
+          {% endif %}
+          <span class="text-xs text-slate-400">
+            {{ sprint.start_date.strftime('%b %d, %Y') }} — {{ sprint.end_date.strftime('%b %d, %Y') }}
+          </span>
+        </div>
+        {% if sprint.goal %}
+        <p class="text-sm text-slate-600">{{ sprint.goal }}</p>
+        {% else %}
+        <p class="text-sm text-slate-400 italic">No sprint goal set.</p>
+        {% endif %}
+      </div>
+
+      <!-- Progress stats -->
+      <div class="flex-shrink-0 text-right">
+        <p class="text-2xl font-bold text-slate-800">{{ progress_pct }}%</p>
+        <p class="text-xs text-slate-400">{{ done_count }} of {{ total }} tasks done</p>
+      </div>
+    </div>
+
+    <!-- Progress bar -->
+    {% if total > 0 %}
+    <div class="mt-4 h-2 bg-slate-100 rounded-full overflow-hidden">
+      <div class="h-full rounded-full transition-all
+        {% if progress_pct == 100 %}bg-green-500{% elif progress_pct >= 50 %}bg-primary{% else %}bg-primary-light{% endif %}"
+           style="width: {{ progress_pct }}%"></div>
+    </div>
+    {% endif %}
+
+    <!-- Created by -->
+    <p class="mt-3 text-xs text-slate-400">
+      Created by {{ sprint.creator.name if sprint.creator else 'Unknown' }}
+      on {{ sprint.created_at.strftime('%b %d, %Y') }}
+    </p>
+  </div>
+
+  <!-- Tasks in sprint -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+      <h2 class="font-semibold text-slate-800 text-sm">Tasks in this Sprint</h2>
+      <span class="text-xs text-slate-400">{{ total }} task{{ 's' if total != 1 else '' }}</span>
+    </div>
+
+    {% if tasks %}
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned To</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Deadline</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for task in tasks %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 py-3.5">
+            <a href="{{ url_for('agent.task_detail', task_id=task.id) }}"
+               class="font-medium text-slate-800 hover:text-primary transition-colors truncate max-w-xs block
+               {% if task.status == 'done' %}line-through text-slate-400{% endif %}">
+              {{ task.title }}
+            </a>
+            {% if task.ticket %}
+            <span class="text-xs font-mono text-slate-400">{{ task.ticket.ref }}</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3.5 text-slate-600 text-xs">{{ task.assignee.name }}</td>
+          <td class="px-4 py-3.5">
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full
+              {% if task.status == 'done' %}bg-green-100 text-green-700
+              {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-700
+              {% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ task.status_label }}
+            </span>
+          </td>
+          <td class="px-4 py-3.5 text-xs
+            {% if task.is_overdue %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}">
+            {% if task.deadline %}
+              {% if task.is_overdue %}Overdue &middot; {% endif %}
+              {{ task.deadline.strftime('%b %d, %Y') }}
+            {% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3.5 text-right">
+            <form method="POST"
+                  action="{{ url_for('agent.sprint_remove_task', sprint_id=sprint.id, task_id=task.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="text-xs text-slate-400 hover:text-red-600 transition-colors"
+                      title="Remove from sprint">
+                Remove
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="px-5 py-10 text-center text-slate-400 text-sm">
+      No tasks in this sprint yet. Add tasks from the section below.
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Add tasks to sprint -->
+  {% if available_tasks and sprint.status != 'completed' %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="px-5 py-4 border-b border-slate-100">
+      <h2 class="font-semibold text-slate-800 text-sm">Add Tasks to Sprint</h2>
+      <p class="text-xs text-slate-400 mt-0.5">Unassigned open tasks (showing up to 100)</p>
+    </div>
+    <div class="divide-y divide-slate-100 max-h-80 overflow-y-auto">
+      {% for task in available_tasks %}
+      <div class="flex items-center justify-between px-5 py-3 hover:bg-slate-50 transition-colors">
+        <div class="flex-1 min-w-0 mr-4">
+          <p class="text-sm font-medium text-slate-700 truncate">{{ task.title }}</p>
+          <p class="text-xs text-slate-400">
+            {{ task.assignee.name }}
+            {% if task.ticket %} &middot; {{ task.ticket.ref }}{% endif %}
+          </p>
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full
+            {% if task.status == 'in_progress' %}bg-yellow-100 text-yellow-700
+            {% else %}bg-slate-100 text-slate-600{% endif %}">
+            {{ task.status_label }}
+          </span>
+          <form method="POST"
+                action="{{ url_for('agent.sprint_add_task', sprint_id=sprint.id, task_id=task.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit"
+                    class="text-xs bg-primary hover:bg-primary-dark text-white px-3 py-1 rounded-lg transition-colors">
+              Add
+            </button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
