@@ -52,8 +52,17 @@ log "Web image built successfully."
 # Step 3: Replace the web container
 # ---------------------------------------------------------------------------
 log "--- Step 3: Restarting web container ---"
-# Kill any stale gunicorn process running outside Docker that may hold port 5000
+# Stop and disable any systemd-managed gunicorn service so it can't reclaim port 5000
+for svc in gunicorn ticketing ticketing-support; do
+    if systemctl is-active --quiet "${svc}" 2>/dev/null; then
+        log "Stopping systemd service: ${svc}"
+        systemctl stop "${svc}"
+        systemctl disable "${svc}"
+    fi
+done
+# Also kill any remaining gunicorn process not managed by systemd
 pkill -f gunicorn 2>/dev/null || true
+sleep 1
 # Stop and remove old container first so the port is fully released
 docker compose -f "${COMPOSE_FILE}" stop web
 docker compose -f "${COMPOSE_FILE}" rm -f web
