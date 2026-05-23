@@ -14,7 +14,7 @@ services:
     environment:
       POSTGRES_DB: ticketing_db
       POSTGRES_USER: ticketing_user
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - pgdata_backup:/var/lib/postgresql/backup
@@ -45,7 +45,6 @@ services:
     restart: always
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://ticketing_user:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@db:5432/ticketing_db
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       FLASK_ENV: production
@@ -79,7 +78,6 @@ services:
     restart: always
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://ticketing_user:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@db:5432/ticketing_db
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       FLASK_APP: wsgi.py
@@ -101,7 +99,6 @@ services:
     restart: always
     env_file: .env
     environment:
-      DATABASE_URL: postgresql://ticketing_user:${DB_PASSWORD:?DB_PASSWORD must be set in .env}@db:5432/ticketing_db
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
       FLASK_APP: wsgi.py
