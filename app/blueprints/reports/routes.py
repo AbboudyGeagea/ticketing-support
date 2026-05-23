@@ -75,29 +75,40 @@ def dashboard():
         User.active == True,
     ).order_by(User.name).all()
 
-    agent_activity = []
-    for agent in agents:
-        resolved = (
-            Ticket.query.filter(
-                Ticket.assigned_to == agent.id,
-                Ticket.status.in_(["resolved", "closed"]),
-                Ticket.updated_at >= start_date,
-            ).count()
+    # One query: resolved tickets per agent
+    resolved_rows = (
+        db.session.query(Ticket.assigned_to, func.count(Ticket.id))
+        .filter(
+            Ticket.assigned_to.isnot(None),
+            Ticket.status.in_(["resolved", "closed"]),
+            Ticket.updated_at >= start_date,
         )
-        replies = (
-            db.session.query(func.count(TicketMessage.id))
-            .filter(
-                TicketMessage.sender_id == agent.id,
-                TicketMessage.is_internal == False,
-                TicketMessage.created_at >= start_date,
-            )
-            .scalar()
-        ) or 0
-        agent_activity.append({
+        .group_by(Ticket.assigned_to)
+        .all()
+    )
+    resolved_map = {uid: cnt for uid, cnt in resolved_rows}
+
+    # One query: replies per agent
+    replies_rows = (
+        db.session.query(TicketMessage.sender_id, func.count(TicketMessage.id))
+        .filter(
+            TicketMessage.sender_id.isnot(None),
+            TicketMessage.is_internal == False,
+            TicketMessage.created_at >= start_date,
+        )
+        .group_by(TicketMessage.sender_id)
+        .all()
+    )
+    replies_map = {uid: cnt for uid, cnt in replies_rows}
+
+    agent_activity = [
+        {
             "name": agent.name,
-            "resolved": resolved,
-            "replies": replies,
-        })
+            "resolved": resolved_map.get(agent.id, 0),
+            "replies": replies_map.get(agent.id, 0),
+        }
+        for agent in agents
+    ]
 
     # Metric 5 — By Status (current snapshot)
     status_counts = (
@@ -216,16 +227,26 @@ def time_report():
         except ValueError:
             pass
 
-    entries = query.all()
+    # Total minutes across all filtered entries (SQL SUM, not in-memory)
+    total_minutes_q = db.session.query(func.sum(TimeEntry.minutes)).join(TimeEntry.user).join(TimeEntry.task)
+    if agent_id_filter:
+        total_minutes_q = total_minutes_q.filter(TimeEntry.logged_by == agent_id_filter)
+    if start_date:
+        total_minutes_q = total_minutes_q.filter(TimeEntry.logged_at >= start_date)
+    if end_date:
+        total_minutes_q = total_minutes_q.filter(TimeEntry.logged_at < end_date + timedelta(days=1))
+    total_minutes = total_minutes_q.scalar() or 0
 
-    total_minutes = sum(e.minutes for e in entries)
+    # Paginated detail entries
+    page = request.args.get("page", 1, type=int)
+    pagination = query.paginate(page=page, per_page=50, error_out=False)
+    entries = pagination.items
 
-    # Group by agent
+    # Group current page entries by agent name
     from collections import defaultdict
     by_agent = defaultdict(list)
     for e in entries:
         by_agent[e.user.name].append(e)
-    # Sort agent names
     grouped = sorted(by_agent.items(), key=lambda x: x[0])
 
     return render_template(
@@ -233,6 +254,7 @@ def time_report():
         entries=entries,
         grouped=grouped,
         total_minutes=total_minutes,
+        pagination=pagination,
         agents=agents,
         filters={
             "agent_id": agent_id_filter,

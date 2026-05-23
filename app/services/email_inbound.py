@@ -35,6 +35,7 @@ def _cache_get(conversation_id: str) -> str | None:
     try:
         return _redis_client().get(f"conv:{conversation_id}")
     except Exception:
+        logger.debug("Redis conv cache read failed for %s — falling back to DB", conversation_id)
         return None
 
 
@@ -167,6 +168,7 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
     from app.models.ticket import Ticket, TicketMessage
     from app.models.user import User
     from app.models.hospital import Hospital
+    from app.models.product import Product
     from app.services.email_outbound import notify_agents_new_ticket
 
     sender_user = User.query.filter_by(email=sender_email).first()
@@ -183,8 +185,18 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
         logger.warning("No hospital match for email %s — ticket not created.", sender_email)
         return
 
+    # Resolve the default product for this hospital (first active product via association)
+    default_product = (
+        Product.query
+        .join(Product.hospitals)
+        .filter(Hospital.id == hospital_id, Product.active == True)
+        .first()
+    )
+    product_id = default_product.id if default_product else None
+
     ticket = Ticket(
         hospital_id=hospital_id,
+        product_id=product_id,
         created_by=sender_user.id if sender_user else None,
         subject=subject,
         status="open",

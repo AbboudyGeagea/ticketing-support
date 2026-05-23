@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ticket Lookup — Intermedic Support</title>
+  {% if config.get('USE_BUNDLED_CSS') %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+  {% else %}
   <script src="https://cdn.tailwindcss.com"></script>
+  {% endif %}
 </head>
 <body class="bg-slate-50 min-h-screen flex items-center justify-center font-sans antialiased">
 <div class="w-full max-w-md">

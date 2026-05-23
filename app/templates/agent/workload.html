@@ -33,6 +33,7 @@
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
   {% for agent in agents %}
   {% set agent_tasks = tasks_by_agent.get(agent.id, []) %}
+  {% if agent_tasks %}
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
 
     <!-- Agent header -->
@@ -94,6 +95,7 @@
     </div>
 
   </div>
+  {% endif %}
   {% endfor %}
 
   {% if not agents %}

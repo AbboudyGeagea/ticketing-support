@@ -51,6 +51,7 @@ services:
       FLASK_ENV: production
       FLASK_APP: wsgi.py
       NODE_ENV: production
+      SECURE_COOKIES: "true"
     depends_on:
       db:
         condition: service_healthy

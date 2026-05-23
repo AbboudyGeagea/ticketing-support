@@ -6,6 +6,9 @@
   <title>{% block title %}Intermedic Support{% endblock %} — Agent Portal</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+  {% if config.get('USE_BUNDLED_CSS') %}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}">
+  {% else %}
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -22,6 +25,7 @@
       }
     }
   </script>
+  {% endif %}
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <style>
     [x-cloak] { display: none; }
@@ -201,6 +205,14 @@
             {% elif category == 'warning' %}bg-yellow-50 text-yellow-800 border border-yellow-200
             {% else %}bg-blue-50 text-blue-800 border border-blue-200{% endif %}">
             <span>{{ message }}</span>
+            <button type="button"
+                    onclick="this.closest('div').remove()"
+                    class="ml-3 opacity-60 hover:opacity-100 flex-shrink-0 leading-none"
+                    aria-label="Dismiss">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
           </div>
         {% endfor %}
       {% endwith %}
@@ -213,5 +225,11 @@
 </div>
 
 {% block scripts %}{% endblock %}
+<script>
+document.addEventListener('submit', function(e) {
+  var btn = e.target.querySelector('[type="submit"]:not([data-no-disable])');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
+});
+</script>
 </body>
 </html>

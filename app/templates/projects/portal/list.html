@@ -11,8 +11,9 @@
 {% if projects %}
 <div class="grid gap-4 sm:grid-cols-2">
   {% for project in projects %}
-  {% set total_tasks = project.tasks.count() %}
-  {% set done_tasks  = project.tasks.filter_by(status='done').count() %}
+  {% set _ts = task_stats.get(project.id, (0, 0)) %}
+  {% set total_tasks = _ts[0] %}
+  {% set done_tasks  = _ts[1] %}
   <a href="{{ url_for('projects.portal_detail', project_id=project.id) }}"
      class="block bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow p-5 group">
     <div class="flex items-start justify-between gap-3 mb-2">

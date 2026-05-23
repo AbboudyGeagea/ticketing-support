@@ -69,8 +69,9 @@
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for project in projects %}
-      {% set total_tasks = project.tasks.count() %}
-      {% set done_tasks  = project.tasks.filter_by(status='done').count() %}
+      {% set _ts = task_stats.get(project.id, (0, 0)) %}
+      {% set total_tasks = _ts[0] %}
+      {% set done_tasks  = _ts[1] %}
       <tr class="hover:bg-slate-50 transition-colors">
         <td class="px-5 py-3">
           <a href="{{ url_for('projects.project_detail', project_id=project.id) }}"

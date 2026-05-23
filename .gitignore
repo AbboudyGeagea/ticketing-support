@@ -21,3 +21,5 @@ htmlcov/
 *.log
 .DS_Store
 Thumbs.db
+node_modules/
+app/static/css/tailwind.css

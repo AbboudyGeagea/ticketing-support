@@ -1,7 +1,9 @@
+import logging
 import os
 from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, abort, current_app, send_from_directory
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
 from app.blueprints.portal import bp
 from app.blueprints.portal.forms import NewTicketForm, ReplyForm
 from app.models.ticket import Ticket, TicketMessage, TicketHistory
@@ -9,6 +11,8 @@ from app.models.product import Product
 from app.extensions import db
 from app.services.email_outbound import notify_agents_new_ticket
 from functools import wraps
+
+logger = logging.getLogger(__name__)
 
 
 def customer_required(f):
@@ -80,7 +84,12 @@ def tickets():
     query = _visible_tickets(current_user)
     if status_filter:
         query = query.filter(Ticket.status == status_filter)
-    tickets_page = query.order_by(Ticket.updated_at.desc()).paginate(page=page, per_page=20)
+    tickets_page = (
+        query
+        .options(joinedload(Ticket.product))
+        .order_by(Ticket.updated_at.desc())
+        .paginate(page=page, per_page=20)
+    )
     return render_template("portal/tickets.html", tickets=tickets_page,
                            status_filter=status_filter)
 
@@ -160,20 +169,20 @@ def ticket_new():
             from app.services.auto_assign import apply_auto_assignment
             apply_auto_assignment(ticket)
         except Exception:
-            pass
+            logger.exception("auto_assign failed for portal ticket %s", ticket.ref)
 
         try:
             from app.services.sla_service import apply_sla
             apply_sla(ticket)
         except Exception:
-            pass
+            logger.exception("sla_apply failed for portal ticket %s", ticket.ref)
 
         db.session.commit()
 
         try:
             notify_agents_new_ticket(ticket)
         except Exception:
-            pass
+            logger.exception("notify failed for portal ticket %s", ticket.ref)
 
         flash(f"Ticket {ticket.ref} submitted successfully.", "success")
         return redirect(url_for("portal.ticket_detail", ref=ticket.ref))
@@ -185,22 +194,32 @@ def ticket_new():
 @login_required
 @customer_required
 def ticket_detail(ref):
-    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
-    if not _visible_tickets(current_user).filter_by(id=ticket.id).first():
-        abort(403)
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
     messages = ticket.messages.filter_by(is_internal=False).all()
+
+    # Batch-load attachments to avoid N+1
+    from app.models.attachment import TicketAttachment
+    msg_ids = [m.id for m in messages]
+    msg_attachments: dict[int, list] = {}
+    if msg_ids:
+        for att in TicketAttachment.query.filter(TicketAttachment.message_id.in_(msg_ids)).all():
+            msg_attachments.setdefault(att.message_id, []).append(att)
+
     reply_form = ReplyForm()
-    return render_template("portal/ticket_detail.html", ticket=ticket,
-                           messages=messages, reply_form=reply_form)
+    return render_template(
+        "portal/ticket_detail.html",
+        ticket=ticket,
+        messages=messages,
+        msg_attachments=msg_attachments,
+        reply_form=reply_form,
+    )
 
 
 @bp.route("/tickets/<ref>/reply", methods=["POST"])
 @login_required
 @customer_required
 def ticket_reply(ref):
-    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
-    if not _visible_tickets(current_user).filter_by(id=ticket.id).first():
-        abort(403)
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
     form = ReplyForm()
     if form.validate_on_submit():
         msg = TicketMessage(
@@ -364,8 +383,6 @@ def kb_article(article_id):
 def download_attachment(att_id):
     from app.models.attachment import TicketAttachment
     att = TicketAttachment.query.get_or_404(att_id)
-    ticket = Ticket.query.get_or_404(att.ticket_id)
-    if ticket.hospital_id != current_user.hospital_id:
-        abort(403)
+    _visible_tickets(current_user).filter(Ticket.id == att.ticket_id).first_or_404()
     upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], str(att.ticket_id))
     return send_from_directory(upload_dir, att.filename, as_attachment=True, download_name=att.original_name)

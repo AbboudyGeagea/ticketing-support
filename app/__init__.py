@@ -1,4 +1,6 @@
+import time as _time
 from datetime import datetime
+from types import SimpleNamespace
 from flask import Flask
 from config import Config
 from app.extensions import db, login_manager, migrate, csrf, limiter
@@ -54,18 +56,40 @@ def create_app(config_class=Config):
         except Exception as e:
             return jsonify({"status": "error", "db": str(e)}), 503
 
+    @app.after_request
+    def set_security_headers(response):
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        response.headers.setdefault("X-XSS-Protection", "1; mode=block")
+        response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+        return response
+
     @app.context_processor
     def inject_now():
         return {"now": datetime.utcnow()}
 
+    _status_cache: dict = {"data": None, "ts": 0.0}
+
     @app.context_processor
     def inject_ticket_statuses():
+        now = _time.monotonic()
+        if _status_cache["data"] is not None and now - _status_cache["ts"] < 60.0:
+            return _status_cache["data"]
         try:
             from app.models.ticket_status import TicketStatus
             statuses = TicketStatus.query.order_by(TicketStatus.order).all()
-            return {"ticket_status_map": {s.slug: s for s in statuses}}
+            status_map = {
+                s.slug: SimpleNamespace(
+                    slug=s.slug, label=s.label, color=s.color, order=s.order, is_system=s.is_system
+                )
+                for s in statuses
+            }
+            result = {"ticket_status_map": status_map}
         except Exception:
-            return {"ticket_status_map": {}}
+            result = {"ticket_status_map": {}}
+        _status_cache["data"] = result
+        _status_cache["ts"] = now
+        return result
 
     @app.errorhandler(403)
     def forbidden(e):

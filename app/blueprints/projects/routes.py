@@ -1,6 +1,8 @@
 from functools import wraps
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 from app.blueprints.projects import bp
 from app.blueprints.projects.forms import ProjectForm, MilestoneForm, ProjectTaskForm, CommentForm
 from app.models.project import Project, ProjectMilestone, ProjectTask, ProjectComment, ProjectTemplate
@@ -57,7 +59,7 @@ def list_projects():
     hospital_filter = request.args.get("hospital_id", type=int)
     page = request.args.get("page", 1, type=int)
 
-    query = Project.query.join(Hospital)
+    query = Project.query.options(joinedload(Project.hospital))
 
     if status_filter:
         query = query.filter(Project.status == status_filter)
@@ -68,12 +70,30 @@ def list_projects():
     pagination = query.paginate(page=page, per_page=20, error_out=False)
     projects = pagination.items
 
+    # Batch-compute task totals and done counts in 1 query instead of 2×N
+    project_ids = [p.id for p in projects]
+    if project_ids:
+        task_rows = (
+            db.session.query(
+                ProjectTask.project_id,
+                func.count(ProjectTask.id).label("total"),
+                func.sum(db.case((ProjectTask.status == "done", 1), else_=0)).label("done"),
+            )
+            .filter(ProjectTask.project_id.in_(project_ids))
+            .group_by(ProjectTask.project_id)
+            .all()
+        )
+        task_stats = {r.project_id: (r.total, r.done or 0) for r in task_rows}
+    else:
+        task_stats = {}
+
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
 
     return render_template(
         "projects/agent/list.html",
         projects=projects,
         pagination=pagination,
+        task_stats=task_stats,
         status_filter=status_filter,
         hospital_filter=hospital_filter,
         hospitals=hospitals,
@@ -288,7 +308,7 @@ def apply_template(project_id):
     tmpl_id = request.form.get("template_id", type=int)
     tmpl = ProjectTemplate.query.get_or_404(tmpl_id)
     count = 0
-    for tt in list(tmpl.tasks)[:50]:
+    for tt in tmpl.tasks.limit(50).all():
         task = ProjectTask(
             project_id=project.id,
             title=tt.title,
@@ -337,7 +357,22 @@ def portal_list():
         .order_by(Project.updated_at.desc())
         .all()
     )
-    return render_template("projects/portal/list.html", projects=projects)
+    project_ids = [p.id for p in projects]
+    if project_ids:
+        task_rows = (
+            db.session.query(
+                ProjectTask.project_id,
+                func.count(ProjectTask.id).label("total"),
+                func.sum(db.case((ProjectTask.status == "done", 1), else_=0)).label("done"),
+            )
+            .filter(ProjectTask.project_id.in_(project_ids))
+            .group_by(ProjectTask.project_id)
+            .all()
+        )
+        task_stats = {r.project_id: (r.total, r.done or 0) for r in task_rows}
+    else:
+        task_stats = {}
+    return render_template("projects/portal/list.html", projects=projects, task_stats=task_stats)
 
 
 @bp.route("/portal/<int:project_id>")

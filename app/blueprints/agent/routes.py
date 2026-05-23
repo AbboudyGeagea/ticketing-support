@@ -1,9 +1,11 @@
 import os
 import json
 from datetime import datetime, timedelta, time as dt_time
+from urllib.parse import urlparse
 from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
 from flask_login import login_required, current_user
-from sqlalchemy import or_, func, nulls_last
+from sqlalchemy import or_, and_, func, nulls_last
+from sqlalchemy.orm import joinedload
 from app.blueprints.agent import bp
 from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
 from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES
@@ -25,6 +27,12 @@ def agent_required(f):
     return decorated
 
 
+def _is_safe_url(url: str) -> bool:
+    """Return True only for http/https URLs (blocks javascript: and data: schemes)."""
+    parsed = urlparse(url)
+    return parsed.scheme in ("http", "https", "")
+
+
 # ── Dashboard ─────────────────────────────────────────────────────────────────
 
 @bp.route("/")
@@ -43,17 +51,22 @@ def dashboard():
         Task.status != TASK_DONE,
         Task.deadline < now,
     ).count()
+    sla_window = now + timedelta(hours=1)
     sla_at_risk = Ticket.query.filter(
         Ticket.status.notin_(["closed", "resolved"]),
-        Ticket.sla_response_due.isnot(None),
-        Ticket.sla_response_due > now,
-        Ticket.sla_response_due <= now + timedelta(hours=1),
-        Ticket.first_response_at.is_(None),
-    ).count() + Ticket.query.filter(
-        Ticket.status.notin_(["closed", "resolved"]),
-        Ticket.sla_resolve_due.isnot(None),
-        Ticket.sla_resolve_due > now,
-        Ticket.sla_resolve_due <= now + timedelta(hours=1),
+        or_(
+            and_(
+                Ticket.sla_response_due.isnot(None),
+                Ticket.sla_response_due > now,
+                Ticket.sla_response_due <= sla_window,
+                Ticket.first_response_at.is_(None),
+            ),
+            and_(
+                Ticket.sla_resolve_due.isnot(None),
+                Ticket.sla_resolve_due > now,
+                Ticket.sla_resolve_due <= sla_window,
+            ),
+        ),
     ).count()
     resolved_today = Ticket.query.filter(
         Ticket.status == "resolved",
@@ -94,7 +107,9 @@ def dashboard():
 
     # Recent tickets
     recent_tickets = (
-        Ticket.query.filter(Ticket.status.notin_(["closed"]))
+        Ticket.query
+        .filter(Ticket.status.notin_(["closed"]))
+        .options(joinedload(Ticket.hospital))
         .order_by(Ticket.updated_at.desc())
         .limit(10)
         .all()
@@ -156,7 +171,17 @@ def tickets():
             or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
         )
 
-    tickets_page = query.order_by(Ticket.updated_at.desc()).paginate(page=page, per_page=25)
+    tickets_page = (
+        query
+        .options(
+            joinedload(Ticket.hospital),
+            joinedload(Ticket.product),
+            joinedload(Ticket.creator),
+            joinedload(Ticket.assignee),
+        )
+        .order_by(Ticket.updated_at.desc())
+        .paginate(page=page, per_page=25)
+    )
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
 
     from app.models.saved_filter import SavedFilter
@@ -222,7 +247,8 @@ def ticket_new():
         )
         db.session.add(ticket)
         db.session.flush()
-        ticket.ref = f"TKT-{datetime.utcnow().year}{datetime.utcnow().month:02d}-{ticket.id:05d}"
+        _now = datetime.utcnow()
+        ticket.ref = f"TKT-{_now.year}{_now.month:02d}-{ticket.id:05d}"
 
         msg = TicketMessage(
             ticket_id=ticket.id,
@@ -291,6 +317,14 @@ def ticket_detail(ref):
     tasks = ticket.tasks.order_by(Task.created_at.desc()).all()
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
 
+    # Batch-load attachments for all messages in a single query to avoid N+1.
+    from app.models.attachment import TicketAttachment
+    msg_ids = [m.id for m in messages]
+    msg_attachments: dict[int, list] = {}
+    if msg_ids:
+        for att in TicketAttachment.query.filter(TicketAttachment.message_id.in_(msg_ids)).all():
+            msg_attachments.setdefault(att.message_id, []).append(att)
+
     reply_form = ReplyForm()
     status_form = StatusForm(status=ticket.status)
     priority_form = PriorityForm(priority=ticket.priority)
@@ -302,6 +336,7 @@ def ticket_detail(ref):
         "agent/ticket_detail.html",
         ticket=ticket,
         messages=messages,
+        msg_attachments=msg_attachments,
         history=history,
         tasks=tasks,
         agents=agents,
@@ -505,7 +540,15 @@ def tasks():
     if status_filter:
         query = query.filter_by(status=status_filter)
 
-    tasks_page = query.order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc()).paginate(page=page, per_page=25)
+    tasks_page = (
+        query
+        .options(
+            joinedload(Task.assignee),
+            joinedload(Task.ticket),
+        )
+        .order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc())
+        .paginate(page=page, per_page=25)
+    )
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
 
     return render_template("agent/tasks.html", tasks=tasks_page, agents=agents,
@@ -575,10 +618,26 @@ def task_detail(task_id):
     subtasks = task.subtasks.all()
     checklist_items = task.checklists.all()
     time_entries = task.time_entries.order_by(TimeEntry.logged_at.desc()).all()
+
+    # Eager-load depends_on/task to avoid N+1 in the dependencies partial.
+    dep_list = (
+        TaskDependency.query
+        .filter_by(task_id=task_id)
+        .options(joinedload(TaskDependency.depends_on))
+        .all()
+    )
+    dependent_list = (
+        TaskDependency.query
+        .filter_by(depends_on_id=task_id)
+        .options(joinedload(TaskDependency.task))
+        .all()
+    )
+
     return render_template("agent/task_detail.html", form=form, task=task,
                            linked_ticket=task.ticket, subtasks=subtasks,
                            checklist_items=checklist_items, agents=agents,
-                           time_entries=time_entries)
+                           time_entries=time_entries,
+                           dep_list=dep_list, dependent_list=dependent_list)
 
 
 @bp.route("/tasks/<int:task_id>/subtasks", methods=["POST"])
@@ -763,7 +822,7 @@ def ticket_bulk():
                     from datetime import datetime as _dt
                     ticket.closed_at = _dt.utcnow()
                 _log_history(ticket, current_user.id, "status_change", old, new_status)
-        ticket.updated_at = __import__("datetime").datetime.utcnow()
+        ticket.updated_at = datetime.utcnow()
 
     db.session.commit()
     flash(f"Updated {count} ticket(s).", "success")
@@ -793,6 +852,19 @@ def ticket_merge(ref):
     TicketMessage.query.filter_by(ticket_id=ticket.id).update({"ticket_id": target.id})
     from app.models.attachment import TicketAttachment
     TicketAttachment.query.filter_by(ticket_id=ticket.id).update({"ticket_id": target.id})
+
+    # Move physical files from source upload directory to target
+    import shutil
+    upload_root = current_app.config["UPLOAD_FOLDER"]
+    src_dir = os.path.join(upload_root, str(ticket.id))
+    tgt_dir = os.path.join(upload_root, str(target.id))
+    if os.path.isdir(src_dir):
+        os.makedirs(tgt_dir, exist_ok=True)
+        for fname in os.listdir(src_dir):
+            src_file = os.path.join(src_dir, fname)
+            tgt_file = os.path.join(tgt_dir, fname)
+            if not os.path.exists(tgt_file):
+                shutil.move(src_file, tgt_file)
 
     # Close source with merge note
     old = ticket.status
@@ -839,7 +911,11 @@ def ticket_rustdesk(ref):
 @agent_required
 def ticket_escalation(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
-    ticket.escalation_url = request.form.get("escalation_url", "").strip() or None
+    url = request.form.get("escalation_url", "").strip() or None
+    if url and not _is_safe_url(url):
+        flash("Invalid escalation URL — only http:// and https:// URLs are allowed.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+    ticket.escalation_url = url
     ticket.escalation_number = request.form.get("escalation_number", "").strip() or None
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
@@ -1029,7 +1105,22 @@ def delete_saved_filter(filter_id):
 @agent_required
 def sprints():
     all_sprints = Sprint.query.order_by(Sprint.start_date.desc()).all()
-    return render_template("agent/sprints.html", sprints=all_sprints)
+    sprint_ids = [s.id for s in all_sprints]
+    if sprint_ids:
+        task_rows = (
+            db.session.query(
+                Task.sprint_id,
+                func.count(Task.id).label("total"),
+                func.sum(db.case((Task.status == TASK_DONE, 1), else_=0)).label("done"),
+            )
+            .filter(Task.sprint_id.in_(sprint_ids))
+            .group_by(Task.sprint_id)
+            .all()
+        )
+        sprint_task_stats = {r.sprint_id: (r.total, r.done or 0) for r in task_rows}
+    else:
+        sprint_task_stats = {}
+    return render_template("agent/sprints.html", sprints=all_sprints, sprint_task_stats=sprint_task_stats)
 
 
 @bp.route("/sprints/new", methods=["GET", "POST"])
@@ -1120,6 +1211,10 @@ def sprint_detail(sprint_id):
 def sprint_add_task(sprint_id, task_id):
     sprint = Sprint.query.get_or_404(sprint_id)
     task = Task.query.get_or_404(task_id)
+    if task.sprint_id and task.sprint_id != sprint.id:
+        other = Sprint.query.get(task.sprint_id)
+        flash(f'Task "{task.title}" is already in sprint "{other.name if other else task.sprint_id}". Remove it first.', "warning")
+        return redirect(url_for("agent.sprint_detail", sprint_id=sprint_id))
     task.sprint_id = sprint.id
     db.session.commit()
     flash(f'Task "{task.title}" added to sprint.', "success")

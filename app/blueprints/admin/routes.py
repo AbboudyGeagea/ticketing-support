@@ -1,5 +1,6 @@
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
+from sqlalchemy import func
 from app.blueprints.admin import bp
 from app.blueprints.admin.forms import (
     HospitalForm, ProductForm, CustomerUserForm, AgentForm, EditUserForm, ResetPasswordForm,
@@ -54,8 +55,28 @@ def dashboard():
 @login_required
 @admin_required
 def hospitals():
+    from app.models.product import hospital_products
     all_hospitals = Hospital.query.order_by(Hospital.name).all()
-    return render_template("admin/hospitals.html", hospitals=all_hospitals)
+    hospital_ids = [h.id for h in all_hospitals]
+
+    user_rows = (
+        db.session.query(User.hospital_id, func.count(User.id))
+        .filter(User.hospital_id.in_(hospital_ids))
+        .group_by(User.hospital_id)
+        .all()
+    ) if hospital_ids else []
+    user_counts = {uid: cnt for uid, cnt in user_rows}
+
+    prod_rows = (
+        db.session.query(hospital_products.c.hospital_id, func.count(hospital_products.c.product_id))
+        .filter(hospital_products.c.hospital_id.in_(hospital_ids))
+        .group_by(hospital_products.c.hospital_id)
+        .all()
+    ) if hospital_ids else []
+    product_counts = {hid: cnt for hid, cnt in prod_rows}
+
+    return render_template("admin/hospitals.html", hospitals=all_hospitals,
+                           user_counts=user_counts, product_counts=product_counts)
 
 
 @bp.route("/hospitals/new", methods=["GET", "POST"])
@@ -815,6 +836,14 @@ def sla_policy_edit(policy_id):
 @admin_required
 def sla_policy_delete(policy_id):
     policy = SLAPolicy.query.get_or_404(policy_id)
+    ticket_count = Ticket.query.filter_by(priority=policy.priority).count()
+    if ticket_count > 0:
+        flash(
+            f"Cannot delete: {ticket_count} ticket(s) currently use the '{policy.priority}' priority. "
+            "Reassign or close them first.",
+            "warning",
+        )
+        return redirect(url_for("admin.sla_policies"))
     db.session.delete(policy)
     db.session.commit()
     flash("SLA policy deleted.", "success")

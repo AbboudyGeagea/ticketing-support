@@ -63,7 +63,7 @@
       <div class="grid grid-cols-2 gap-4 mb-6">
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">Deadline</label>
-          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", min=now.strftime('%Y-%m-%d')) }}
         </div>
         <div>
           <label class="block text-sm font-medium text-slate-700 mb-1.5">

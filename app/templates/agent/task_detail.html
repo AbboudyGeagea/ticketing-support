@@ -47,19 +47,21 @@
 
     <!-- Checklist -->
     <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+      {% set cl_total = checklist_items | length %}
+      {% set cl_done = checklist_items | selectattr('is_done', 'equalto', true) | list | length %}
       <div class="flex items-center justify-between mb-4">
         <h3 class="text-sm font-semibold text-slate-700">Checklist</h3>
-        {% if task.checklist_progress %}
+        {% if cl_total > 0 %}
         <span class="text-xs text-slate-500">
-          {{ task.checklist_progress.done }}/{{ task.checklist_progress.total }} done
+          {{ cl_done }}/{{ cl_total }} done
         </span>
         {% endif %}
       </div>
 
-      {% if task.checklist_progress %}
+      {% if cl_total > 0 %}
       <div class="w-full bg-slate-100 rounded-full h-1.5 mb-4">
         <div class="bg-primary rounded-full h-1.5 transition-all"
-             style="width: {{ ((task.checklist_progress.done / task.checklist_progress.total) * 100)|round|int }}%"></div>
+             style="width: {{ ((cl_done / cl_total) * 100)|round|int }}%"></div>
       </div>
       {% endif %}
 
@@ -239,21 +241,21 @@
         </div>
       </div>
 
-      <!-- Checklist progress -->
-      {% if task.checklist_progress %}
+      <!-- Checklist progress (uses cl_total/cl_done computed above) -->
+      {% if cl_total > 0 %}
       <div class="flex items-center justify-between text-sm">
         <span class="text-slate-500 text-xs">Checklist</span>
         <span class="text-slate-700 font-medium text-xs">
-          {{ task.checklist_progress.done }}/{{ task.checklist_progress.total }} items done
+          {{ cl_done }}/{{ cl_total }} items done
         </span>
       </div>
       {% endif %}
 
-      <!-- Time logged -->
+      <!-- Time logged (summed from the already-loaded time_entries list) -->
       <div class="flex items-center justify-between text-sm">
         <span class="text-slate-500 text-xs">Time logged</span>
         <span class="text-slate-700 font-medium text-xs">
-          {% set total_min = task.total_logged_minutes %}
+          {% set total_min = time_entries | sum(attribute='minutes') %}
           {% if total_min > 0 %}
             {{ total_min // 60 }}h {{ total_min % 60 }}m
           {% else %}
@@ -326,7 +328,7 @@
 
         <div class="mb-3">
           <label class="block text-xs font-medium text-slate-600 mb-1">Deadline</label>
-          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary", min=now.strftime('%Y-%m-%d')) }}
         </div>
 
         <div class="mb-4">
