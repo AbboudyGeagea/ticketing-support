@@ -3,6 +3,7 @@ Inbound email processing via Microsoft Graph API.
 Polls the O365 mailbox for unread messages and converts them to tickets.
 """
 import re
+import uuid
 import logging
 from datetime import datetime
 from bs4 import BeautifulSoup
@@ -195,6 +196,7 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
     product_id = default_product.id if default_product else None
 
     ticket = Ticket(
+        ref=uuid.uuid4().hex,  # temp unique value, replaced after flush
         hospital_id=hospital_id,
         product_id=product_id,
         created_by=sender_user.id if sender_user else None,

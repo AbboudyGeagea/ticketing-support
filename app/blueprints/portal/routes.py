@@ -1,5 +1,6 @@
 import logging
 import os
+import uuid
 from datetime import datetime
 from flask import render_template, redirect, url_for, flash, request, abort, current_app, send_from_directory
 from flask_login import login_required, current_user
@@ -124,6 +125,7 @@ def ticket_new():
             form.product_id.errors = ["Please select a valid product."]
             return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates)
         ticket = Ticket(
+            ref=uuid.uuid4().hex,  # temp unique value, replaced after flush
             hospital_id=current_user.hospital_id,
             product_id=form.product_id.data,
             created_by=current_user.id,

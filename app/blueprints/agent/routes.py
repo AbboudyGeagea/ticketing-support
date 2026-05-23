@@ -1,5 +1,6 @@
 import os
 import json
+import uuid
 from datetime import datetime, timedelta, time as dt_time
 from urllib.parse import urlparse
 from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
@@ -235,7 +236,9 @@ def ticket_new():
             return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
 
         from app.models.ticket import Ticket, TicketMessage
+        _now = datetime.utcnow()
         ticket = Ticket(
+            ref=uuid.uuid4().hex,  # temp unique value, replaced after flush
             hospital_id=hospital.id,
             product_id=product_id,
             created_by=customer_id,
@@ -247,7 +250,6 @@ def ticket_new():
         )
         db.session.add(ticket)
         db.session.flush()
-        _now = datetime.utcnow()
         ticket.ref = f"TKT-{_now.year}{_now.month:02d}-{ticket.id:05d}"
 
         msg = TicketMessage(
