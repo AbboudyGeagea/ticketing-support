@@ -52,7 +52,9 @@ log "Web image built successfully."
 # Step 3: Replace the web container
 # ---------------------------------------------------------------------------
 log "--- Step 3: Restarting web container ---"
-# Stop and remove old container first so the port is freed before the new one starts
+# Kill any stale gunicorn process running outside Docker that may hold port 5000
+pkill -f gunicorn 2>/dev/null || true
+# Stop and remove old container first so the port is fully released
 docker compose -f "${COMPOSE_FILE}" stop web
 docker compose -f "${COMPOSE_FILE}" rm -f web
 # flask db upgrade runs automatically inside the container on startup (see docker-compose command)
