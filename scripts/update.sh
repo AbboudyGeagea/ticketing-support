@@ -1,117 +1,110 @@
 #!/bin/bash
 # =============================================================================
-# update.sh — Zero-downtime update for Ticketing-Intermedic
+# update.sh — Update Ticketing-Intermedic (no Docker)
 #
-# Pulls the latest code from Git, rebuilds the web container, and restarts
-# it without downtime (postgres keeps running throughout).
+# Pulls the latest code, installs dependencies, runs migrations,
+# and restarts the systemd services.
 #
 # Usage:
-#   sudo /home/support/ticketing-support/scripts/update.sh
-#
-# For a rollback, pin a specific git tag:
-#   sudo git -C /home/support/ticketing-support checkout v1.2.3
 #   sudo /home/support/ticketing-support/scripts/update.sh
 # =============================================================================
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration — adjust service names if yours differ
 # ---------------------------------------------------------------------------
 APP_DIR="/home/support/ticketing-support"
-COMPOSE_FILE="${APP_DIR}/docker-compose.prod.yml"
+VENV="${APP_DIR}/venv"
+# Space-separated list of systemd services to restart (skip silently if not found)
+WEB_SERVICE="gunicorn"
+WORKER_SERVICES="celery-worker celery-beat"
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
-die()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+die() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: $*" >&2; exit 1; }
 
-[[ "$(id -u)" -eq 0 ]] || die "This script must be run as root (use sudo)."
+[[ "$(id -u)" -eq 0 ]] || die "Run as root (sudo)."
 
-log "=== Starting zero-downtime update of Ticketing-Intermedic ==="
+log "=== Starting update of Ticketing-Intermedic ==="
 
 # ---------------------------------------------------------------------------
 # Step 1: Pull latest code
 # ---------------------------------------------------------------------------
-log "--- Step 1: Pulling latest code from Git ---"
+log "--- Step 1: Pulling latest code ---"
 cd "${APP_DIR}"
 git fetch origin
-CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-log "Current branch: ${CURRENT_BRANCH}"
-git pull origin "${CURRENT_BRANCH}"
-log "Git pull complete. Current commit: $(git rev-parse --short HEAD)"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+git pull origin "${BRANCH}"
+log "Updated to: $(git rev-parse --short HEAD)"
 
 # ---------------------------------------------------------------------------
-# Step 2: Build new web image
+# Step 2: Install / update Python dependencies
 # ---------------------------------------------------------------------------
-log "--- Step 2: Building new web image ---"
-docker compose -f "${COMPOSE_FILE}" build web
-log "Web image built successfully."
+log "--- Step 2: Installing Python dependencies ---"
+"${VENV}/bin/pip" install --quiet -r requirements.txt
+log "Dependencies up to date."
 
 # ---------------------------------------------------------------------------
-# Step 3: Replace the web container
+# Step 3: Run database migrations
 # ---------------------------------------------------------------------------
-log "--- Step 3: Restarting web container ---"
-# Stop and disable any systemd-managed gunicorn service so it can't reclaim port 5000
-for svc in gunicorn ticketing ticketing-support; do
-    if systemctl is-active --quiet "${svc}" 2>/dev/null; then
-        log "Stopping systemd service: ${svc}"
-        systemctl stop "${svc}"
-        systemctl disable "${svc}"
+log "--- Step 3: Running database migrations ---"
+cd "${APP_DIR}"
+FLASK_APP=wsgi:app "${VENV}/bin/flask" db upgrade
+log "Migrations complete."
+
+# ---------------------------------------------------------------------------
+# Step 4: Restart web service
+# ---------------------------------------------------------------------------
+log "--- Step 4: Restarting web service (${WEB_SERVICE}) ---"
+systemctl restart "${WEB_SERVICE}"
+log "${WEB_SERVICE} restarted."
+
+# ---------------------------------------------------------------------------
+# Step 5: Restart background worker services (if they exist)
+# ---------------------------------------------------------------------------
+log "--- Step 5: Restarting worker services ---"
+for svc in ${WORKER_SERVICES}; do
+    if systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
+        systemctl restart "${svc}"
+        log "Restarted: ${svc}"
+    else
+        log "Skipping ${svc} (not enabled)."
     fi
 done
-# Also kill any remaining gunicorn process not managed by systemd
-pkill -f gunicorn 2>/dev/null || true
-sleep 1
-# Stop and remove old container first so the port is fully released
-docker compose -f "${COMPOSE_FILE}" stop web
-docker compose -f "${COMPOSE_FILE}" rm -f web
-# flask db upgrade runs automatically inside the container on startup (see docker-compose command)
-docker compose -f "${COMPOSE_FILE}" up -d --no-deps web
-log "Web container restarted."
 
 # ---------------------------------------------------------------------------
-# Step 5: Health check
+# Step 6: Health check
 # ---------------------------------------------------------------------------
-log "--- Step 4: Waiting for health check ---"
+log "--- Step 6: Health check ---"
 MAX_WAIT=60
 ELAPSED=0
-until docker compose -f "${COMPOSE_FILE}" exec -T web curl -sf http://localhost:5000/health &>/dev/null; do
+until curl -sf http://127.0.0.1:5000/health &>/dev/null; do
     if [[ "${ELAPSED}" -ge "${MAX_WAIT}" ]]; then
-        die "Health check failed after ${MAX_WAIT}s. Check logs: docker compose -f ${COMPOSE_FILE} logs web"
+        die "App did not respond after ${MAX_WAIT}s. Check: journalctl -u ${WEB_SERVICE} -n 50"
     fi
-    log "Waiting for app to become healthy... (${ELAPSED}s/${MAX_WAIT}s)"
+    log "Waiting... (${ELAPSED}s/${MAX_WAIT}s)"
     sleep 5
     (( ELAPSED += 5 )) || true
 done
 log "Health check passed."
 
 # ---------------------------------------------------------------------------
-# Step 6: Remove dangling Docker images to free disk space
+# Step 7: Reload nginx if config changed
 # ---------------------------------------------------------------------------
-log "--- Step 5: Cleaning up dangling Docker images ---"
-docker image prune -f
-log "Cleanup complete."
-
-# ---------------------------------------------------------------------------
-# Step 7: Reload nginx config in case it changed
-# ---------------------------------------------------------------------------
-log "--- Step 6: Reloading nginx ---"
-NGINX_AVAILABLE="/etc/nginx/sites-available/support.intermedic.com"
+log "--- Step 7: Reloading nginx ---"
 NGINX_SOURCE="${APP_DIR}/nginx/sites-available/support.intermedic.com"
-
+NGINX_DEST="/etc/nginx/sites-available/support.intermedic.com"
 if [[ -f "${NGINX_SOURCE}" ]]; then
-    cp "${NGINX_SOURCE}" "${NGINX_AVAILABLE}"
+    cp "${NGINX_SOURCE}" "${NGINX_DEST}"
     nginx -t && systemctl reload nginx
-    log "Nginx config updated and reloaded."
+    log "Nginx reloaded."
 else
-    log "No nginx config update needed."
+    log "No nginx config change."
 fi
 
 # ---------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------
-log "=== Update complete ==="
-log "Commit: $(git -C "${APP_DIR}" log -1 --oneline)"
-log "Status:"
-docker compose -f "${COMPOSE_FILE}" ps
+log "=== Update complete: $(git -C "${APP_DIR}" log -1 --oneline) ==="
