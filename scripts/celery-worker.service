@@ -1,0 +1,22 @@
+[Unit]
+Description=Intermedic Celery Worker
+After=network.target
+
+[Service]
+Type=simple
+User=support
+Group=support
+WorkingDirectory=/home/support/ticketing-support
+EnvironmentFile=/home/support/ticketing-support/.env
+ExecStart=/home/support/ticketing-support/venv/bin/celery \
+    -A wsgi:celery worker \
+    --loglevel=info \
+    --concurrency=2 \
+    -n worker@%%h
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

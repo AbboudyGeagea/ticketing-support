@@ -1,0 +1,139 @@
+{% extends 'base_agent.html' %}
+{% block title %}Email Diagnostics{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+  <div class="mb-6">
+    <h2 class="text-xl font-bold text-slate-800">Email / Graph API Diagnostics</h2>
+    <p class="text-slate-500 text-sm mt-1">Verify Azure credentials, test sending, and manually trigger an inbox poll.</p>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+    <div class="mb-4 px-4 py-3 rounded-lg text-sm font-medium
+      {% if cat == 'success' %}bg-green-50 text-green-800 border border-green-200
+      {% elif cat == 'danger' %}bg-red-50 text-red-800 border border-red-200
+      {% else %}bg-yellow-50 text-yellow-800 border border-yellow-200{% endif %}">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- Config status -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+    <h3 class="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">Configuration</h3>
+    <table class="w-full text-sm">
+      <tbody>
+        {% set rows = [
+          ("AZURE_TENANT_ID",    status.tenant_id),
+          ("AZURE_CLIENT_ID",    status.client_id),
+          ("AZURE_CLIENT_SECRET",status.client_secret),
+        ] %}
+        {% for key, ok in rows %}
+        <tr class="border-b border-slate-100">
+          <td class="py-2 pr-4 font-mono text-slate-600 w-64">{{ key }}</td>
+          <td class="py-2">
+            {% if ok %}
+            <span class="inline-flex items-center gap-1 text-green-700 font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              Set
+            </span>
+            {% else %}
+            <span class="inline-flex items-center gap-1 text-red-600 font-medium">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              Missing
+            </span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+        <tr class="border-b border-slate-100">
+          <td class="py-2 pr-4 font-mono text-slate-600">O365_MAILBOX</td>
+          <td class="py-2 font-medium {% if status.mailbox %}text-green-700{% else %}text-red-600{% endif %}">
+            {{ status.mailbox or "Not set" }}
+          </td>
+        </tr>
+        <tr>
+          <td class="py-2 pr-4 font-mono text-slate-600">Poll interval</td>
+          <td class="py-2 text-slate-700">{{ status.poll_interval }}s (via Celery beat)</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Actions -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+    <!-- Test token -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">1. Test Graph API Token</h3>
+      <p class="text-xs text-slate-500 mb-4">Authenticates with Azure using your credentials. Confirms the App Registration is correct.</p>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="test_token">
+        <button type="submit"
+                class="w-full bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          Authenticate
+        </button>
+      </form>
+    </div>
+
+    <!-- Send test email -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">2. Send Test Email</h3>
+      <p class="text-xs text-slate-500 mb-3">Sends a test message via the Graph API to verify outbound delivery.</p>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="send_test">
+        <input type="email" name="recipient" placeholder="you@example.com" required
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-primary">
+        <button type="submit"
+                class="w-full bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          Send Test
+        </button>
+      </form>
+    </div>
+
+    <!-- Manual poll -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+      <h3 class="text-sm font-semibold text-slate-700 mb-1">3. Poll Inbox Now</h3>
+      <p class="text-xs text-slate-500 mb-4">Manually runs the inbound email processor. Useful for testing without waiting for the Celery schedule.</p>
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="poll_now">
+        <button type="submit"
+                class="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          Poll Now
+        </button>
+      </form>
+    </div>
+
+  </div>
+
+  <!-- Azure setup guide -->
+  <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 mt-6 text-sm text-blue-900">
+    <h3 class="font-semibold mb-2">Azure App Registration — Required Permissions</h3>
+    <ol class="list-decimal list-inside space-y-1 text-blue-800">
+      <li>Go to <strong>Azure Portal → App registrations → New registration</strong></li>
+      <li>Name it <code class="bg-blue-100 px-1 rounded">Intermedic Support Desk</code>, single-tenant</li>
+      <li>Under <strong>Certificates &amp; secrets</strong> → create a client secret, copy the value</li>
+      <li>Under <strong>API permissions</strong> → Add → Microsoft Graph → <strong>Application permissions</strong>:
+        <ul class="list-disc list-inside ml-4 mt-1 space-y-0.5">
+          <li><code class="bg-blue-100 px-1 rounded">Mail.ReadWrite</code> — read &amp; mark emails as read</li>
+          <li><code class="bg-blue-100 px-1 rounded">Mail.Send</code> — send outbound notifications</li>
+        </ul>
+      </li>
+      <li>Click <strong>Grant admin consent</strong></li>
+      <li>Copy <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong></li>
+      <li>Add to <code class="bg-blue-100 px-1 rounded">.env</code> on the server:
+        <pre class="bg-blue-100 rounded p-2 mt-1 text-xs overflow-x-auto">AZURE_TENANT_ID=your-tenant-id
+AZURE_CLIENT_ID=your-client-id
+AZURE_CLIENT_SECRET=your-client-secret
+O365_MAILBOX=informatics@intermedic.com</pre>
+      </li>
+      <li>Restart the service: <code class="bg-blue-100 px-1 rounded">sudo systemctl restart intermedic-desk</code></li>
+    </ol>
+  </div>
+
+</div>
+{% endblock %}

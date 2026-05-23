@@ -113,7 +113,7 @@
 
       {% set in_clients  = 'admin.hospital' in request.endpoint or 'admin.user' in request.endpoint or 'admin.agent' in request.endpoint or 'admin.product' in request.endpoint or 'admin.shared_installation' in request.endpoint or 'admin.credential' in request.endpoint %}
       {% set in_workflow = 'admin.ticket_template' in request.endpoint or 'admin.project_template' in request.endpoint or request.endpoint == 'admin.templates_hub' or 'admin.sla_policy' in request.endpoint or 'admin.assignment_rule' in request.endpoint or 'admin.canned_response' in request.endpoint or request.endpoint == 'admin.automation_hub' or 'admin.ticket_status' in request.endpoint or 'admin.kb_article' in request.endpoint %}
-      {% set in_system   = 'admin.webhook' in request.endpoint %}
+      {% set in_system   = 'admin.webhook' in request.endpoint or request.endpoint == 'admin.email_test' %}
 
       <!-- Clients group -->
       <div class="mb-1">
@@ -198,6 +198,10 @@
           <a href="{{ url_for('admin.webhooks') }}"
              class="sidebar-link pl-7 {% if 'admin.webhook' in request.endpoint %}active{% endif %}">
             Integrations
+          </a>
+          <a href="{{ url_for('admin.email_test') }}"
+             class="sidebar-link pl-7 {% if request.endpoint == 'admin.email_test' %}active{% endif %}">
+            Email / Graph API
           </a>
         </div>
       </div>

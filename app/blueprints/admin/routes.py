@@ -1132,3 +1132,79 @@ def hospital_access(hospital_id):
         HospitalCredential.category, HospitalCredential.label
     ).all()
     return render_template("admin/hospital_access.html", hospital=hospital, credentials=credentials)
+
+
+# ── Email Diagnostics ─────────────────────────────────────────────────────────
+
+@bp.route("/email/test", methods=["GET", "POST"])
+@login_required
+@admin_required
+def email_test():
+    cfg = current_app.config
+    status = {
+        "tenant_id":     bool(cfg.get("AZURE_TENANT_ID")),
+        "client_id":     bool(cfg.get("AZURE_CLIENT_ID")),
+        "client_secret": bool(cfg.get("AZURE_CLIENT_SECRET")),
+        "mailbox":       cfg.get("O365_MAILBOX", ""),
+        "poll_interval": cfg.get("EMAIL_POLL_INTERVAL_SECONDS", 60),
+    }
+    token_ok = False
+    token_error = ""
+    send_result = None
+
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "test_token":
+            try:
+                import msal
+                authority = f"https://login.microsoftonline.com/{cfg['AZURE_TENANT_ID']}"
+                app_obj = msal.ConfidentialClientApplication(
+                    cfg["AZURE_CLIENT_ID"],
+                    authority=authority,
+                    client_credential=cfg["AZURE_CLIENT_SECRET"],
+                )
+                result = app_obj.acquire_token_for_client(
+                    scopes=["https://graph.microsoft.com/.default"]
+                )
+                if "access_token" in result:
+                    token_ok = True
+                    flash("Graph API token acquired successfully.", "success")
+                else:
+                    token_error = result.get("error_description", result.get("error", "Unknown error"))
+                    flash(f"Token error: {token_error}", "danger")
+            except Exception as e:
+                token_error = str(e)
+                flash(f"Exception: {e}", "danger")
+
+        elif action == "send_test":
+            recipient = request.form.get("recipient", "").strip()
+            if not recipient:
+                flash("Enter a recipient address.", "warning")
+            else:
+                try:
+                    from app.services.email_outbound import _send
+                    _send(
+                        [recipient],
+                        subject="[Intermedic Support] Email Test",
+                        text=(
+                            f"This is a test email from the Intermedic Support Desk.\n\n"
+                            f"Mailbox: {cfg.get('O365_MAILBOX')}\n"
+                            f"Time: {__import__('datetime').datetime.utcnow().isoformat()} UTC"
+                        ),
+                    )
+                    send_result = f"Test email sent to {recipient}."
+                    flash(send_result, "success")
+                except Exception as e:
+                    flash(f"Send failed: {e}", "danger")
+
+        elif action == "poll_now":
+            try:
+                from app.services.email_inbound import fetch_and_process
+                fetch_and_process(current_app._get_current_object())
+                flash("Email poll completed — check logs for details.", "success")
+            except Exception as e:
+                flash(f"Poll failed: {e}", "danger")
+
+    return render_template("admin/email_test.html", status=status,
+                           token_ok=token_ok, token_error=token_error)
