@@ -6,18 +6,18 @@
 # it without downtime (postgres keeps running throughout).
 #
 # Usage:
-#   sudo /opt/ticketing-support/scripts/update.sh
+#   sudo /home/support/ticketing-support/scripts/update.sh
 #
 # For a rollback, pin a specific git tag:
-#   sudo git -C /opt/ticketing-support checkout v1.2.3
-#   sudo /opt/ticketing-support/scripts/update.sh
+#   sudo git -C /home/support/ticketing-support checkout v1.2.3
+#   sudo /home/support/ticketing-support/scripts/update.sh
 # =============================================================================
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-APP_DIR="/opt/ticketing-support"
+APP_DIR="/home/support/ticketing-support"
 COMPOSE_FILE="${APP_DIR}/docker-compose.prod.yml"
 
 # ---------------------------------------------------------------------------

@@ -6,17 +6,17 @@
 # compresses it, and keeps the last 30 days of backups.
 #
 # Schedule via cron (added automatically by deploy.sh):
-#   0 2 * * * /opt/ticketing-support/scripts/backup.sh >> /var/log/ticketing-backup.log 2>&1
+#   0 2 * * * /home/support/ticketing-support/scripts/backup.sh >> /var/log/ticketing-backup.log 2>&1
 #
 # Manual run:
-#   sudo /opt/ticketing-support/scripts/backup.sh
+#   sudo /home/support/ticketing-support/scripts/backup.sh
 # =============================================================================
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-APP_DIR="/opt/ticketing-support"
+APP_DIR="/home/support/ticketing-support"
 COMPOSE_FILE="${APP_DIR}/docker-compose.prod.yml"
 BACKUP_DIR="/var/backups/ticketing"
 DB_SERVICE="db"
@@ -102,6 +102,6 @@ log "=== Backup complete ==="
 # ---------------------------------------------------------------------------
 # Optional: To restore a backup, run:
 #   zcat /var/backups/ticketing/ticketing_db_TIMESTAMP.sql.gz \
-#     | docker compose -f /opt/ticketing-support/docker-compose.prod.yml \
+#     | docker compose -f /home/support/ticketing-support/docker-compose.prod.yml \
 #         exec -T db psql -U ticketing_user -d ticketing_db
 # ---------------------------------------------------------------------------

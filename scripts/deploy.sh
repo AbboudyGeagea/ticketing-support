@@ -15,8 +15,8 @@ set -euo pipefail
 # Configuration
 # ---------------------------------------------------------------------------
 APP_NAME="ticketing-support"
-APP_DIR="/opt/ticketing-support"
-REPO_URL="https://github.com/intermedic/ticketing-support.git"
+APP_DIR="/home/support/ticketing-support"
+REPO_URL="https://github.com/AbboudyGeagea/ticketing-support.git"
 DOMAIN="support.intermedic.com"
 NGINX_CONF_NAME="${DOMAIN}"
 SUPPORT_EMAIL="informatics@intermedic.com"
