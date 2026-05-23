@@ -16,7 +16,7 @@ set -euo pipefail
 APP_DIR="/home/support/ticketing-support"
 VENV="${APP_DIR}/venv"
 # Space-separated list of systemd services to restart (skip silently if not found)
-WEB_SERVICE="gunicorn"
+WEB_SERVICE="intermedic-desk"
 WORKER_SERVICES="celery-worker celery-beat"
 
 # ---------------------------------------------------------------------------
