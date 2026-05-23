@@ -42,34 +42,26 @@ git pull origin "${CURRENT_BRANCH}"
 log "Git pull complete. Current commit: $(git rev-parse --short HEAD)"
 
 # ---------------------------------------------------------------------------
-# Step 2: Run database migrations (before rebuilding image)
+# Step 2: Build new web image
 # ---------------------------------------------------------------------------
-log "--- Step 2: Running database migrations ---"
-docker compose -f "${COMPOSE_FILE}" exec -T web flask db upgrade || {
-    die "Database migration failed. Aborting update to avoid downtime."
-}
-log "Database migrations complete."
-
-# ---------------------------------------------------------------------------
-# Step 3: Build new web image
-# ---------------------------------------------------------------------------
-log "--- Step 3: Building new web image ---"
+log "--- Step 2: Building new web image ---"
 docker compose -f "${COMPOSE_FILE}" build --no-cache web
 log "Web image built successfully."
 
 # ---------------------------------------------------------------------------
-# Step 4: Replace the web container (zero-downtime)
+# Step 3: Replace the web container (zero-downtime)
 # ---------------------------------------------------------------------------
-log "--- Step 4: Restarting web container ---"
-# --no-deps ensures db is not restarted
+log "--- Step 3: Restarting web container ---"
+# --no-deps ensures db/redis are not restarted
 # --force-recreate ensures the new image is used
+# flask db upgrade runs automatically inside the container on startup (see docker-compose command)
 docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate web
 log "Web container restarted."
 
 # ---------------------------------------------------------------------------
 # Step 5: Health check
 # ---------------------------------------------------------------------------
-log "--- Step 5: Waiting for health check ---"
+log "--- Step 4: Waiting for health check ---"
 MAX_WAIT=60
 ELAPSED=0
 until docker compose -f "${COMPOSE_FILE}" exec -T web curl -sf http://localhost:5000/health &>/dev/null; do
@@ -85,14 +77,14 @@ log "Health check passed."
 # ---------------------------------------------------------------------------
 # Step 6: Remove dangling Docker images to free disk space
 # ---------------------------------------------------------------------------
-log "--- Step 6: Cleaning up dangling Docker images ---"
+log "--- Step 5: Cleaning up dangling Docker images ---"
 docker image prune -f
 log "Cleanup complete."
 
 # ---------------------------------------------------------------------------
 # Step 7: Reload nginx config in case it changed
 # ---------------------------------------------------------------------------
-log "--- Step 7: Reloading nginx ---"
+log "--- Step 6: Reloading nginx ---"
 NGINX_AVAILABLE="/etc/nginx/sites-available/support.intermedic.com"
 NGINX_SOURCE="${APP_DIR}/nginx/sites-available/support.intermedic.com"
 
