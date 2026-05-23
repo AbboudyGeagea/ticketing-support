@@ -6,7 +6,7 @@ from wtforms.validators import DataRequired, Optional, Length
 
 class NewTicketForm(FlaskForm):
     hospital_id = SelectField("Hospital", coerce=int, validators=[DataRequired()])
-    customer_id = SelectField("Reporter (optional)", coerce=int, validators=[Optional()])
+    customer_id = SelectField("Reporter (optional)", coerce=int, validators=[Optional()], validate_choice=False)
     product_id = SelectField("Product", coerce=int, validators=[], validate_choice=False)
     subject = StringField("Subject", validators=[DataRequired(), Length(max=500)])
     body = TextAreaField("Description", validators=[DataRequired()])

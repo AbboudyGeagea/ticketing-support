@@ -125,7 +125,7 @@ def ticket_new():
             form.product_id.errors = ["Please select a valid product."]
             return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates)
         ticket = Ticket(
-            ref=uuid.uuid4().hex,  # temp unique value, replaced after flush
+            ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=current_user.hospital_id,
             product_id=form.product_id.data,
             created_by=current_user.id,

@@ -238,7 +238,7 @@ def ticket_new():
         from app.models.ticket import Ticket, TicketMessage
         _now = datetime.utcnow()
         ticket = Ticket(
-            ref=uuid.uuid4().hex,  # temp unique value, replaced after flush
+            ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=hospital.id,
             product_id=product_id,
             created_by=customer_id,
