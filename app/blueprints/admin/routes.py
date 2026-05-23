@@ -5,7 +5,7 @@ from app.blueprints.admin import bp
 from app.blueprints.admin.forms import (
     HospitalForm, ProductForm, CustomerUserForm, AgentForm, EditUserForm, ResetPasswordForm,
     CannedResponseForm, AssignmentRuleForm, WebhookConfigForm, ProjectTemplateForm,
-    KBArticleForm, TicketTemplateForm, SLAPolicyForm, SharedInstallationForm, TicketStatusForm,
+    KBArticleForm, TicketTemplateForm, SLAPolicyForm, SharedInstallationForm, TicketStatusForm, NewTicketStatusForm,
 )
 from app.models.hospital import Hospital
 from app.models.product import Product
@@ -961,6 +961,33 @@ def ticket_statuses():
     return render_template("admin/ticket_statuses.html", statuses=statuses)
 
 
+@bp.route("/ticket-statuses/new", methods=["GET", "POST"])
+@login_required
+@admin_required
+def ticket_status_new():
+    form = NewTicketStatusForm()
+    if form.validate_on_submit():
+        if TicketStatus.query.get(form.slug.data):
+            form.slug.errors = ["This slug is already in use."]
+        else:
+            color = form.color.data.strip()
+            if not color.startswith("#"):
+                color = "#" + color
+            max_order = db.session.query(func.max(TicketStatus.order)).scalar() or 0
+            status = TicketStatus(
+                slug=form.slug.data,
+                label=form.label.data.strip(),
+                color=color,
+                order=max_order + 1,
+                is_system=False,
+            )
+            db.session.add(status)
+            db.session.commit()
+            flash(f'Status "{status.label}" created.', "success")
+            return redirect(url_for("admin.ticket_statuses"))
+    return render_template("admin/ticket_status_new.html", form=form)
+
+
 @bp.route("/ticket-statuses/<slug>/edit", methods=["GET", "POST"])
 @login_required
 @admin_required
@@ -977,3 +1004,21 @@ def ticket_status_edit(slug):
         flash(f'Status "{status.label}" updated.', "success")
         return redirect(url_for("admin.ticket_statuses"))
     return render_template("admin/ticket_status_form.html", form=form, status=status)
+
+
+@bp.route("/ticket-statuses/<slug>/delete", methods=["POST"])
+@login_required
+@admin_required
+def ticket_status_delete(slug):
+    status = TicketStatus.query.get_or_404(slug)
+    if status.is_system:
+        flash("System statuses cannot be deleted.", "warning")
+        return redirect(url_for("admin.ticket_statuses"))
+    ticket_count = Ticket.query.filter_by(status=slug).count()
+    if ticket_count > 0:
+        flash(f"Cannot delete: {ticket_count} ticket(s) currently use this status.", "warning")
+        return redirect(url_for("admin.ticket_statuses"))
+    db.session.delete(status)
+    db.session.commit()
+    flash(f'Status "{status.label}" deleted.', "success")
+    return redirect(url_for("admin.ticket_statuses"))

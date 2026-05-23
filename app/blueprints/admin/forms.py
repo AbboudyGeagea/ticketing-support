@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, SelectField, SelectMultipleField, BooleanField, SubmitField, PasswordField, IntegerField, FloatField
-from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, URL, NumberRange
+from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, URL, NumberRange, Regexp
 from app.models.user import User
 
 
@@ -117,6 +117,16 @@ class TicketStatusForm(FlaskForm):
     label = StringField("Display Label", validators=[DataRequired(), Length(max=100)])
     color = StringField("Color (hex)", validators=[DataRequired(), Length(min=4, max=7)])
     submit = SubmitField("Save")
+
+
+class NewTicketStatusForm(FlaskForm):
+    slug = StringField("Slug", validators=[
+        DataRequired(), Length(max=50),
+        Regexp(r'^[a-z0-9_]+$', message="Lowercase letters, numbers, and underscores only."),
+    ])
+    label = StringField("Display Label", validators=[DataRequired(), Length(max=100)])
+    color = StringField("Color (hex)", validators=[DataRequired(), Length(min=4, max=7)])
+    submit = SubmitField("Create Status")
 
 
 class SharedInstallationForm(FlaskForm):
