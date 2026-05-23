@@ -383,8 +383,9 @@ def ticket_reply(ref):
                     size=size,
                 )
                 db.session.add(att)
-            except ValueError as e:
-                flash(str(e), "warning")
+            except (ValueError, OSError) as e:
+                logger.exception("Attachment save failed for ticket %s", ticket.ref)
+                flash("Attachment could not be saved — reply submitted without it.", "warning")
 
         _log_history(ticket, current_user.id, "reply", None,
                      "internal note" if form.is_internal.data else "public reply")

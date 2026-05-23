@@ -164,8 +164,9 @@ def ticket_new():
                     size=size,
                 )
                 db.session.add(att)
-            except ValueError as e:
-                flash(str(e), "warning")
+            except (ValueError, OSError) as e:
+                logger.exception("Attachment save failed for ticket %s", ticket.ref)
+                flash("Attachment could not be saved — ticket submitted without it.", "warning")
 
         try:
             from app.services.auto_assign import apply_auto_assignment
@@ -251,8 +252,9 @@ def ticket_reply(ref):
                     size=size,
                 )
                 db.session.add(att)
-            except ValueError as e:
-                flash(str(e), "warning")
+            except (ValueError, OSError) as e:
+                logger.exception("Attachment save failed for ticket %s", ticket.ref)
+                flash("Attachment could not be saved — reply submitted without it.", "warning")
 
         if ticket.status in ("resolved", "pending"):
             old_status = ticket.status   # capture first
