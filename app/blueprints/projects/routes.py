@@ -1,3 +1,5 @@
+import json
+from datetime import date
 from functools import wraps
 from flask import render_template, redirect, url_for, flash, request, abort
 from flask_login import login_required, current_user
@@ -137,6 +139,8 @@ def project_detail(project_id):
     comment_form = CommentForm()
     templates = ProjectTemplate.query.order_by(ProjectTemplate.name).all()
 
+    gantt_data = _build_gantt_data(project, tasks, milestones)
+
     return render_template(
         "projects/agent/detail.html",
         project=project,
@@ -145,7 +149,41 @@ def project_detail(project_id):
         comments=comments,
         comment_form=comment_form,
         templates=templates,
+        gantt_data=gantt_data,
     )
+
+
+def _build_gantt_data(project, tasks, milestones):
+    """Return JSON string with tasks and milestones for the ECharts Gantt chart."""
+    proj_start = project.start_date or date.today()
+    gantt_tasks = []
+    for t in tasks:
+        if not t.due_date:
+            continue
+        gantt_tasks.append({
+            "title": t.title,
+            "start": proj_start.isoformat(),
+            "end": t.due_date.isoformat(),
+            "status": t.status,
+            "assignee": t.assignee.name if t.assignee else None,
+        })
+    gantt_milestones = [
+        {"name": ms.name, "date": ms.due_date.isoformat(), "done": ms.status == "completed"}
+        for ms in milestones if ms.due_date
+    ]
+    return json.dumps({"tasks": gantt_tasks, "milestones": gantt_milestones})
+
+
+@bp.route("/project/<int:project_id>/toggle-gantt", methods=["POST"])
+@login_required
+@agent_required
+def toggle_gantt(project_id):
+    project = Project.query.get_or_404(project_id)
+    project.is_gantt_visible = not project.is_gantt_visible
+    db.session.commit()
+    state = "shown to" if project.is_gantt_visible else "hidden from"
+    flash(f"Gantt chart {state} customers.", "success")
+    return redirect(url_for("projects.project_detail", project_id=project_id))
 
 
 @bp.route("/project/<int:project_id>/edit", methods=["GET", "POST"])
@@ -387,6 +425,7 @@ def portal_detail(project_id):
     tasks = project.tasks.all()
     comments = project.comments.all()
     comment_form = CommentForm()
+    gantt_data = _build_gantt_data(project, tasks, milestones) if project.is_gantt_visible else None
 
     return render_template(
         "projects/portal/detail.html",
@@ -395,6 +434,7 @@ def portal_detail(project_id):
         tasks=tasks,
         comments=comments,
         comment_form=comment_form,
+        gantt_data=gantt_data,
     )
 
 

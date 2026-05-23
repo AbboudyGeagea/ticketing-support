@@ -60,7 +60,7 @@
   {% if project.description %}
   <p class="mt-4 text-sm text-slate-600 leading-relaxed">{{ project.description }}</p>
   {% endif %}
-  <div class="mt-4 flex items-center gap-2">
+  <div class="mt-4 flex flex-wrap items-center gap-3">
     {% if project.is_customer_visible %}
       <span class="inline-flex items-center gap-1.5 text-xs text-secondary font-medium">
         <span class="w-2 h-2 rounded-full bg-secondary inline-block"></span>
@@ -72,8 +72,32 @@
         Hidden from customers
       </span>
     {% endif %}
+    <form method="POST" action="{{ url_for('projects.toggle_gantt', project_id=project.id) }}">
+      {{ comment_form.hidden_tag() }}
+      <button type="submit"
+              class="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full border transition-colors
+                     {% if project.is_gantt_visible %}border-primary text-primary bg-blue-50 hover:bg-blue-100{% else %}border-slate-300 text-slate-500 hover:border-slate-400{% endif %}">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+        {% if project.is_gantt_visible %}Gantt visible to customers{% else %}Gantt hidden from customers{% endif %}
+      </button>
+    </form>
   </div>
 </div>
+
+<!-- Gantt Chart (always visible to agents) -->
+{% set gantt = gantt_data | tojson if gantt_data else gantt_data %}
+{% if gantt_data %}
+{% set parsed = gantt_data | from_json if gantt_data else {} %}
+<div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
+  <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Gantt Chart</h2>
+    <span class="text-xs text-slate-400">Tasks with due dates</span>
+  </div>
+  <div id="gantt-chart" class="w-full" style="height: 320px; min-height: 200px;"></div>
+</div>
+{% endif %}
 
 <!-- Milestones section -->
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
@@ -245,4 +269,91 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+{% if gantt_data %}
+<script>
+(function () {
+  var raw = {{ gantt_data | tojson }};
+  var tasks = raw.tasks || [];
+  var milestones = raw.milestones || [];
+
+  if (!tasks.length && !milestones.length) return;
+
+  var chart = echarts.init(document.getElementById('gantt-chart'));
+
+  var categories = tasks.map(function (t) { return t.title; });
+  var statusColor = { todo: '#94a3b8', in_progress: '#f59e0b', done: '#22c55e' };
+
+  var seriesData = tasks.map(function (t, i) {
+    return {
+      name: t.title,
+      value: [i, t.start, t.end, t.status, t.assignee || ''],
+      itemStyle: { color: statusColor[t.status] || '#94a3b8' }
+    };
+  });
+
+  var markLines = milestones.map(function (ms) {
+    return {
+      xAxis: ms.date,
+      label: { formatter: ms.name, position: 'insideStartTop', fontSize: 10 },
+      lineStyle: { color: ms.done ? '#22c55e' : '#6366f1', type: 'dashed', width: 1.5 }
+    };
+  });
+
+  var option = {
+    tooltip: {
+      formatter: function (params) {
+        var v = params.value;
+        var lines = ['<b>' + params.name + '</b>'];
+        lines.push('Start: ' + v[1]);
+        lines.push('End: &nbsp; ' + v[2]);
+        lines.push('Status: ' + v[3].replace('_', ' '));
+        if (v[4]) lines.push('Assignee: ' + v[4]);
+        return lines.join('<br>');
+      }
+    },
+    grid: { left: 140, right: 40, top: 20, bottom: 40, containLabel: false },
+    xAxis: {
+      type: 'time',
+      axisLabel: { fontSize: 10, color: '#94a3b8' },
+      splitLine: { lineStyle: { color: '#f1f5f9' } }
+    },
+    yAxis: {
+      type: 'category',
+      data: categories,
+      inverse: true,
+      axisLabel: { fontSize: 11, color: '#475569', width: 130, overflow: 'truncate' },
+      axisTick: { show: false },
+      axisLine: { show: false }
+    },
+    series: [{
+      type: 'custom',
+      renderItem: function (params, api) {
+        var categoryIndex = api.value(0);
+        var start = api.coord([api.value(1), categoryIndex]);
+        var end = api.coord([api.value(2), categoryIndex]);
+        var height = api.size([0, 1])[1] * 0.6;
+        return {
+          type: 'rect',
+          shape: { x: start[0], y: start[1] - height / 2, width: Math.max(end[0] - start[0], 4), height: height, r: 3 },
+          style: api.style({ stroke: 'transparent' }),
+          emphasis: { style: { opacity: 0.8 } }
+        };
+      },
+      encode: { x: [1, 2], y: 0 },
+      data: seriesData,
+      markLine: milestones.length ? {
+        symbol: ['none', 'none'],
+        data: markLines
+      } : undefined
+    }]
+  };
+
+  chart.setOption(option);
+  window.addEventListener('resize', function () { chart.resize(); });
+})();
+</script>
+{% endif %}
 {% endblock %}
