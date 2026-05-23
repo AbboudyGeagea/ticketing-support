@@ -26,14 +26,14 @@ class Config:
     O365_MAILBOX = os.environ.get("O365_MAILBOX")
 
     # Celery / Redis
-    CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
-    CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://redis:6379/0")
-    RATELIMIT_STORAGE_URI = os.environ.get("CELERY_BROKER_URL", "redis://redis:6379/0")
+    CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+    CELERY_RESULT_BACKEND = os.environ.get("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/0")
+    RATELIMIT_STORAGE_URI = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 
     EMAIL_POLL_INTERVAL_SECONDS = int(os.environ.get("EMAIL_POLL_INTERVAL_SECONDS", 60))
 
     # File uploads
-    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/app/uploads")
+    UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/home/support/ticketing-support/uploads")
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB
 
     # App
