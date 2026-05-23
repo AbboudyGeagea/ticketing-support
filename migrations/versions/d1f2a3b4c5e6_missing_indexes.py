@@ -15,52 +15,42 @@ depends_on = None
 
 
 def upgrade():
-    with op.batch_alter_table('tickets', schema=None) as batch_op:
-        batch_op.create_index('ix_tickets_status', ['status'])
-        batch_op.create_index('ix_tickets_assigned_to', ['assigned_to'])
-        batch_op.create_index('ix_tickets_hospital_id', ['hospital_id'])
-        batch_op.create_index('ix_tickets_updated_at', ['updated_at'])
-        batch_op.create_index('ix_tickets_email_thread_id', ['email_thread_id'])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tickets_status ON tickets(status)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tickets_assigned_to ON tickets(assigned_to)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tickets_hospital_id ON tickets(hospital_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tickets_updated_at ON tickets(updated_at)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tickets_email_thread_id ON tickets(email_thread_id)")
 
-    with op.batch_alter_table('ticket_messages', schema=None) as batch_op:
-        batch_op.create_index('ix_ticket_messages_ticket_id', ['ticket_id'])
-        batch_op.create_index('ix_ticket_messages_sender_id', ['sender_id'])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ticket_messages_ticket_id ON ticket_messages(ticket_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ticket_messages_sender_id ON ticket_messages(sender_id)")
 
-    with op.batch_alter_table('ticket_history', schema=None) as batch_op:
-        batch_op.create_index('ix_ticket_history_ticket_id', ['ticket_id'])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ticket_history_ticket_id ON ticket_history(ticket_id)")
 
-    with op.batch_alter_table('ticket_attachments', schema=None) as batch_op:
-        batch_op.create_index('ix_ticket_attachments_ticket_id', ['ticket_id'])
-        batch_op.create_index('ix_ticket_attachments_message_id', ['message_id'])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ticket_attachments_ticket_id ON ticket_attachments(ticket_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_ticket_attachments_message_id ON ticket_attachments(message_id)")
 
-    with op.batch_alter_table('tasks', schema=None) as batch_op:
-        batch_op.create_index('ix_tasks_assigned_to', ['assigned_to'])
-        batch_op.create_index('ix_tasks_status', ['status'])
-        batch_op.create_index('ix_tasks_deadline', ['deadline'])
-        batch_op.create_index('ix_tasks_ticket_id', ['ticket_id'])
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tasks_assigned_to ON tasks(assigned_to)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tasks_status ON tasks(status)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tasks_deadline ON tasks(deadline)")
+    op.execute("CREATE INDEX IF NOT EXISTS ix_tasks_ticket_id ON tasks(ticket_id)")
 
 
 def downgrade():
-    with op.batch_alter_table('tasks', schema=None) as batch_op:
-        batch_op.drop_index('ix_tasks_ticket_id')
-        batch_op.drop_index('ix_tasks_deadline')
-        batch_op.drop_index('ix_tasks_status')
-        batch_op.drop_index('ix_tasks_assigned_to')
+    op.execute("DROP INDEX IF EXISTS ix_tickets_status")
+    op.execute("DROP INDEX IF EXISTS ix_tickets_assigned_to")
+    op.execute("DROP INDEX IF EXISTS ix_tickets_hospital_id")
+    op.execute("DROP INDEX IF EXISTS ix_tickets_updated_at")
+    op.execute("DROP INDEX IF EXISTS ix_tickets_email_thread_id")
 
-    with op.batch_alter_table('ticket_attachments', schema=None) as batch_op:
-        batch_op.drop_index('ix_ticket_attachments_message_id')
-        batch_op.drop_index('ix_ticket_attachments_ticket_id')
+    op.execute("DROP INDEX IF EXISTS ix_ticket_messages_ticket_id")
+    op.execute("DROP INDEX IF EXISTS ix_ticket_messages_sender_id")
 
-    with op.batch_alter_table('ticket_history', schema=None) as batch_op:
-        batch_op.drop_index('ix_ticket_history_ticket_id')
+    op.execute("DROP INDEX IF EXISTS ix_ticket_history_ticket_id")
 
-    with op.batch_alter_table('ticket_messages', schema=None) as batch_op:
-        batch_op.drop_index('ix_ticket_messages_sender_id')
-        batch_op.drop_index('ix_ticket_messages_ticket_id')
+    op.execute("DROP INDEX IF EXISTS ix_ticket_attachments_ticket_id")
+    op.execute("DROP INDEX IF EXISTS ix_ticket_attachments_message_id")
 
-    with op.batch_alter_table('tickets', schema=None) as batch_op:
-        batch_op.drop_index('ix_tickets_email_thread_id')
-        batch_op.drop_index('ix_tickets_updated_at')
-        batch_op.drop_index('ix_tickets_hospital_id')
-        batch_op.drop_index('ix_tickets_assigned_to')
-        batch_op.drop_index('ix_tickets_status')
+    op.execute("DROP INDEX IF EXISTS ix_tasks_assigned_to")
+    op.execute("DROP INDEX IF EXISTS ix_tasks_status")
+    op.execute("DROP INDEX IF EXISTS ix_tasks_deadline")
+    op.execute("DROP INDEX IF EXISTS ix_tasks_ticket_id")

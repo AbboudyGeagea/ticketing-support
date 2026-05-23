@@ -16,12 +16,19 @@ depends_on = None
 
 
 def upgrade():
-    op.create_check_constraint(
-        "ck_task_progress_range",
-        "tasks",
-        "progress BETWEEN 0 AND 100",
-    )
+    op.execute("""
+        DO $$ BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'ck_task_progress_range'
+            ) THEN
+                ALTER TABLE tasks ADD CONSTRAINT ck_task_progress_range
+                    CHECK (progress BETWEEN 0 AND 100);
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade():
-    op.drop_constraint("ck_task_progress_range", "tasks", type_="check")
+    op.execute("""
+        ALTER TABLE tasks DROP CONSTRAINT IF EXISTS ck_task_progress_range;
+    """)
