@@ -45,7 +45,7 @@ log "Git pull complete. Current commit: $(git rev-parse --short HEAD)"
 # Step 2: Build new web image
 # ---------------------------------------------------------------------------
 log "--- Step 2: Building new web image ---"
-docker compose -f "${COMPOSE_FILE}" build --no-cache web
+docker compose -f "${COMPOSE_FILE}" build web
 log "Web image built successfully."
 
 # ---------------------------------------------------------------------------
