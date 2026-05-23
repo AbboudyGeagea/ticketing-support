@@ -49,13 +49,14 @@ docker compose -f "${COMPOSE_FILE}" build web
 log "Web image built successfully."
 
 # ---------------------------------------------------------------------------
-# Step 3: Replace the web container (zero-downtime)
+# Step 3: Replace the web container
 # ---------------------------------------------------------------------------
 log "--- Step 3: Restarting web container ---"
-# --no-deps ensures db/redis are not restarted
-# --force-recreate ensures the new image is used
+# Stop and remove old container first so the port is freed before the new one starts
+docker compose -f "${COMPOSE_FILE}" stop web
+docker compose -f "${COMPOSE_FILE}" rm -f web
 # flask db upgrade runs automatically inside the container on startup (see docker-compose command)
-docker compose -f "${COMPOSE_FILE}" up -d --no-deps --force-recreate web
+docker compose -f "${COMPOSE_FILE}" up -d --no-deps web
 log "Web container restarted."
 
 # ---------------------------------------------------------------------------
