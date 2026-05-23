@@ -136,6 +136,25 @@ class SharedInstallationForm(FlaskForm):
     submit = SubmitField("Save")
 
 
+class CredentialForm(FlaskForm):
+    category = SelectField("Category", choices=[
+        ("remote_desktop", "Remote Desktop"),
+        ("vpn", "VPN"),
+        ("network", "Network / IP"),
+        ("admin_account", "Admin Account"),
+        ("os_account", "OS Account"),
+        ("other", "Other"),
+    ])
+    label = StringField("Label", validators=[DataRequired(), Length(max=200)])
+    username = StringField("Username / Login", validators=[Optional(), Length(max=200)])
+    password = PasswordField("Password", validators=[Optional()])
+    host = StringField("Host / IP Address", validators=[Optional(), Length(max=200)])
+    role = StringField("Role / Function", validators=[Optional(), Length(max=200)])
+    url = StringField("URL", validators=[Optional(), Length(max=500)])
+    notes = TextAreaField("Notes (non-sensitive)", validators=[Optional()])
+    submit = SubmitField("Save Credential")
+
+
 class SLAPolicyForm(FlaskForm):
     priority = SelectField("Priority", choices=[
         ("low", "Low"), ("medium", "Medium"), ("high", "High"), ("urgent", "Urgent"),

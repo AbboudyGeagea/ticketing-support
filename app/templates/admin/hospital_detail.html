@@ -10,7 +10,7 @@
 
 <!-- Tab Bar -->
 <div class="flex gap-1 border-b border-slate-200 mb-5">
-  {% for tab_id, tab_label in [('users','Users'), ('products','Products'), ('info','Hospital Info')] %}
+  {% for tab_id, tab_label in [('users','Users'), ('products','Products'), ('info','Hospital Info'), ('access','Access & Credentials')] %}
   <button onclick="switchTab('{{ tab_id }}')"
           id="tab-btn-{{ tab_id }}"
           class="tab-btn px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
@@ -18,6 +18,7 @@
     {{ tab_label }}
     {% if tab_id == 'users' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ users | length }}</span>{% endif %}
     {% if tab_id == 'products' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ subscribed_ids | length }}</span>{% endif %}
+    {% if tab_id == 'access' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ credentials | length }}</span>{% endif %}
   </button>
   {% endfor %}
 </div>
@@ -210,6 +211,63 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- ── ACCESS TAB ─────────────────────────────────────────────────────────── -->
+<div id="tab-access" class="tab-panel {% if active_tab != 'access' %}hidden{% endif %}">
+  {% set categories = [
+    ('remote_desktop','Remote Desktop'),('vpn','VPN'),('network','Network / IP'),
+    ('admin_account','Admin Accounts'),('os_account','OS Accounts'),('other','Other'),
+  ] %}
+  {% if not credentials %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-12 text-center">
+    <p class="text-slate-400 text-sm mb-4">No credentials stored yet.</p>
+    <a href="{{ url_for('admin.credential_add', hospital_id=hospital.id) }}"
+       class="bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
+      + Add First Credential
+    </a>
+  </div>
+  {% else %}
+  {% for cat_id, cat_label in categories %}
+  {% set cat_creds = credentials | selectattr('category', 'equalto', cat_id) | list %}
+  {% if cat_creds %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-4">
+    <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+      <h3 class="text-sm font-semibold text-slate-700">{{ cat_label }}</h3>
+    </div>
+    <div class="divide-y divide-slate-100">
+      {% for cred in cat_creds %}
+      <div class="px-5 py-3 flex items-center justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-medium text-slate-800">{{ cred.label }}</p>
+          <div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
+            {% if cred.username %}<span class="text-xs text-slate-500">👤 {{ cred.username }}</span>{% endif %}
+            {% if cred.password_enc %}<span class="text-xs text-slate-400">🔑 ••••••••</span>{% endif %}
+            {% if cred.host_enc %}<span class="text-xs text-slate-400">🖥 ••••••••</span>{% endif %}
+            {% if cred.url %}<a href="{{ cred.url }}" target="_blank" class="text-xs text-primary hover:underline">🔗 URL</a>{% endif %}
+          </div>
+          {% if cred.notes %}<p class="text-xs text-slate-400 mt-1 truncate">{{ cred.notes }}</p>{% endif %}
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+          <a href="{{ url_for('admin.hospital_access', hospital_id=hospital.id) }}"
+             class="text-xs text-slate-500 hover:text-primary transition-colors">View</a>
+          <a href="{{ url_for('admin.credential_edit', hospital_id=hospital.id, cred_id=cred.id) }}"
+             class="text-xs text-primary hover:underline">Edit</a>
+          <form method="POST" action="{{ url_for('admin.credential_delete', hospital_id=hospital.id, cred_id=cred.id) }}"
+                onsubmit="return confirm('Delete this credential?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-xs text-slate-400 hover:text-red-500">Delete</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% endfor %}
+  <a href="{{ url_for('admin.credential_add', hospital_id=hospital.id) }}"
+     class="inline-block text-sm text-primary hover:underline font-medium mt-1">+ Add Credential</a>
+  {% endif %}
 </div>
 
 {% endblock %}

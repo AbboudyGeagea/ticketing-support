@@ -32,6 +32,10 @@ class Config:
 
     EMAIL_POLL_INTERVAL_SECONDS = int(os.environ.get("EMAIL_POLL_INTERVAL_SECONDS", 60))
 
+    # Hospital credentials vault
+    CREDENTIAL_ENCRYPTION_KEY = os.environ.get("CREDENTIAL_ENCRYPTION_KEY", "")
+    CREDENTIAL_MASTER_KEY = os.environ.get("CREDENTIAL_MASTER_KEY", "")
+
     # File uploads
     UPLOAD_FOLDER = os.environ.get("UPLOAD_FOLDER", "/home/support/ticketing-support/uploads")
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB

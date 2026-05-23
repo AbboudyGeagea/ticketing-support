@@ -1,0 +1,268 @@
+{% extends 'base_agent.html' %}
+{% block title %}{{ hospital.name }} — Access{% endblock %}
+{% block page_title %}{{ hospital.name }}{% endblock %}
+
+{% block header_actions %}
+<a href="javascript:history.back()" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back</a>
+{% if current_user.is_admin %}
+<a href="{{ url_for('admin.hospital_detail', hospital_id=hospital.id, tab='access') }}"
+   class="text-sm text-primary hover:underline">Manage</a>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+{% set categories = [
+  ('remote_desktop', 'Remote Desktop'),
+  ('vpn', 'VPN'),
+  ('network', 'Network / IP'),
+  ('admin_account', 'Admin Accounts'),
+  ('os_account', 'OS Accounts'),
+  ('other', 'Other'),
+] %}
+
+{% if not credentials %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-16 text-center">
+  <p class="text-slate-400 text-sm">No credentials stored for this hospital yet.</p>
+  {% if current_user.is_admin %}
+  <a href="{{ url_for('admin.credential_add', hospital_id=hospital.id) }}"
+     class="mt-4 inline-block bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
+    + Add First Credential
+  </a>
+  {% endif %}
+</div>
+{% else %}
+
+{% for cat_id, cat_label in categories %}
+{% set cat_creds = credentials | selectattr('category', 'equalto', cat_id) | list %}
+{% if cat_creds %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-5">
+  <div class="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800 text-sm">{{ cat_label }}</h2>
+    <span class="text-xs text-slate-400">{{ cat_creds | length }} entr{{ 'y' if cat_creds | length == 1 else 'ies' }}</span>
+  </div>
+  <div class="divide-y divide-slate-100">
+    {% for cred in cat_creds %}
+    <div class="px-5 py-4" id="cred-row-{{ cred.id }}">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-slate-800 mb-2">{{ cred.label }}</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+
+            {% if cred.username %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Username</span>
+              <span class="font-mono text-slate-700 text-xs">{{ cred.username }}</span>
+              <button onclick="copyText('{{ cred.username }}')" title="Copy"
+                      class="text-slate-300 hover:text-primary transition-colors flex-shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            </div>
+            {% endif %}
+
+            {% if cred.password_enc %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Password</span>
+              <span class="font-mono text-slate-400 text-xs masked-field" id="pw-{{ cred.id }}">••••••••</span>
+              <button onclick="copyMasked('pw-{{ cred.id }}')" title="Copy" id="copy-pw-{{ cred.id }}"
+                      class="text-slate-300 hover:text-primary transition-colors flex-shrink-0 hidden">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            </div>
+            {% endif %}
+
+            {% if cred.host_enc %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Host / IP</span>
+              <span class="font-mono text-slate-400 text-xs masked-field" id="host-{{ cred.id }}">••••••••</span>
+              <button onclick="copyMasked('host-{{ cred.id }}')" title="Copy" id="copy-host-{{ cred.id }}"
+                      class="text-slate-300 hover:text-primary transition-colors flex-shrink-0 hidden">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            </div>
+            {% endif %}
+
+            {% if cred.role_enc %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Role</span>
+              <span class="font-mono text-slate-400 text-xs masked-field" id="role-{{ cred.id }}">••••••••</span>
+            </div>
+            {% endif %}
+
+            {% if cred.url %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">URL</span>
+              <a href="{{ cred.url }}" target="_blank" rel="noopener"
+                 class="text-primary hover:underline text-xs truncate">{{ cred.url }}</a>
+            </div>
+            {% endif %}
+
+            {% if cred.notes %}
+            <div class="flex items-start gap-2 sm:col-span-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0 pt-0.5">Notes</span>
+              <span class="text-slate-600 text-xs">{{ cred.notes }}</span>
+            </div>
+            {% endif %}
+
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-shrink-0">
+          {% if cred.password_enc or cred.host_enc or cred.role_enc %}
+          <button onclick="openReveal({{ cred.id }})"
+                  class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:border-primary hover:text-primary transition-colors"
+                  id="reveal-btn-{{ cred.id }}">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+            </svg>
+            Reveal
+          </button>
+          {% endif %}
+          {% if current_user.is_admin %}
+          <a href="{{ url_for('admin.credential_edit', hospital_id=hospital.id, cred_id=cred.id) }}"
+             class="text-xs text-slate-400 hover:text-primary transition-colors">Edit</a>
+          <form method="POST" action="{{ url_for('admin.credential_delete', hospital_id=hospital.id, cred_id=cred.id) }}"
+                onsubmit="return confirm('Delete this credential?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-xs text-slate-400 hover:text-red-500 transition-colors">Delete</button>
+          </form>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+{% if current_user.is_admin %}
+<div class="mt-2">
+  <a href="{{ url_for('admin.credential_add', hospital_id=hospital.id) }}"
+     class="inline-flex items-center gap-2 text-sm text-primary hover:underline font-medium">
+    + Add Credential
+  </a>
+</div>
+{% endif %}
+
+{% endif %}
+
+<!-- Reveal Modal -->
+<div id="reveal-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
+  <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+    <h3 class="text-base font-semibold text-slate-800 mb-1">Enter Master Key</h3>
+    <p class="text-xs text-slate-400 mb-4">Required to reveal encrypted credentials.</p>
+    <input type="password" id="master-key-input" placeholder="Master key"
+           class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-3"
+           onkeydown="if(event.key==='Enter') doReveal()">
+    <p id="reveal-error" class="text-red-500 text-xs mb-3 hidden">Wrong key. Try again.</p>
+    <div class="flex gap-3">
+      <button onclick="doReveal()"
+              class="flex-1 bg-primary hover:bg-primary-dark text-white text-sm font-semibold py-2.5 rounded-lg transition-colors">
+        Reveal
+      </button>
+      <button onclick="closeReveal()"
+              class="text-slate-500 hover:text-slate-800 text-sm py-2.5 px-4 transition-colors">
+        Cancel
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var _activeCred = null;
+var _revealed = {};
+
+function openReveal(credId) {
+  if (_revealed[credId]) return;
+  _activeCred = credId;
+  document.getElementById('master-key-input').value = '';
+  document.getElementById('reveal-error').classList.add('hidden');
+  document.getElementById('reveal-modal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('master-key-input').focus(), 50);
+}
+
+function closeReveal() {
+  document.getElementById('reveal-modal').classList.add('hidden');
+  _activeCred = null;
+}
+
+function doReveal() {
+  var key = document.getElementById('master-key-input').value;
+  if (!key || !_activeCred) return;
+
+  fetch('{{ url_for("admin.credential_reveal", hospital_id=hospital.id, cred_id=0) }}'.replace('/0/', '/' + _activeCred + '/'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
+    body: JSON.stringify({ key: key })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (!data.ok) {
+      document.getElementById('reveal-error').classList.remove('hidden');
+      return;
+    }
+    var id = _activeCred;
+    _revealed[id] = true;
+
+    function showField(elId, value, copyBtnId) {
+      var el = document.getElementById(elId);
+      if (el && value) {
+        el.textContent = value;
+        el.classList.remove('text-slate-400');
+        el.classList.add('text-slate-800');
+        if (copyBtnId) {
+          var btn = document.getElementById(copyBtnId);
+          if (btn) btn.classList.remove('hidden');
+        }
+      }
+    }
+
+    showField('pw-' + id, data.password, 'copy-pw-' + id);
+    showField('host-' + id, data.host, 'copy-host-' + id);
+    showField('role-' + id, data.role, null);
+
+    var btn = document.getElementById('reveal-btn-' + id);
+    if (btn) btn.classList.add('hidden');
+
+    closeReveal();
+  })
+  .catch(() => {
+    document.getElementById('reveal-error').classList.remove('hidden');
+  });
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showCopied());
+}
+
+function copyMasked(elId) {
+  var el = document.getElementById(elId);
+  if (el && el.textContent !== '••••••••') {
+    navigator.clipboard.writeText(el.textContent).then(() => showCopied());
+  }
+}
+
+function showCopied() {
+  var t = document.createElement('div');
+  t.textContent = 'Copied!';
+  t.className = 'fixed bottom-6 right-6 bg-slate-800 text-white text-xs px-4 py-2 rounded-lg shadow-lg z-50';
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1500);
+}
+
+document.getElementById('reveal-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeReveal();
+});
+</script>
+{% endblock %}

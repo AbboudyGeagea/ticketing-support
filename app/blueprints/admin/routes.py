@@ -1,4 +1,4 @@
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.blueprints.admin import bp
@@ -6,8 +6,10 @@ from app.blueprints.admin.forms import (
     HospitalForm, ProductForm, CustomerUserForm, AgentForm, EditUserForm, ResetPasswordForm,
     CannedResponseForm, AssignmentRuleForm, WebhookConfigForm, ProjectTemplateForm,
     KBArticleForm, TicketTemplateForm, SLAPolicyForm, SharedInstallationForm, TicketStatusForm, NewTicketStatusForm,
+    CredentialForm,
 )
-from app.models.hospital import Hospital
+from app.models.hospital import Hospital, HospitalCredential
+from app.utils.crypto import encrypt, decrypt
 from app.models.product import Product
 from app.models.user import User
 from app.models.ticket import Ticket
@@ -21,7 +23,7 @@ from app.models.ticket_template import TicketTemplate
 from app.models.sla_policy import SLAPolicy
 from app.models.shared_installation import SharedInstallation
 from app.models.ticket_status import TicketStatus
-from app.extensions import db
+from app.extensions import db, csrf
 from functools import wraps
 
 
@@ -133,10 +135,14 @@ def hospital_detail(hospital_id):
             flash(f'User "{u.name}" created.', "success")
             return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="users"))
 
+    credentials = HospitalCredential.query.filter_by(hospital_id=hospital_id).order_by(
+        HospitalCredential.category, HospitalCredential.label
+    ).all()
     active_tab = request.args.get("tab", "users")
     return render_template("admin/hospital_detail.html", hospital=hospital, users=users,
                            subscribed_ids=subscribed_ids, available_products=available_products,
                            hospital_product_list=hospital_product_list,
+                           credentials=credentials,
                            add_error=add_error, active_tab=active_tab)
 
 
@@ -1022,3 +1028,107 @@ def ticket_status_delete(slug):
     db.session.commit()
     flash(f'Status "{status.label}" deleted.', "success")
     return redirect(url_for("admin.ticket_statuses"))
+
+
+# ── Hospital Credentials ──────────────────────────────────────────────────────
+
+def _agent_or_admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not current_user.is_authenticated or not current_user.is_agent:
+            abort(403)
+        return f(*args, **kwargs)
+    return decorated
+
+
+@bp.route("/hospitals/<int:hospital_id>/credentials/add", methods=["GET", "POST"])
+@login_required
+@_agent_or_admin_required
+def credential_add(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    form = CredentialForm()
+    if form.validate_on_submit():
+        cred = HospitalCredential(
+            hospital_id=hospital_id,
+            category=form.category.data,
+            label=form.label.data,
+            username=form.username.data or None,
+            password_enc=encrypt(form.password.data) if form.password.data else None,
+            host_enc=encrypt(form.host.data) if form.host.data else None,
+            role_enc=encrypt(form.role.data) if form.role.data else None,
+            url=form.url.data or None,
+            notes=form.notes.data or None,
+            created_by=current_user.id,
+        )
+        db.session.add(cred)
+        db.session.commit()
+        flash("Credential added.", "success")
+        return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="access"))
+    return render_template("admin/credential_form.html", form=form, hospital=hospital, cred=None)
+
+
+@bp.route("/hospitals/<int:hospital_id>/credentials/<int:cred_id>/edit", methods=["GET", "POST"])
+@login_required
+@_agent_or_admin_required
+def credential_edit(hospital_id, cred_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    cred = HospitalCredential.query.filter_by(id=cred_id, hospital_id=hospital_id).first_or_404()
+    form = CredentialForm(obj=cred)
+    if form.validate_on_submit():
+        cred.category = form.category.data
+        cred.label = form.label.data
+        cred.username = form.username.data or None
+        if form.password.data:
+            cred.password_enc = encrypt(form.password.data)
+        if form.host.data:
+            cred.host_enc = encrypt(form.host.data)
+        if form.role.data:
+            cred.role_enc = encrypt(form.role.data)
+        cred.url = form.url.data or None
+        cred.notes = form.notes.data or None
+        db.session.commit()
+        flash("Credential updated.", "success")
+        return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="access"))
+    return render_template("admin/credential_form.html", form=form, hospital=hospital, cred=cred)
+
+
+@bp.route("/hospitals/<int:hospital_id>/credentials/<int:cred_id>/delete", methods=["POST"])
+@login_required
+@_agent_or_admin_required
+def credential_delete(hospital_id, cred_id):
+    cred = HospitalCredential.query.filter_by(id=cred_id, hospital_id=hospital_id).first_or_404()
+    db.session.delete(cred)
+    db.session.commit()
+    flash("Credential deleted.", "success")
+    return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="access"))
+
+
+@bp.route("/hospitals/<int:hospital_id>/credentials/<int:cred_id>/reveal", methods=["POST"])
+@csrf.exempt
+@login_required
+@_agent_or_admin_required
+def credential_reveal(hospital_id, cred_id):
+    cred = HospitalCredential.query.filter_by(id=cred_id, hospital_id=hospital_id).first_or_404()
+    data = request.get_json(silent=True) or {}
+    entered = data.get("key", "")
+    master = current_app.config.get("CREDENTIAL_MASTER_KEY", "")
+    if not master or entered != master:
+        return jsonify({"ok": False}), 403
+    return jsonify({
+        "ok": True,
+        "password": decrypt(cred.password_enc) if cred.password_enc else "",
+        "host": decrypt(cred.host_enc) if cred.host_enc else "",
+        "role": decrypt(cred.role_enc) if cred.role_enc else "",
+    })
+
+
+@bp.route("/hospitals/<int:hospital_id>/access")
+@login_required
+@_agent_or_admin_required
+def hospital_access(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    credentials = HospitalCredential.query.filter_by(hospital_id=hospital_id).order_by(
+        HospitalCredential.category, HospitalCredential.label
+    ).all()
+    return render_template("admin/hospital_access.html", hospital=hospital, credentials=credentials)

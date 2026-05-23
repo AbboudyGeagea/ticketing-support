@@ -220,7 +220,10 @@
       <dl class="space-y-2 text-sm">
         <div class="flex justify-between">
           <dt class="text-slate-500">Hospital</dt>
-          <dd class="text-slate-800 font-medium">{{ ticket.hospital.name }}</dd>
+          <dd>
+            <a href="{{ url_for('admin.hospital_access', hospital_id=ticket.hospital_id) }}"
+               class="text-primary hover:underline font-medium text-sm">{{ ticket.hospital.name }}</a>
+          </dd>
         </div>
         {% if ticket.product %}
         <div class="flex justify-between">
