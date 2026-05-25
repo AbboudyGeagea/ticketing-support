@@ -138,11 +138,15 @@ def hospital_detail(hospital_id):
     credentials = HospitalCredential.query.filter_by(hospital_id=hospital_id).order_by(
         HospitalCredential.category, HospitalCredential.label
     ).all()
+    from app.models.project import Project, ProjectTemplate
+    projects = hospital.projects.order_by(Project.created_at.desc()).all()
+    templates = ProjectTemplate.query.order_by(ProjectTemplate.name).all()
     active_tab = request.args.get("tab", "users")
     return render_template("admin/hospital_detail.html", hospital=hospital, users=users,
                            subscribed_ids=subscribed_ids, available_products=available_products,
                            hospital_product_list=hospital_product_list,
                            credentials=credentials,
+                           projects=projects, templates=templates,
                            add_error=add_error, active_tab=active_tab)
 
 

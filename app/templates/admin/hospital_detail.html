@@ -10,7 +10,7 @@
 
 <!-- Tab Bar -->
 <div class="flex gap-1 border-b border-slate-200 mb-5">
-  {% for tab_id, tab_label in [('users','Users'), ('products','Products'), ('info','Hospital Info'), ('access','Access & Credentials')] %}
+  {% for tab_id, tab_label in [('users','Users'), ('products','Products'), ('info','Hospital Info'), ('access','Access & Credentials'), ('projects','Projects')] %}
   <button onclick="switchTab('{{ tab_id }}')"
           id="tab-btn-{{ tab_id }}"
           class="tab-btn px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors
@@ -19,6 +19,7 @@
     {% if tab_id == 'users' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ users | length }}</span>{% endif %}
     {% if tab_id == 'products' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ subscribed_ids | length }}</span>{% endif %}
     {% if tab_id == 'access' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ credentials | length }}</span>{% endif %}
+    {% if tab_id == 'projects' %}<span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">{{ projects | length }}</span>{% endif %}
   </button>
   {% endfor %}
 </div>
@@ -267,6 +268,94 @@
   {% endfor %}
   <a href="{{ url_for('admin.credential_add', hospital_id=hospital.id) }}"
      class="inline-block text-sm text-primary hover:underline font-medium mt-1">+ Add Credential</a>
+  {% endif %}
+</div>
+
+<!-- ── PROJECTS TAB ──────────────────────────────────────────────────────── -->
+<div id="tab-projects" class="tab-panel {% if active_tab != 'projects' %}hidden{% endif %}">
+
+  <!-- Start New Project -->
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-4 p-5">
+    <h3 class="text-sm font-semibold text-slate-700 mb-3">Start New Project</h3>
+    {% if templates %}
+    <form method="POST" action="{{ url_for('projects.start_project', hospital_id=hospital.id) }}"
+          class="flex flex-wrap gap-3 items-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="flex-1 min-w-48">
+        <label class="block text-xs font-medium text-slate-600 mb-1">Project Name</label>
+        <input type="text" name="name" required placeholder="e.g. PACS Installation 2026"
+               class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40">
+      </div>
+      <div class="flex-1 min-w-48">
+        <label class="block text-xs font-medium text-slate-600 mb-1">Template</label>
+        <select name="template_id" required
+                class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40">
+          <option value="">— Select template —</option>
+          {% for t in templates %}
+          <option value="{{ t.id }}">{{ t.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit"
+              class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors whitespace-nowrap">
+        Create Project
+      </button>
+    </form>
+    {% else %}
+    <p class="text-sm text-slate-400">No project templates found. <a href="{{ url_for('admin.project_templates') }}" class="text-primary hover:underline">Create one first.</a></p>
+    {% endif %}
+  </div>
+
+  <!-- Existing Projects -->
+  {% if projects %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <table class="w-full text-sm">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr>
+          <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customer Visible</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Created</th>
+          <th class="px-4 py-3"></th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        {% for p in projects %}
+        <tr class="hover:bg-slate-50 transition-colors">
+          <td class="px-5 py-3.5">
+            <p class="font-medium text-slate-800">{{ p.name }}</p>
+            {% if p.source_template %}<p class="text-xs text-slate-400">{{ p.source_template.name }}</p>{% endif %}
+          </td>
+          <td class="px-4 py-3.5">
+            <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full
+              {% if p.status == 'active' %}bg-blue-100 text-blue-700
+              {% elif p.status == 'completed' %}bg-green-100 text-green-700
+              {% elif p.status == 'on_hold' %}bg-amber-100 text-amber-700
+              {% else %}bg-slate-100 text-slate-600{% endif %}">
+              {{ p.status_label }}
+            </span>
+          </td>
+          <td class="px-4 py-3.5">
+            {% if p.is_customer_visible %}
+            <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Shared</span>
+            {% else %}
+            <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Internal</span>
+            {% endif %}
+          </td>
+          <td class="px-4 py-3.5 text-xs text-slate-500">{{ p.created_at.strftime('%b %d, %Y') }}</td>
+          <td class="px-4 py-3.5 text-right">
+            <a href="{{ url_for('projects.project_detail', project_id=p.id) }}"
+               class="text-primary hover:underline text-xs font-medium">Open →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-10 text-center">
+    <p class="text-slate-400 text-sm">No projects yet. Use the form above to start one.</p>
+  </div>
   {% endif %}
 </div>
 

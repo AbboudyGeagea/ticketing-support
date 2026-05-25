@@ -210,6 +210,26 @@ def notify_sla_breach(ticket):
     _send(recipients, subject, text=text)
 
 
+def notify_requirement_assigned(requirement):
+    """Email the assignee when a project requirement is assigned to them."""
+    recipient = requirement.assignee_email
+    if not recipient:
+        return
+    agent = requirement.assigned_agent
+    project = requirement.project
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    portal_url = f"{base_url}/projects/portal/{project.id}"
+    subject = f"[{project.name}] Action required: {requirement.title}"
+    html = render_template(
+        "emails/requirement_assigned.html",
+        requirement=requirement,
+        project=project,
+        agent=agent,
+        portal_url=portal_url,
+    )
+    _send([recipient], subject, html=html)
+
+
 def send_csat_survey(ticket):
     if not ticket.creator or not ticket.creator.email:
         return

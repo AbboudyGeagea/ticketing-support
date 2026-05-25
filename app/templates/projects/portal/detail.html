@@ -83,37 +83,117 @@
 </div>
 {% endif %}
 
+<!-- Requirements -->
+{% if requirements %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="font-semibold text-slate-800">Requirements
+      <span class="ml-1.5 text-xs bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">
+        {{ requirements | selectattr('status', 'equalto', 'pending') | list | length }} pending
+      </span>
+    </h2>
+  </div>
+  <div class="divide-y divide-slate-100">
+    {% for req in requirements %}
+    <div class="px-5 py-4">
+      <div class="flex flex-wrap items-start gap-3 mb-2">
+        <div class="flex-1 min-w-0">
+          <div class="flex flex-wrap items-center gap-2 mb-0.5">
+            <span class="text-sm font-medium text-slate-800">{{ req.title }}</span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium
+              {% if req.req_type == 'approve' %}bg-purple-100 text-purple-700
+              {% elif req.req_type == 'question' %}bg-blue-100 text-blue-700
+              {% else %}bg-amber-100 text-amber-700{% endif %}">
+              {{ req.req_type_label }}
+            </span>
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium
+              {% if req.status == 'approved' %}bg-green-100 text-green-700
+              {% elif req.status == 'rejected' %}bg-red-100 text-red-700
+              {% elif req.status == 'submitted' %}bg-blue-100 text-blue-700
+              {% else %}bg-slate-100 text-slate-500{% endif %}">
+              {{ req.status_label }}
+            </span>
+          </div>
+          {% if req.description %}<p class="text-xs text-slate-500">{{ req.description }}</p>{% endif %}
+          {% if req.due_date %}<p class="text-xs text-slate-400 mt-0.5">Due: {{ req.due_date.strftime('%B %d, %Y') }}</p>{% endif %}
+          {% if req.assigned_agent %}
+          <p class="text-xs text-slate-400 mt-0.5">Contact: <span class="text-slate-600">{{ req.assigned_agent.name }}
+            {% if req.assigned_agent.email %}&nbsp;— <a href="mailto:{{ req.assigned_agent.email }}" class="text-primary hover:underline">{{ req.assigned_agent.email }}</a>{% endif %}
+          </span></p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if req.response_text %}
+      <div class="mb-3 bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-600 border border-slate-100">
+        <span class="font-medium text-slate-500">Your response:</span> {{ req.response_text }}
+      </div>
+      {% endif %}
+
+      {% if req.status in ('pending', 'submitted', 'rejected') %}
+      <form method="POST" action="{{ url_for('projects.requirement_respond', project_id=project.id, req_id=req.id) }}"
+            class="mt-2 space-y-2">
+        {{ comment_form.hidden_tag() }}
+        <textarea name="response_text" rows="2" placeholder="Your response or comments…"
+                  class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none">{{ req.response_text or '' }}</textarea>
+        <div class="flex gap-2">
+          {% if req.req_type == 'approve' %}
+          <button type="submit" name="action" value="approve"
+                  class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+            Approve
+          </button>
+          <button type="submit" name="action" value="reject"
+                  class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+            Reject
+          </button>
+          {% else %}
+          <button type="submit" name="action" value="submit"
+                  class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+            Submit Response
+          </button>
+          {% endif %}
+        </div>
+      </form>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- Tasks -->
-{% if tasks %}
+{% if top_level_tasks %}
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
   <div class="px-5 py-4 border-b border-slate-100">
     <h2 class="font-semibold text-slate-800">Tasks</h2>
   </div>
-  <ul class="divide-y divide-slate-100">
-    {% for task in tasks %}
-    <li class="px-5 py-3 flex items-center gap-3">
-      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
-        {% if task.status == 'done' %}bg-green-100 text-green-800
-        {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-800
-        {% else %}bg-slate-100 text-slate-600{% endif %}">
-        {% if task.status == 'todo' %}To Do
-        {% elif task.status == 'in_progress' %}In Progress
-        {% else %}Done{% endif %}
-      </span>
-      <div class="flex-1 min-w-0">
-        <p class="text-sm text-slate-800 {{ 'line-through text-slate-400' if task.status == 'done' else '' }}">
-          {{ task.title }}
-        </p>
-        {% if task.assignee %}
-          <p class="text-xs text-slate-400">{{ task.assignee.name }}</p>
+  <div class="divide-y divide-slate-100">
+    {% for task in top_level_tasks %}
+    <div class="px-5 py-3">
+      <div class="flex items-center gap-3">
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0
+          {% if task.status == 'done' %}bg-green-100 text-green-800
+          {% elif task.status == 'in_progress' %}bg-yellow-100 text-yellow-800
+          {% else %}bg-slate-100 text-slate-600{% endif %}">
+          {% if task.status == 'todo' %}To Do{% elif task.status == 'in_progress' %}In Progress{% else %}Done{% endif %}
+        </span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-slate-800 {{ 'line-through text-slate-400' if task.status == 'done' else '' }}">
+            {{ task.title }}
+          </p>
+          {% if task.subtasks %}
+          <p class="text-xs text-slate-400">
+            {{ task.subtasks | selectattr('status', 'equalto', 'done') | list | length }}/{{ task.subtasks | length }} subtasks done
+          </p>
+          {% endif %}
+        </div>
+        {% if task.due_date %}
+          <span class="text-xs text-slate-400 flex-shrink-0">{{ task.due_date.strftime('%b %d') }}</span>
         {% endif %}
       </div>
-      {% if task.due_date %}
-        <span class="text-xs text-slate-400 flex-shrink-0">{{ task.due_date.strftime('%b %d') }}</span>
-      {% endif %}
-    </li>
+    </div>
     {% endfor %}
-  </ul>
+  </div>
 </div>
 {% endif %}
 

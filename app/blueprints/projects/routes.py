@@ -7,7 +7,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 from app.blueprints.projects import bp
 from app.blueprints.projects.forms import ProjectForm, MilestoneForm, ProjectTaskForm, CommentForm
-from app.models.project import Project, ProjectMilestone, ProjectTask, ProjectComment, ProjectTemplate
+from app.models.project import (
+    Project, ProjectMilestone, ProjectTask, ProjectComment,
+    ProjectTemplate, ProjectTemplateTask, ProjectTemplateRequirement,
+    ProjectRequirement, REQ_TYPES,
+)
 from app.models.hospital import Hospital
 from app.models.user import User
 from app.extensions import db
@@ -141,15 +145,23 @@ def project_detail(project_id):
 
     gantt_data = _build_gantt_data(project, tasks, milestones)
 
+    requirements = project.requirements.all()
+    top_level_tasks = [t for t in tasks if t.parent_id is None]
+    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+
     return render_template(
         "projects/agent/detail.html",
         project=project,
         milestones=milestones,
         tasks=tasks,
+        top_level_tasks=top_level_tasks,
         comments=comments,
         comment_form=comment_form,
         templates=templates,
         gantt_data=gantt_data,
+        requirements=requirements,
+        req_types=REQ_TYPES,
+        agents=agents,
     )
 
 
@@ -345,19 +357,9 @@ def apply_template(project_id):
     project = Project.query.get_or_404(project_id)
     tmpl_id = request.form.get("template_id", type=int)
     tmpl = ProjectTemplate.query.get_or_404(tmpl_id)
-    count = 0
-    for tt in tmpl.tasks.limit(50).all():
-        task = ProjectTask(
-            project_id=project.id,
-            title=tt.title,
-            description=tt.description,
-            priority=tt.default_priority,
-            status="todo",
-        )
-        db.session.add(task)
-        count += 1
+    _instantiate_template(project, tmpl)
     db.session.commit()
-    flash(f'{count} task(s) from template "{tmpl.name}" added to project.', "success")
+    flash(f'Template "{tmpl.name}" applied — tasks and requirements added.', "success")
     return redirect(url_for("projects.project_detail", project_id=project_id))
 
 
@@ -423,6 +425,8 @@ def portal_detail(project_id):
 
     milestones = project.milestones.all()
     tasks = project.tasks.all()
+    top_level_tasks = [t for t in tasks if t.parent_id is None]
+    requirements = project.requirements.all()
     comments = project.comments.all()
     comment_form = CommentForm()
     gantt_data = _build_gantt_data(project, tasks, milestones) if project.is_gantt_visible else None
@@ -432,6 +436,8 @@ def portal_detail(project_id):
         project=project,
         milestones=milestones,
         tasks=tasks,
+        top_level_tasks=top_level_tasks,
+        requirements=requirements,
         comments=comments,
         comment_form=comment_form,
         gantt_data=gantt_data,
@@ -457,3 +463,232 @@ def portal_comment(project_id):
         db.session.commit()
         flash("Comment posted.", "success")
     return redirect(url_for("projects.portal_detail", project_id=project_id))
+
+
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _instantiate_template(project, tmpl):
+    """Create ProjectTasks (with subtasks) and ProjectRequirements from a template."""
+    # Only top-level template tasks; subtasks carry parent_id
+    top_tasks = [t for t in tmpl.tasks if t.parent_id is None]
+    id_map = {}  # template_task.id → new ProjectTask.id
+
+    for tt in sorted(top_tasks, key=lambda x: x.order):
+        pt = ProjectTask(
+            project_id=project.id,
+            title=tt.title,
+            description=tt.description,
+            priority=tt.default_priority,
+            status="todo",
+        )
+        db.session.add(pt)
+        db.session.flush()
+        id_map[tt.id] = pt.id
+
+        for sub in sorted(tt.subtasks, key=lambda x: x.order):
+            ps = ProjectTask(
+                project_id=project.id,
+                parent_id=pt.id,
+                title=sub.title,
+                description=sub.description,
+                priority=sub.default_priority,
+                status="todo",
+            )
+            db.session.add(ps)
+
+    for tr in tmpl.requirements:
+        pr = ProjectRequirement(
+            project_id=project.id,
+            title=tr.title,
+            description=tr.description,
+            req_type=tr.req_type,
+            status="pending",
+        )
+        db.session.add(pr)
+
+    project.template_id = tmpl.id
+
+
+# ── Start Project from Hospital ────────────────────────────────────────────────
+
+@bp.route("/start/<int:hospital_id>", methods=["POST"])
+@login_required
+@agent_required
+def start_project(hospital_id):
+    from app.models.hospital import Hospital
+    hospital = Hospital.query.get_or_404(hospital_id)
+    tmpl_id = request.form.get("template_id", type=int)
+    name = request.form.get("name", "").strip()
+
+    if not tmpl_id or not name:
+        flash("Project name and template are required.", "error")
+        return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="projects"))
+
+    tmpl = ProjectTemplate.query.get_or_404(tmpl_id)
+    project = Project(
+        hospital_id=hospital_id,
+        name=name,
+        status="planning",
+        is_customer_visible=False,
+        created_by=current_user.id,
+    )
+    db.session.add(project)
+    db.session.flush()
+    _instantiate_template(project, tmpl)
+    db.session.commit()
+    flash(f'Project "{name}" created with {len(tmpl.tasks)} tasks.', "success")
+    return redirect(url_for("projects.project_detail", project_id=project.id))
+
+
+# ── Requirements (Agent) ───────────────────────────────────────────────────────
+
+@bp.route("/project/<int:project_id>/requirements/add", methods=["POST"])
+@login_required
+@agent_required
+def requirement_add(project_id):
+    from app.services.email_outbound import notify_requirement_assigned
+    project = Project.query.get_or_404(project_id)
+
+    title = request.form.get("title", "").strip()
+    description = request.form.get("description", "").strip() or None
+    req_type = request.form.get("req_type", "provide")
+    due_date_str = request.form.get("due_date", "").strip()
+    assigned_user_id = request.form.get("assigned_to_id", type=int)
+    assigned_email = request.form.get("assigned_to_email", "").strip() or None
+    assigned_agent_id = request.form.get("assigned_agent_id", type=int)
+
+    if not title:
+        flash("Title is required.", "error")
+        return redirect(url_for("projects.project_detail", project_id=project_id, tab="requirements"))
+
+    from datetime import date as date_type
+    due_date = None
+    if due_date_str:
+        try:
+            due_date = date_type.fromisoformat(due_date_str)
+        except ValueError:
+            pass
+
+    req = ProjectRequirement(
+        project_id=project_id,
+        title=title,
+        description=description,
+        req_type=req_type if req_type in ("provide", "approve", "question") else "provide",
+        status="pending",
+        assigned_to_id=assigned_user_id or None,
+        assigned_to_email=assigned_email if not assigned_user_id else None,
+        assigned_agent_id=assigned_agent_id or None,
+        due_date=due_date,
+    )
+    db.session.add(req)
+    db.session.flush()
+
+    notify_requirement_assigned(req)
+    req.email_sent = True
+    db.session.commit()
+    flash("Requirement added and assignee notified.", "success")
+    return redirect(url_for("projects.project_detail", project_id=project_id, tab="requirements"))
+
+
+@bp.route("/project/<int:project_id>/requirements/<int:req_id>/edit", methods=["POST"])
+@login_required
+@agent_required
+def requirement_edit(project_id, req_id):
+    req = ProjectRequirement.query.filter_by(id=req_id, project_id=project_id).first_or_404()
+
+    req.title = request.form.get("title", req.title).strip()
+    req.description = request.form.get("description", "").strip() or None
+    req.req_type = request.form.get("req_type", req.req_type)
+    req.status = request.form.get("status", req.status)
+
+    due_date_str = request.form.get("due_date", "").strip()
+    if due_date_str:
+        from datetime import date as date_type
+        try:
+            req.due_date = date_type.fromisoformat(due_date_str)
+        except ValueError:
+            pass
+    else:
+        req.due_date = None
+
+    db.session.commit()
+    flash("Requirement updated.", "success")
+    return redirect(url_for("projects.project_detail", project_id=project_id, tab="requirements"))
+
+
+@bp.route("/project/<int:project_id>/requirements/<int:req_id>/delete", methods=["POST"])
+@login_required
+@agent_required
+def requirement_delete(project_id, req_id):
+    req = ProjectRequirement.query.filter_by(id=req_id, project_id=project_id).first_or_404()
+    db.session.delete(req)
+    db.session.commit()
+    flash("Requirement deleted.", "success")
+    return redirect(url_for("projects.project_detail", project_id=project_id, tab="requirements"))
+
+
+# ── Requirements (Customer portal) ────────────────────────────────────────────
+
+@bp.route("/portal/<int:project_id>/requirements/<int:req_id>/respond", methods=["POST"])
+@login_required
+@customer_required
+def requirement_respond(project_id, req_id):
+    project = Project.query.get_or_404(project_id)
+    if not project.is_customer_visible or project.hospital_id != current_user.hospital_id:
+        abort(403)
+
+    req = ProjectRequirement.query.filter_by(id=req_id, project_id=project_id).first_or_404()
+    response_text = request.form.get("response_text", "").strip()
+    action = request.form.get("action", "submit")  # submit | approve | reject
+
+    if response_text:
+        req.response_text = response_text
+
+    if action == "approve":
+        req.status = "approved"
+    elif action == "reject":
+        req.status = "rejected"
+    else:
+        req.status = "submitted"
+
+    db.session.commit()
+    flash("Response submitted.", "success")
+    return redirect(url_for("projects.portal_detail", project_id=project_id))
+
+
+# ── Project task subtask (quick add inline) ────────────────────────────────────
+
+@bp.route("/project/<int:project_id>/tasks/<int:task_id>/subtask", methods=["POST"])
+@login_required
+@agent_required
+def add_subtask(project_id, task_id):
+    parent = ProjectTask.query.filter_by(id=task_id, project_id=project_id).first_or_404()
+    title = request.form.get("title", "").strip()
+    if not title:
+        flash("Subtask title required.", "error")
+        return redirect(url_for("projects.project_detail", project_id=project_id))
+
+    sub = ProjectTask(
+        project_id=project_id,
+        parent_id=parent.id,
+        title=title,
+        priority=parent.priority,
+        status="todo",
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return redirect(url_for("projects.project_detail", project_id=project_id))
+
+
+# ── Project complete → auto-hide ───────────────────────────────────────────────
+
+@bp.route("/project/<int:project_id>/complete", methods=["POST"])
+@login_required
+@agent_required
+def complete_project(project_id):
+    project = Project.query.get_or_404(project_id)
+    project.status = "completed"
+    project.is_customer_visible = False
+    db.session.commit()
+    flash("Project marked complete and hidden from customer portal.", "success")
+    return redirect(url_for("projects.project_detail", project_id=project_id))
