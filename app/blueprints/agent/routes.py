@@ -334,6 +334,9 @@ def ticket_detail(ref):
     assign_form.agent_id.choices = [(0, "— Unassign —")] + [(a.id, a.name) for a in agents]
     assign_form.agent_id.data = ticket.assigned_to or 0
 
+    from app.models.rustdesk_log import RustDeskLog
+    rustdesk_logs = ticket.rustdesk_logs.limit(20).all()
+
     return render_template(
         "agent/ticket_detail.html",
         ticket=ticket,
@@ -346,6 +349,7 @@ def ticket_detail(ref):
         status_form=status_form,
         priority_form=priority_form,
         assign_form=assign_form,
+        rustdesk_logs=rustdesk_logs,
     )
 
 
@@ -905,6 +909,22 @@ def ticket_rustdesk(ref):
     db.session.commit()
     flash("RustDesk Device ID updated.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/rustdesk/log", methods=["POST"])
+@login_required
+@agent_required
+def ticket_rustdesk_log(ref):
+    from app.models.rustdesk_log import RustDeskLog
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    log = RustDeskLog(
+        ticket_id=ticket.id,
+        agent_id=current_user.id,
+        peer_id=ticket.rustdesk_peer_id,
+    )
+    db.session.add(log)
+    db.session.commit()
+    return jsonify({"ok": True})
 
 
 # ── Escalation ────────────────────────────────────────────────────────────────
