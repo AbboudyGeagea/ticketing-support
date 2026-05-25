@@ -29,17 +29,23 @@
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
   <style>
     [x-cloak] { display: none; }
-    .sidebar-link { @apply flex items-center gap-3 px-4 py-2 rounded-lg text-slate-300 hover:bg-slate-600 hover:text-white transition-colors text-sm font-medium; }
-    .sidebar-link.active { @apply bg-primary text-white; }
-    .badge-open      { @apply bg-blue-100 text-blue-800; }
-    .badge-in_progress { @apply bg-yellow-100 text-yellow-800; }
-    .badge-pending   { @apply bg-orange-100 text-orange-800; }
-    .badge-resolved  { @apply bg-green-100 text-green-800; }
-    .badge-closed    { @apply bg-slate-100 text-slate-600; }
-    .badge-low       { @apply bg-slate-100 text-slate-600; }
-    .badge-medium    { @apply bg-blue-100 text-blue-700; }
-    .badge-high      { @apply bg-orange-100 text-orange-700; }
-    .badge-urgent    { @apply bg-red-100 text-red-700; }
+    .sidebar-link {
+      display: flex; align-items: center; gap: 0.75rem;
+      padding: 0.5rem 1rem; border-radius: 0.5rem;
+      color: #cbd5e1; font-size: 0.875rem; font-weight: 500;
+      text-decoration: none; transition: background-color 0.15s, color 0.15s;
+    }
+    .sidebar-link:hover { background-color: #475569; color: #fff; }
+    .sidebar-link.active { background-color: #3b82f6; color: #fff; }
+    .badge-open        { background-color: #dbeafe; color: #1e40af; }
+    .badge-in_progress { background-color: #fef9c3; color: #854d0e; }
+    .badge-pending     { background-color: #ffedd5; color: #9a3412; }
+    .badge-resolved    { background-color: #dcfce7; color: #166534; }
+    .badge-closed      { background-color: #f1f5f9; color: #475569; }
+    .badge-low         { background-color: #f1f5f9; color: #475569; }
+    .badge-medium      { background-color: #dbeafe; color: #1d4ed8; }
+    .badge-high        { background-color: #ffedd5; color: #c2410c; }
+    .badge-urgent      { background-color: #fee2e2; color: #b91c1c; }
   </style>
 </head>
 <body class="bg-slate-100 font-sans antialiased">
