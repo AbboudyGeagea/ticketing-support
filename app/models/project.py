@@ -104,7 +104,7 @@ class ProjectTask(db.Model):
         "ProjectTask",
         backref=db.backref("parent", remote_side=[id]),
         order_by="ProjectTask.created_at",
-        cascade="all, delete-orphan",
+        cascade="save-update, merge",
     )
 
 
@@ -201,7 +201,7 @@ class ProjectTemplateTask(db.Model):
         "ProjectTemplateTask",
         backref=db.backref("parent", remote_side=[id]),
         order_by="ProjectTemplateTask.order",
-        cascade="all, delete-orphan",
+        cascade="save-update, merge",
     )
 
 
