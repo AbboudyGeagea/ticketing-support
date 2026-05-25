@@ -1184,8 +1184,6 @@ def email_test():
                     msg = str(e)
                     if "email_config" in msg and ("does not exist" in msg or "no such table" in msg.lower()):
                         flash("The email_config table is missing — run 'flask db upgrade' on the server, then try again.", "danger")
-                    elif "CREDENTIAL_ENCRYPTION_KEY" in msg:
-                        flash("CREDENTIAL_ENCRYPTION_KEY is not set in the server environment — required to encrypt the client secret.", "danger")
                     else:
                         flash(f"Save failed: {e}", "danger")
                     current_app.logger.exception("email_config save failed")
