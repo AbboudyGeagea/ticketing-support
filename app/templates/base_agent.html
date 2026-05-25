@@ -75,8 +75,6 @@
          class="nav-link {% if request.endpoint and 'agent.task' in request.endpoint and request.endpoint != 'agent.workload' %}active{% endif %}">Tasks</a>
       <a href="{{ url_for('agent.workload') }}"
          class="nav-link {% if request.endpoint == 'agent.workload' %}active{% endif %}">Workload</a>
-      <a href="{{ url_for('agent.sprints') }}"
-         class="nav-link {% if request.endpoint and 'agent.sprint' in request.endpoint %}active{% endif %}">Sprints</a>
       <a href="{{ url_for('projects.list_projects') }}"
          class="nav-link {% if request.endpoint and 'projects.' in request.endpoint %}active{% endif %}">Projects</a>
       <a href="{{ url_for('agent.kb_list') }}"

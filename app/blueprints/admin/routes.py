@@ -197,6 +197,34 @@ def hospital_edit(hospital_id):
     return render_template("admin/hospital_form.html", form=form, hospital=hospital)
 
 
+@bp.route("/hospitals/bulk-delete", methods=["POST"])
+@login_required
+@admin_required
+def hospital_bulk_delete():
+    ids = request.form.getlist("hospital_ids", type=int)
+    if not ids:
+        flash("No hospitals selected.", "warning")
+        return redirect(url_for("admin.hospitals"))
+    deleted, skipped = 0, []
+    for hospital_id in ids:
+        hospital = Hospital.query.get(hospital_id)
+        if not hospital:
+            continue
+        user_count = User.query.filter_by(hospital_id=hospital_id).count()
+        ticket_count = hospital.tickets.count()
+        if user_count or ticket_count:
+            skipped.append(f"{hospital.name} ({user_count} users, {ticket_count} tickets)")
+            continue
+        db.session.delete(hospital)
+        deleted += 1
+    db.session.commit()
+    if deleted:
+        flash(f"{deleted} hospital(s) deleted.", "success")
+    if skipped:
+        flash("Skipped — still have data: " + "; ".join(skipped), "warning")
+    return redirect(url_for("admin.hospitals"))
+
+
 @bp.route("/hospitals/<int:hospital_id>/delete", methods=["POST"])
 @login_required
 @admin_required

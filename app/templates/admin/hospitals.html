@@ -14,17 +14,40 @@
 
 {% block content %}
 
-{# Search #}
-<div class="mb-3">
+{# Search + bulk toolbar #}
+<div class="mb-3 flex flex-wrap items-center gap-3">
   <input id="hospital-search" type="search" placeholder="Search hospitals…"
          class="w-full sm:w-72 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40">
+
+  {# Bulk action bar — hidden until checkboxes selected #}
+  <div id="bulk-bar" class="hidden flex items-center gap-2">
+    <span id="bulk-count" class="text-sm text-slate-500 font-medium"></span>
+    <form id="bulk-delete-form" method="POST"
+          action="{{ url_for('admin.hospital_bulk_delete') }}"
+          onsubmit="return confirmBulkDelete()">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div id="bulk-id-inputs"></div>
+      <button type="submit"
+              class="text-sm font-medium bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+        Delete Selected
+      </button>
+    </form>
+    <button onclick="clearSelection()"
+            class="text-sm text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors">
+      Clear
+    </button>
+  </div>
 </div>
 
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
   <table class="w-full text-sm" id="hospitals-table">
     <thead class="bg-slate-50 border-b border-slate-200">
       <tr>
-        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
+        <th class="px-4 py-3 w-8">
+          <input type="checkbox" id="select-all" title="Select all visible"
+                 class="w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer">
+        </th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Email Domain</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Users</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Products</th>
@@ -34,8 +57,12 @@
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for h in hospitals %}
-      <tr class="hover:bg-slate-50 transition-colors hospital-row">
-        <td class="px-5 py-3.5">
+      <tr class="hover:bg-slate-50 transition-colors hospital-row" data-id="{{ h.id }}">
+        <td class="px-4 py-3.5">
+          <input type="checkbox" value="{{ h.id }}" data-name="{{ h.name }}"
+                 class="row-check w-4 h-4 rounded border-slate-300 accent-primary cursor-pointer">
+        </td>
+        <td class="px-4 py-3.5">
           <p class="font-medium text-slate-800 hospital-name">{{ h.name }}</p>
           {% if h.phone %}<p class="text-xs text-slate-400">{{ h.phone }}</p>{% endif %}
         </td>
@@ -55,8 +82,7 @@
             <form method="POST" action="{{ url_for('admin.hospital_delete', hospital_id=h.id) }}"
                   onsubmit="return confirm('Delete {{ h.name }}? This cannot be undone.')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-              <button type="submit"
-                      class="text-xs font-medium text-red-500 hover:text-red-700 transition-colors">
+              <button type="submit" class="text-xs font-medium text-red-500 hover:text-red-700 transition-colors">
                 Delete
               </button>
             </form>
@@ -65,7 +91,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">
+        <td colspan="7" class="px-5 py-10 text-center text-slate-400 text-sm">
           No hospitals yet. <a href="{{ url_for('admin.hospital_new') }}" class="text-primary hover:underline">Add the first one</a>.
         </td>
       </tr>
@@ -77,12 +103,17 @@
 </div>
 
 <script>
-  const input = document.getElementById('hospital-search');
-  const rows  = document.querySelectorAll('.hospital-row');
-  const empty = document.getElementById('no-results');
+  const searchInput = document.getElementById('hospital-search');
+  const rows        = document.querySelectorAll('.hospital-row');
+  const noResults   = document.getElementById('no-results');
+  const selectAll   = document.getElementById('select-all');
+  const bulkBar     = document.getElementById('bulk-bar');
+  const bulkCount   = document.getElementById('bulk-count');
+  const bulkInputs  = document.getElementById('bulk-id-inputs');
 
-  input.addEventListener('input', () => {
-    const q = input.value.toLowerCase().trim();
+  // ── Search ──────────────────────────────────────────────────────────────────
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.toLowerCase().trim();
     let visible = 0;
     rows.forEach(row => {
       const name = row.querySelector('.hospital-name').textContent.toLowerCase();
@@ -90,7 +121,60 @@
       row.classList.toggle('hidden', !show);
       if (show) visible++;
     });
-    empty.classList.toggle('hidden', visible > 0);
+    noResults.classList.toggle('hidden', visible > 0);
+    updateBulkBar();
   });
+
+  // ── Select all (visible rows only) ──────────────────────────────────────────
+  selectAll.addEventListener('change', () => {
+    visibleCheckboxes().forEach(cb => cb.checked = selectAll.checked);
+    updateBulkBar();
+  });
+
+  // ── Individual checkboxes ───────────────────────────────────────────────────
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const visible = visibleCheckboxes();
+      selectAll.indeterminate = visible.some(c => c.checked) && !visible.every(c => c.checked);
+      selectAll.checked = visible.length > 0 && visible.every(c => c.checked);
+      updateBulkBar();
+    });
+  });
+
+  function visibleCheckboxes() {
+    return [...document.querySelectorAll('.hospital-row:not(.hidden) .row-check')];
+  }
+
+  function checkedCheckboxes() {
+    return [...document.querySelectorAll('.row-check:checked')];
+  }
+
+  function updateBulkBar() {
+    const checked = checkedCheckboxes();
+    bulkBar.classList.toggle('hidden', checked.length === 0);
+    bulkCount.textContent = checked.length + ' selected';
+  }
+
+  function clearSelection() {
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = false);
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+    updateBulkBar();
+  }
+
+  function confirmBulkDelete() {
+    const checked = checkedCheckboxes();
+    if (!checked.length) return false;
+    const names = checked.map(cb => cb.dataset.name).join('\n  • ');
+    if (!confirm('Permanently delete ' + checked.length + ' hospital(s)?\n\n  • ' + names + '\n\nHospitals with users or tickets will be skipped.')) return false;
+    // populate hidden inputs
+    bulkInputs.innerHTML = '';
+    checked.forEach(cb => {
+      const inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = 'hospital_ids'; inp.value = cb.value;
+      bulkInputs.appendChild(inp);
+    });
+    return true;
+  }
 </script>
 {% endblock %}
