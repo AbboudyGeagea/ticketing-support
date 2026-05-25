@@ -19,9 +19,78 @@
     {% endfor %}
   {% endwith %}
 
+  <!-- Edit credentials -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Azure / Graph Credentials</h3>
+      <span class="text-xs px-2 py-0.5 rounded-full
+        {% if status.source == 'db' %}bg-emerald-50 text-emerald-700 border border-emerald-200
+        {% else %}bg-slate-100 text-slate-600 border border-slate-200{% endif %}">
+        Source: {{ "database" if status.source == "db" else "environment (.env)" }}
+      </span>
+    </div>
+    <p class="text-xs text-slate-500 mb-4">
+      Values saved here are stored in the database (secret encrypted with the app's Fernet key) and override
+      <code class="bg-slate-100 px-1 rounded">.env</code> values immediately — no restart required.
+      Leave the secret field blank to keep the existing one.
+    </p>
+    <form method="POST" autocomplete="off">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="save_config">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">AZURE_TENANT_ID</label>
+          <input type="text" name="tenant_id" value="{{ form_values.tenant_id }}"
+                 placeholder="00000000-0000-0000-0000-000000000000"
+                 pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+                 title="GUID format: 8-4-4-4-12 hex characters"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">AZURE_CLIENT_ID</label>
+          <input type="text" name="client_id" value="{{ form_values.client_id }}"
+                 placeholder="00000000-0000-0000-0000-000000000000"
+                 pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
+                 title="GUID format: 8-4-4-4-12 hex characters"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">
+            AZURE_CLIENT_SECRET
+            {% if form_values.has_secret %}
+              <span class="ml-1 text-emerald-600 font-normal">— currently set</span>
+            {% endif %}
+          </label>
+          <input type="password" name="client_secret"
+                 placeholder="{% if form_values.has_secret %}Leave blank to keep current{% else %}Enter client secret value{% endif %}"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">O365_MAILBOX</label>
+          <input type="email" name="mailbox" value="{{ form_values.mailbox }}"
+                 placeholder="informatics@intermedic.com"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+      </div>
+      <div class="flex items-center justify-between mt-4">
+        <p class="text-xs text-slate-400">
+          {% if form_values.updated_at %}
+            Last saved: {{ form_values.updated_at.strftime("%Y-%m-%d %H:%M UTC") }}
+          {% else %}
+            Not yet saved — currently using .env values.
+          {% endif %}
+        </p>
+        <button type="submit"
+                class="bg-primary hover:bg-primary-dark text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+          Save credentials
+        </button>
+      </div>
+    </form>
+  </div>
+
   <!-- Config status -->
   <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-6 mb-6">
-    <h3 class="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">Configuration</h3>
+    <h3 class="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">Effective Configuration</h3>
     <table class="w-full text-sm">
       <tbody>
         {% set rows = [

@@ -63,11 +63,12 @@ def _html_to_text(html: str) -> str:
 
 def fetch_and_process(app):
     """Called by APScheduler every N seconds."""
-    cfg = app.config
-    tenant_id = cfg.get("AZURE_TENANT_ID")
-    client_id = cfg.get("AZURE_CLIENT_ID")
-    client_secret = cfg.get("AZURE_CLIENT_SECRET")
-    mailbox = cfg.get("O365_MAILBOX")
+    from app.services.email_settings import get_effective_config
+    eff = get_effective_config(app)
+    tenant_id = eff["tenant_id"]
+    client_id = eff["client_id"]
+    client_secret = eff["client_secret"]
+    mailbox = eff["mailbox"]
 
     if not all([tenant_id, client_id, client_secret, mailbox]):
         logger.debug("Email inbound not configured, skipping poll.")

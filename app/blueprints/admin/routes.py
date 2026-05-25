@@ -1140,14 +1140,9 @@ def hospital_access(hospital_id):
 @login_required
 @admin_required
 def email_test():
+    from app.models.email_config import EmailConfig
+    from app.services.email_settings import get_effective_config
     cfg = current_app.config
-    status = {
-        "tenant_id":     bool(cfg.get("AZURE_TENANT_ID")),
-        "client_id":     bool(cfg.get("AZURE_CLIENT_ID")),
-        "client_secret": bool(cfg.get("AZURE_CLIENT_SECRET")),
-        "mailbox":       cfg.get("O365_MAILBOX", ""),
-        "poll_interval": cfg.get("EMAIL_POLL_INTERVAL_SECONDS", 60),
-    }
     token_ok = False
     token_error = ""
     send_result = None
@@ -1155,24 +1150,57 @@ def email_test():
     if request.method == "POST":
         action = request.form.get("action")
 
-        if action == "test_token":
+        if action == "save_config":
+            tenant_id = (request.form.get("tenant_id") or "").strip()
+            client_id = (request.form.get("client_id") or "").strip()
+            client_secret = (request.form.get("client_secret") or "").strip()
+            mailbox = (request.form.get("mailbox") or "").strip()
+
+            import re
+            guid_re = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+            errors = []
+            if tenant_id and not guid_re.match(tenant_id):
+                errors.append("Tenant ID must be a valid GUID (8-4-4-4-12 hex format).")
+            if client_id and not guid_re.match(client_id):
+                errors.append("Client ID must be a valid GUID (8-4-4-4-12 hex format).")
+
+            if errors:
+                for e in errors:
+                    flash(e, "danger")
+            else:
+                row = EmailConfig.get_singleton()
+                row.tenant_id = tenant_id or None
+                row.client_id = client_id or None
+                row.mailbox = mailbox or None
+                if client_secret:
+                    row.client_secret_enc = encrypt(client_secret)
+                row.updated_by = current_user.id
+                db.session.commit()
+                flash("Email configuration saved. Changes apply immediately to new requests.", "success")
+                return redirect(url_for("admin.email_test"))
+
+        elif action == "test_token":
             try:
                 import msal
-                authority = f"https://login.microsoftonline.com/{cfg['AZURE_TENANT_ID']}"
-                app_obj = msal.ConfidentialClientApplication(
-                    cfg["AZURE_CLIENT_ID"],
-                    authority=authority,
-                    client_credential=cfg["AZURE_CLIENT_SECRET"],
-                )
-                result = app_obj.acquire_token_for_client(
-                    scopes=["https://graph.microsoft.com/.default"]
-                )
-                if "access_token" in result:
-                    token_ok = True
-                    flash("Graph API token acquired successfully.", "success")
+                eff = get_effective_config()
+                if not all([eff["tenant_id"], eff["client_id"], eff["client_secret"]]):
+                    flash("Missing one or more credentials — fill them in above and Save first.", "warning")
                 else:
-                    token_error = result.get("error_description", result.get("error", "Unknown error"))
-                    flash(f"Token error: {token_error}", "danger")
+                    authority = f"https://login.microsoftonline.com/{eff['tenant_id']}"
+                    app_obj = msal.ConfidentialClientApplication(
+                        eff["client_id"],
+                        authority=authority,
+                        client_credential=eff["client_secret"],
+                    )
+                    result = app_obj.acquire_token_for_client(
+                        scopes=["https://graph.microsoft.com/.default"]
+                    )
+                    if "access_token" in result:
+                        token_ok = True
+                        flash("Graph API token acquired successfully.", "success")
+                    else:
+                        token_error = result.get("error_description", result.get("error", "Unknown error"))
+                        flash(f"Token error: {token_error}", "danger")
             except Exception as e:
                 token_error = str(e)
                 flash(f"Exception: {e}", "danger")
@@ -1189,7 +1217,7 @@ def email_test():
                         subject="[Intermedic Support] Email Test",
                         text=(
                             f"This is a test email from the Intermedic Support Desk.\n\n"
-                            f"Mailbox: {cfg.get('O365_MAILBOX')}\n"
+                            f"Mailbox: {get_effective_config()['mailbox']}\n"
                             f"Time: {__import__('datetime').datetime.utcnow().isoformat()} UTC"
                         ),
                     )
@@ -1206,5 +1234,23 @@ def email_test():
             except Exception as e:
                 flash(f"Poll failed: {e}", "danger")
 
+    eff = get_effective_config()
+    row = EmailConfig.query.first()
+    status = {
+        "tenant_id":     bool(eff["tenant_id"]),
+        "client_id":     bool(eff["client_id"]),
+        "client_secret": bool(eff["client_secret"]),
+        "mailbox":       eff["mailbox"],
+        "poll_interval": cfg.get("EMAIL_POLL_INTERVAL_SECONDS", 60),
+        "source":        eff["source"],
+    }
+    form_values = {
+        "tenant_id": (row.tenant_id if row else "") or "",
+        "client_id": (row.client_id if row else "") or "",
+        "mailbox":   (row.mailbox if row else "") or "",
+        "has_secret": bool(row and row.client_secret_enc),
+        "updated_at": row.updated_at if row else None,
+    }
     return render_template("admin/email_test.html", status=status,
-                           token_ok=token_ok, token_error=token_error)
+                           token_ok=token_ok, token_error=token_error,
+                           form_values=form_values)

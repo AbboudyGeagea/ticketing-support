@@ -10,13 +10,17 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _SCOPES = ["https://graph.microsoft.com/.default"]
 
 
-def _get_token() -> str | None:
-    cfg = current_app.config
-    authority = f"https://login.microsoftonline.com/{cfg['AZURE_TENANT_ID']}"
+def _get_token(eff: dict | None = None) -> str | None:
+    from app.services.email_settings import get_effective_config
+    eff = eff or get_effective_config()
+    if not all([eff["tenant_id"], eff["client_id"], eff["client_secret"]]):
+        logger.error("Graph API credentials missing — cannot acquire token")
+        return None
+    authority = f"https://login.microsoftonline.com/{eff['tenant_id']}"
     app = msal.ConfidentialClientApplication(
-        cfg["AZURE_CLIENT_ID"],
+        eff["client_id"],
         authority=authority,
-        client_credential=cfg["AZURE_CLIENT_SECRET"],
+        client_credential=eff["client_secret"],
     )
     result = app.acquire_token_for_client(scopes=_SCOPES)
     if "access_token" not in result:
@@ -28,10 +32,12 @@ def _get_token() -> str | None:
 def _send(recipients: list[str], subject: str, html: str = None, text: str = None):
     if not recipients:
         return
-    token = _get_token()
+    from app.services.email_settings import get_effective_config
+    eff = get_effective_config()
+    token = _get_token(eff)
     if not token:
         return
-    mailbox = current_app.config.get("O365_MAILBOX")
+    mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
     payload = {
