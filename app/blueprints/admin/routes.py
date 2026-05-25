@@ -1273,3 +1273,45 @@ def email_test():
     return render_template("admin/email_test.html", status=status,
                            token_ok=token_ok, token_error=token_error,
                            form_values=form_values)
+
+
+# ── Excel bulk import ──────────────────────────────────────────────────────────
+
+@bp.route("/import-excel", methods=["GET", "POST"])
+@login_required
+@admin_required
+def import_excel():
+    import os, tempfile
+    from app.services.excel_import import import_sites_excel
+
+    if request.method == "POST":
+        f = request.files.get("excel_file")
+        if not f or not f.filename.lower().endswith((".xlsx", ".xls")):
+            flash("Please upload a valid .xlsx file.", "error")
+            return redirect(url_for("admin.import_excel"))
+
+        suffix = ".xlsx" if f.filename.lower().endswith(".xlsx") else ".xls"
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+        try:
+            f.save(tmp.name)
+            tmp.close()
+            stats = import_sites_excel(tmp.name, created_by=current_user.id)
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.exception("Excel import failed")
+            flash(f"Import failed: {e}", "error")
+            return redirect(url_for("admin.import_excel"))
+        finally:
+            try:
+                os.unlink(tmp.name)
+            except OSError:
+                pass
+
+        flash(
+            f"Import complete — {stats['hospitals']} sites processed, "
+            f"{stats['credentials']} credentials imported.",
+            "success",
+        )
+        return redirect(url_for("admin.import_excel"))
+
+    return render_template("admin/import_excel.html")
