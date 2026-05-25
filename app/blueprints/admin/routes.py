@@ -94,6 +94,7 @@ def hospital_new():
             phone=form.phone.data,
             rustdesk_server_url=form.rustdesk_server_url.data.strip() if form.rustdesk_server_url.data else None,
             rustdesk_server_key=form.rustdesk_server_key.data.strip() if form.rustdesk_server_key.data else None,
+            rustdesk_id=form.rustdesk_id.data.strip() if form.rustdesk_id.data else None,
             active=form.active.data,
         )
         db.session.add(h)
@@ -190,6 +191,7 @@ def hospital_edit(hospital_id):
         hospital.phone = form.phone.data
         hospital.rustdesk_server_url = form.rustdesk_server_url.data.strip() if form.rustdesk_server_url.data else None
         hospital.rustdesk_server_key = form.rustdesk_server_key.data.strip() if form.rustdesk_server_key.data else None
+        hospital.rustdesk_id = form.rustdesk_id.data.strip() if form.rustdesk_id.data else None
         hospital.active = form.active.data
         db.session.commit()
         flash("Hospital updated.", "success")

@@ -180,28 +180,35 @@
 
 {% block scripts %}
 <script>
-var _activeCred = null;
 var _revealed = {};
 
 function openReveal(credId) {
   if (_revealed[credId]) return;
-  _activeCred = credId;
-  document.getElementById('master-key-input').value = '';
-  document.getElementById('reveal-error').classList.add('hidden');
-  document.getElementById('reveal-modal').classList.remove('hidden');
-  setTimeout(() => document.getElementById('master-key-input').focus(), 50);
+  var savedKey = sessionStorage.getItem('rd_master_key');
+  if (savedKey) {
+    _fetchReveal(credId, savedKey);
+  } else {
+    document.getElementById('master-key-input').value = '';
+    document.getElementById('reveal-error').classList.add('hidden');
+    document.getElementById('reveal-modal').dataset.cred = credId;
+    document.getElementById('reveal-modal').classList.remove('hidden');
+    setTimeout(() => document.getElementById('master-key-input').focus(), 50);
+  }
 }
 
 function closeReveal() {
   document.getElementById('reveal-modal').classList.add('hidden');
-  _activeCred = null;
 }
 
 function doReveal() {
   var key = document.getElementById('master-key-input').value;
-  if (!key || !_activeCred) return;
+  var credId = document.getElementById('reveal-modal').dataset.cred;
+  if (!key || !credId) return;
+  _fetchReveal(credId, key);
+}
 
-  fetch('{{ url_for("admin.credential_reveal", hospital_id=hospital.id, cred_id=0) }}'.replace('/0/', '/' + _activeCred + '/'), {
+function _fetchReveal(credId, key) {
+  fetch('{{ url_for("admin.credential_reveal", hospital_id=hospital.id, cred_id=0) }}'.replace('/0/', '/' + credId + '/'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
     body: JSON.stringify({ key: key })
@@ -210,10 +217,11 @@ function doReveal() {
   .then(data => {
     if (!data.ok) {
       document.getElementById('reveal-error').classList.remove('hidden');
+      sessionStorage.removeItem('rd_master_key');
       return;
     }
-    var id = _activeCred;
-    _revealed[id] = true;
+    sessionStorage.setItem('rd_master_key', key);
+    _revealed[credId] = true;
 
     function showField(elId, value, copyBtnId) {
       var el = document.getElementById(elId);
@@ -221,24 +229,20 @@ function doReveal() {
         el.textContent = value;
         el.classList.remove('text-slate-400');
         el.classList.add('text-slate-800');
-        if (copyBtnId) {
-          var btn = document.getElementById(copyBtnId);
-          if (btn) btn.classList.remove('hidden');
-        }
+        if (copyBtnId) { var b = document.getElementById(copyBtnId); if (b) b.classList.remove('hidden'); }
       }
     }
+    showField('pw-' + credId, data.password, 'copy-pw-' + credId);
+    showField('host-' + credId, data.host, 'copy-host-' + credId);
+    showField('role-' + credId, data.role, null);
 
-    showField('pw-' + id, data.password, 'copy-pw-' + id);
-    showField('host-' + id, data.host, 'copy-host-' + id);
-    showField('role-' + id, data.role, null);
-
-    var btn = document.getElementById('reveal-btn-' + id);
+    var btn = document.getElementById('reveal-btn-' + credId);
     if (btn) btn.classList.add('hidden');
-
     closeReveal();
   })
   .catch(() => {
     document.getElementById('reveal-error').classList.remove('hidden');
+    sessionStorage.removeItem('rd_master_key');
   });
 }
 

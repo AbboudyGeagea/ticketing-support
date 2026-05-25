@@ -11,6 +11,7 @@ class HospitalForm(FlaskForm):
     phone = StringField("Phone", validators=[Optional(), Length(max=50)])
     rustdesk_server_url = StringField("RustDesk Server URL", validators=[Optional(), Length(max=500)])
     rustdesk_server_key = StringField("RustDesk Server Key", validators=[Optional(), Length(max=200)])
+    rustdesk_id = StringField("RustDesk Device ID", validators=[Optional(), Length(max=50)])
     active = BooleanField("Active", default=True)
     submit = SubmitField("Save Hospital")
 

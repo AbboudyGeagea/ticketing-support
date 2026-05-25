@@ -24,6 +24,7 @@ class Hospital(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     rustdesk_server_url = db.Column(db.String(500), nullable=True)
     rustdesk_server_key = db.Column(db.String(200), nullable=True)
+    rustdesk_id = db.Column(db.String(50), nullable=True)
 
     users = db.relationship("User", back_populates="hospital", lazy="dynamic")
     products = db.relationship("Product", secondary=hospital_products, back_populates="hospitals")

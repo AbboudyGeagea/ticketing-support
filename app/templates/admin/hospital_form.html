@@ -28,15 +28,50 @@
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Phone</label>
         {{ form.phone(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
       </div>
-      <div class="mb-4 pt-2 border-t border-slate-100">
+
+      <!-- RustDesk section -->
+      <div class="pt-3 border-t border-slate-100 mb-4">
         <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">RustDesk Remote Support</p>
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">RustDesk Server URL <span class="text-slate-400 font-normal">(shown to agents on ticket page)</span></label>
-        {{ form.rustdesk_server_url(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. relay.hospital.com") }}
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Server URL
+            <span class="text-slate-400 font-normal">— hostname only, e.g. <code class="bg-slate-100 px-1 rounded">relay.yourdomain.com</code></span>
+          </label>
+          {{ form.rustdesk_server_url(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono", placeholder="relay.yourdomain.com") }}
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Server Key
+            <span class="text-slate-400 font-normal">(public key shown in server console)</span>
+          </label>
+          <div class="relative">
+            {{ form.rustdesk_server_key(id="rd-key-input", type="password",
+               class="w-full border border-slate-300 rounded-lg px-3 py-2.5 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono",
+               autocomplete="off") }}
+            <button type="button" onclick="toggleKeyVisibility()"
+                    class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    title="Show/hide key">
+              <svg id="eye-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </button>
+          </div>
+          {% if hospital and hospital.rustdesk_server_key %}
+          <p class="text-xs text-slate-400 mt-1">A key is saved. Leave blank to keep it, or type a new one to replace.</p>
+          {% endif %}
+        </div>
+
+        <div class="mb-4">
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Device ID
+            <span class="text-slate-400 font-normal">(RustDesk ID shown on the remote machine — for one-click connect)</span>
+          </label>
+          {{ form.rustdesk_id(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono", placeholder="e.g. 123456789") }}
+        </div>
       </div>
-      <div class="mb-5">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">RustDesk Server Key <span class="text-slate-400 font-normal">(optional, for display only)</span></label>
-        {{ form.rustdesk_server_key(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
-      </div>
+
       <div class="mb-6 flex items-center gap-2">
         {{ form.active(class="rounded border-slate-300 text-primary") }}
         <label class="text-sm text-slate-700">{{ form.active.label.text }}</label>
@@ -48,4 +83,11 @@
     </form>
   </div>
 </div>
+
+<script>
+function toggleKeyVisibility() {
+  var inp = document.getElementById('rd-key-input');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+</script>
 {% endblock %}
