@@ -193,6 +193,26 @@ def hospital_edit(hospital_id):
     return render_template("admin/hospital_form.html", form=form, hospital=hospital)
 
 
+@bp.route("/hospitals/<int:hospital_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def hospital_delete(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    user_count = User.query.filter_by(hospital_id=hospital_id).count()
+    ticket_count = hospital.tickets.count()
+    if user_count or ticket_count:
+        flash(
+            f'Cannot delete "{hospital.name}" — it still has '
+            f'{user_count} user(s) and {ticket_count} ticket(s). Remove them first.',
+            "error",
+        )
+        return redirect(url_for("admin.hospitals"))
+    db.session.delete(hospital)
+    db.session.commit()
+    flash(f'"{hospital.name}" deleted.', "success")
+    return redirect(url_for("admin.hospitals"))
+
+
 # ── Products (global panel) ───────────────────────────────────────────────────
 
 @bp.route("/products")

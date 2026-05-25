@@ -13,8 +13,15 @@
 {% endblock %}
 
 {% block content %}
+
+{# Search #}
+<div class="mb-3">
+  <input id="hospital-search" type="search" placeholder="Search hospitals…"
+         class="w-full sm:w-72 text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40">
+</div>
+
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
+  <table class="w-full text-sm" id="hospitals-table">
     <thead class="bg-slate-50 border-b border-slate-200">
       <tr>
         <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
@@ -27,9 +34,9 @@
     </thead>
     <tbody class="divide-y divide-slate-100">
       {% for h in hospitals %}
-      <tr class="hover:bg-slate-50 transition-colors">
+      <tr class="hover:bg-slate-50 transition-colors hospital-row">
         <td class="px-5 py-3.5">
-          <p class="font-medium text-slate-800">{{ h.name }}</p>
+          <p class="font-medium text-slate-800 hospital-name">{{ h.name }}</p>
           {% if h.phone %}<p class="text-xs text-slate-400">{{ h.phone }}</p>{% endif %}
         </td>
         <td class="px-4 py-3.5 text-slate-500 text-xs font-mono">{{ h.email_domain or '—' }}</td>
@@ -42,16 +49,48 @@
           </span>
         </td>
         <td class="px-4 py-3.5 text-right">
-          <a href="{{ url_for('admin.hospital_detail', hospital_id=h.id) }}"
-             class="text-primary hover:underline text-xs font-medium">Manage →</a>
+          <div class="flex items-center justify-end gap-3">
+            <a href="{{ url_for('admin.hospital_detail', hospital_id=h.id) }}"
+               class="text-primary hover:underline text-xs font-medium">Manage →</a>
+            <form method="POST" action="{{ url_for('admin.hospital_delete', hospital_id=h.id) }}"
+                  onsubmit="return confirm('Delete {{ h.name }}? This cannot be undone.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button type="submit"
+                      class="text-xs font-medium text-red-500 hover:text-red-700 transition-colors">
+                Delete
+              </button>
+            </form>
+          </div>
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">No hospitals yet. <a href="{{ url_for('admin.hospital_new') }}" class="text-primary hover:underline">Add the first one</a>.</td>
+        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">
+          No hospitals yet. <a href="{{ url_for('admin.hospital_new') }}" class="text-primary hover:underline">Add the first one</a>.
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <p id="no-results" class="hidden px-5 py-6 text-center text-sm text-slate-400">No hospitals match your search.</p>
 </div>
+
+<script>
+  const input = document.getElementById('hospital-search');
+  const rows  = document.querySelectorAll('.hospital-row');
+  const empty = document.getElementById('no-results');
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    let visible = 0;
+    rows.forEach(row => {
+      const name = row.querySelector('.hospital-name').textContent.toLowerCase();
+      const show = !q || name.includes(q);
+      row.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+    empty.classList.toggle('hidden', visible > 0);
+  });
+</script>
 {% endblock %}
