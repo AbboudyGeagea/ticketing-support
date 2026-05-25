@@ -207,7 +207,7 @@
         <div id="grp-system" class="space-y-0.5 mt-0.5 {% if not in_system %}hidden{% endif %}">
           <a href="{{ url_for('admin.webhooks') }}"
              class="sidebar-link pl-7 {% if 'admin.webhook' in request.endpoint %}active{% endif %}">
-            Integrations
+            Webhooks
           </a>
           <a href="{{ url_for('admin.email_test') }}"
              class="sidebar-link pl-7 {% if request.endpoint == 'admin.email_test' %}active{% endif %}">
