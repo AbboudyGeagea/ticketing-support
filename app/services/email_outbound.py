@@ -10,6 +10,61 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _SCOPES = ["https://graph.microsoft.com/.default"]
 
 
+def send_diagnostic(recipient: str, subject: str, text: str) -> tuple[bool, str]:
+    """Verbose send used by the admin diagnostics page.
+
+    Returns (ok, message). On failure, message contains the Graph API
+    HTTP status + body (or the MSAL error). Unlike _send(), nothing is
+    swallowed — every failure mode surfaces a specific error string.
+    """
+    from app.services.email_settings import get_effective_config
+    eff = get_effective_config()
+
+    missing = [k for k in ("tenant_id", "client_id", "client_secret", "mailbox") if not eff.get(k)]
+    if missing:
+        return False, f"Missing credentials: {', '.join(missing)}"
+
+    try:
+        authority = f"https://login.microsoftonline.com/{eff['tenant_id']}"
+        msal_app = msal.ConfidentialClientApplication(
+            eff["client_id"], authority=authority, client_credential=eff["client_secret"],
+        )
+        result = msal_app.acquire_token_for_client(scopes=_SCOPES)
+    except Exception as exc:
+        return False, f"MSAL exception: {exc}"
+
+    if "access_token" not in result:
+        err = result.get("error", "unknown")
+        desc = result.get("error_description", "")
+        return False, f"Token acquisition failed [{err}]: {desc}"
+
+    token = result["access_token"]
+    mailbox = eff["mailbox"]
+    payload = {
+        "message": {
+            "subject": subject,
+            "body": {"contentType": "Text", "content": text},
+            "toRecipients": [{"emailAddress": {"address": recipient}}],
+        },
+        "saveToSentItems": True,
+    }
+    try:
+        resp = requests.post(
+            f"{_GRAPH_BASE}/users/{mailbox}/sendMail",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=15,
+        )
+    except Exception as exc:
+        return False, f"HTTP request failed: {exc}"
+
+    if resp.status_code in (200, 202):
+        return True, f"Graph API accepted the message (HTTP {resp.status_code})."
+
+    body = (resp.text or "")[:800]
+    return False, f"Graph sendMail returned HTTP {resp.status_code}: {body}"
+
+
 def _get_token(eff: dict | None = None) -> str | None:
     from app.services.email_settings import get_effective_config
     eff = eff or get_effective_config()

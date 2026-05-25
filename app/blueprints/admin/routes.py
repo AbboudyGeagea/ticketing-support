@@ -1220,20 +1220,25 @@ def email_test():
                 flash("Enter a recipient address.", "warning")
             else:
                 try:
-                    from app.services.email_outbound import _send
-                    _send(
-                        [recipient],
+                    from app.services.email_outbound import send_diagnostic
+                    import datetime as _dt
+                    ok, msg = send_diagnostic(
+                        recipient,
                         subject="[Intermedic Support] Email Test",
                         text=(
                             f"This is a test email from the Intermedic Support Desk.\n\n"
                             f"Mailbox: {get_effective_config()['mailbox']}\n"
-                            f"Time: {__import__('datetime').datetime.utcnow().isoformat()} UTC"
+                            f"Time: {_dt.datetime.utcnow().isoformat()} UTC"
                         ),
                     )
-                    send_result = f"Test email sent to {recipient}."
-                    flash(send_result, "success")
+                    if ok:
+                        flash(f"Test email accepted by Graph API for {recipient}. {msg}", "success")
+                    else:
+                        flash(f"Send failed — {msg}", "danger")
+                        current_app.logger.error("email send_test failed: %s", msg)
                 except Exception as e:
-                    flash(f"Send failed: {e}", "danger")
+                    flash(f"Send failed (exception): {e}", "danger")
+                    current_app.logger.exception("email send_test crashed")
 
         elif action == "poll_now":
             try:
