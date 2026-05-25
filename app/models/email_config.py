@@ -24,5 +24,5 @@ class EmailConfig(db.Model):
         if row is None:
             row = cls()
             db.session.add(row)
-            db.session.commit()
+            db.session.flush()
         return row

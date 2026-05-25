@@ -1168,16 +1168,27 @@ def email_test():
                 for e in errors:
                     flash(e, "danger")
             else:
-                row = EmailConfig.get_singleton()
-                row.tenant_id = tenant_id or None
-                row.client_id = client_id or None
-                row.mailbox = mailbox or None
-                if client_secret:
-                    row.client_secret_enc = encrypt(client_secret)
-                row.updated_by = current_user.id
-                db.session.commit()
-                flash("Email configuration saved. Changes apply immediately to new requests.", "success")
-                return redirect(url_for("admin.email_test"))
+                try:
+                    row = EmailConfig.get_singleton()
+                    row.tenant_id = tenant_id or None
+                    row.client_id = client_id or None
+                    row.mailbox = mailbox or None
+                    if client_secret:
+                        row.client_secret_enc = encrypt(client_secret)
+                    row.updated_by = current_user.id
+                    db.session.commit()
+                    flash("Email configuration saved. Changes apply immediately to new requests.", "success")
+                    return redirect(url_for("admin.email_test"))
+                except Exception as e:
+                    db.session.rollback()
+                    msg = str(e)
+                    if "email_config" in msg and ("does not exist" in msg or "no such table" in msg.lower()):
+                        flash("The email_config table is missing — run 'flask db upgrade' on the server, then try again.", "danger")
+                    elif "CREDENTIAL_ENCRYPTION_KEY" in msg:
+                        flash("CREDENTIAL_ENCRYPTION_KEY is not set in the server environment — required to encrypt the client secret.", "danger")
+                    else:
+                        flash(f"Save failed: {e}", "danger")
+                    current_app.logger.exception("email_config save failed")
 
         elif action == "test_token":
             try:
@@ -1235,7 +1246,12 @@ def email_test():
                 flash(f"Poll failed: {e}", "danger")
 
     eff = get_effective_config()
-    row = EmailConfig.query.first()
+    try:
+        row = EmailConfig.query.first()
+    except Exception:
+        db.session.rollback()
+        row = None
+        current_app.logger.warning("email_config table not available — run 'flask db upgrade'")
     status = {
         "tenant_id":     bool(eff["tenant_id"]),
         "client_id":     bool(eff["client_id"]),
