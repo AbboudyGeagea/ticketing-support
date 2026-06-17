@@ -4,9 +4,10 @@
 {% block page_title %}Dashboard{% endblock %}
 
 {% block header_actions %}
+<span id="last-updated" class="text-xs text-slate-400 hidden"></span>
 <a href="{{ url_for('agent.task_new') }}"
    class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5">
-  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
   </svg>
   New Task
@@ -15,19 +16,29 @@
 
 {% block content %}
 
+<!-- Greeting -->
+<div class="mb-5">
+  <h2 class="text-lg font-semibold text-slate-800">
+    <span id="greeting">Welcome back</span>, {{ current_user.name.split()[0] }}
+  </h2>
+  <p class="text-sm text-slate-400 mt-0.5">Here's what's happening across your tickets and tasks.</p>
+</div>
+
 <!-- Stat Cards -->
 <div class="grid grid-cols-2 xl:grid-cols-5 gap-4 mb-6">
   {% set cards = [
-    ('Open Tickets', open_count, 'text-blue-600', 'bg-blue-50', 'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z'),
-    ('Assigned to Me', my_count, 'text-violet-600', 'bg-violet-50', 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z'),
-    ('SLA At Risk', sla_at_risk, 'text-amber-600', 'bg-amber-50', 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'),
-    ('Overdue Tasks', overdue_tasks, 'text-red-600', 'bg-red-50', 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z'),
-    ('Resolved Today', resolved_today, 'text-green-600', 'bg-green-50', 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z'),
+    ('Open Tickets',   open_count,     'text-blue-600',   'bg-blue-50',   'M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z', url_for('agent.tickets')),
+    ('Assigned to Me', my_count,       'text-violet-600', 'bg-violet-50', 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z',                          url_for('agent.tickets')),
+    ('SLA At Risk',    sla_at_risk,    'text-amber-600',  'bg-amber-50',  'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z',                                                  url_for('agent.tickets')),
+    ('Overdue Tasks',  overdue_tasks,  'text-red-600',    'bg-red-50',    'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', url_for('agent.tasks')),
+    ('Resolved Today', resolved_today, 'text-green-600',  'bg-green-50',  'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z',                                               url_for('agent.tickets')),
   ] %}
-  {% for label, value, text_cls, bg_cls, icon_path in cards %}
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
+  {% for label, value, text_cls, bg_cls, icon_path, href in cards %}
+  <a href="{{ href }}"
+     class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md hover:border-slate-300 transition-all"
+     aria-label="{{ label }}: {{ value }}">
     <div class="w-10 h-10 rounded-lg {{ bg_cls }} flex items-center justify-center flex-shrink-0">
-      <svg class="w-5 h-5 {{ text_cls }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <svg class="w-5 h-5 {{ text_cls }}" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{{ icon_path }}"/>
       </svg>
     </div>
@@ -35,7 +46,7 @@
       <p class="text-2xl font-bold text-slate-800">{{ value }}</p>
       <p class="text-xs text-slate-500 mt-0.5">{{ label }}</p>
     </div>
-  </div>
+  </a>
   {% endfor %}
 </div>
 
@@ -45,20 +56,37 @@
   <!-- Ticket Volume (line) -->
   <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
     <h3 class="text-sm font-semibold text-slate-700 mb-4">Ticket Volume — Last 30 Days</h3>
-    <div id="chart-volume" style="height:200px;"></div>
+    {% if chart_dates %}
+    <div id="chart-volume" style="height:200px;" role="img" aria-label="Ticket volume over the last 30 days"
+         data-dates="{{ chart_dates | tojson | e }}"
+         data-values="{{ chart_values | tojson | e }}"></div>
+    {% else %}
+    <div class="flex items-center justify-center h-[200px] text-sm text-slate-400">No ticket data for this period.</div>
+    {% endif %}
   </div>
 
   <!-- By Status (donut) -->
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
     <h3 class="text-sm font-semibold text-slate-700 mb-4">Tickets by Status</h3>
-    <div id="chart-status" style="height:200px;"></div>
+    {% if status_data %}
+    <div id="chart-status" style="height:200px;" role="img" aria-label="Ticket counts by status"
+         data-series="{{ status_data | tojson | e }}"></div>
+    {% else %}
+    <div class="flex items-center justify-center h-[200px] text-sm text-slate-400">No tickets to display.</div>
+    {% endif %}
   </div>
 </div>
 
 <!-- By Hospital -->
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
   <h3 class="text-sm font-semibold text-slate-700 mb-4">Open Tickets by Hospital</h3>
-  <div id="chart-hospitals" style="height:180px;"></div>
+  {% if hosp_names %}
+  <div id="chart-hospitals" style="height:180px;" role="img" aria-label="Open ticket counts by hospital"
+       data-names="{{ hosp_names | tojson | e }}"
+       data-values="{{ hosp_values | tojson | e }}"></div>
+  {% else %}
+  <div class="flex items-center justify-center h-[80px] text-sm text-slate-400">No open tickets to display.</div>
+  {% endif %}
 </div>
 
 <!-- Bottom Row: Recent Tickets + My Tasks -->
@@ -77,16 +105,19 @@
          class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-slate-800 truncate">{{ t.subject }}</p>
-          <div class="flex items-center gap-2 mt-0.5">
-            <p class="text-xs text-slate-400">{{ t.ref }} · {{ t.hospital.name }}</p>
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+            <span class="text-xs text-slate-400">{{ t.ref }} · {{ t.hospital.name }}</span>
+            {% if t.assigned_to == current_user.id %}
+            <span class="text-xs text-violet-600 font-semibold">You</span>
+            {% endif %}
             {% if lm %}
               {% if lm.sender_id and lm.sender and lm.sender.is_agent %}
               <span class="inline-flex items-center gap-1 text-xs text-emerald-600">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Support replied
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500" aria-hidden="true"></span>Support replied
               </span>
               {% else %}
               <span class="inline-flex items-center gap-1 text-xs font-medium text-orange-600">
-                <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>Awaiting support
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-500" aria-hidden="true"></span>Awaiting support
               </span>
               {% endif %}
             {% endif %}
@@ -95,7 +126,10 @@
         {{ status_badge(t.status, ticket_status_map) }}
       </a>
       {% else %}
-      <p class="px-5 py-4 text-sm text-slate-400">No open tickets.</p>
+      <div class="px-5 py-8 text-center">
+        <p class="text-sm text-slate-400 mb-2">No open tickets right now.</p>
+        <a href="{{ url_for('agent.tickets') }}" class="text-xs text-primary hover:underline">Go to ticket list</a>
+      </div>
       {% endfor %}
     </div>
   </div>
@@ -117,19 +151,24 @@
           </p>
           {% if task.deadline %}
           <p class="text-xs mt-0.5 {% if task.is_overdue %}text-red-500 font-medium{% else %}text-slate-400{% endif %}">
-            {% if task.is_overdue %}Overdue · {% endif %}
-            Due {{ task.deadline.strftime('%b %d, %Y') }}
+            {% if task.is_overdue %}Overdue · {% endif %}Due {{ task.deadline.strftime('%b %d, %Y') }}
           </p>
+          {% else %}
+          <p class="text-xs mt-0.5 text-slate-300">No deadline set</p>
           {% endif %}
         </div>
         <span class="w-2 h-2 rounded-full mt-1.5 flex-shrink-0
           {% if task.status == 'done' %}bg-green-400
           {% elif task.status == 'in_progress' %}bg-yellow-400
-          {% else %}bg-slate-300{% endif %}">
+          {% else %}bg-slate-300{% endif %}"
+          aria-hidden="true">
         </span>
       </a>
       {% else %}
-      <p class="px-5 py-4 text-sm text-slate-400">No pending tasks.</p>
+      <div class="px-5 py-8 text-center">
+        <p class="text-sm text-slate-400 mb-2">No pending tasks.</p>
+        <a href="{{ url_for('agent.task_new') }}" class="text-xs text-primary hover:underline">Create a task</a>
+      </div>
       {% endfor %}
     </div>
   </div>
@@ -139,49 +178,83 @@
 
 {% block scripts %}
 <script>
-const volumeChart = echarts.init(document.getElementById('chart-volume'));
-volumeChart.setOption({
-  tooltip: { trigger: 'axis' },
-  grid: { left: 40, right: 10, top: 10, bottom: 30 },
-  xAxis: { type: 'category', data: {{ chart_dates | tojson }}, axisLabel: { fontSize: 10 } },
-  yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
-  series: [{
-    type: 'line', data: {{ chart_values | tojson }},
-    smooth: true, areaStyle: { opacity: 0.15 },
-    lineStyle: { color: '#1B4F8A', width: 2 },
-    itemStyle: { color: '#1B4F8A' },
-    symbol: 'circle', symbolSize: 5,
-  }]
-});
+(function () {
+  const h = new Date().getHours();
+  const greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  const el = document.getElementById('greeting');
+  if (el) el.textContent = greet;
 
-const statusChart = echarts.init(document.getElementById('chart-status'));
-statusChart.setOption({
-  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 10 } },
-  series: [{
-    type: 'pie', radius: ['45%', '70%'],
-    data: {{ status_data | tojson }},
-    label: { show: false },
-    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
-    color: ['#3B82F6','#EAB308','#F97316','#22C55E','#94A3B8'],
-  }]
-});
+  const ts = document.getElementById('last-updated');
+  if (ts) {
+    ts.textContent = 'Updated ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    ts.classList.remove('hidden');
+  }
+})();
 
-const hospChart = echarts.init(document.getElementById('chart-hospitals'));
-hospChart.setOption({
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-  grid: { left: 140, right: 20, top: 10, bottom: 25 },
-  xAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
-  yAxis: { type: 'category', data: {{ hosp_names | tojson }}, axisLabel: { fontSize: 10 } },
-  series: [{
-    type: 'bar', data: {{ hosp_values | tojson }},
-    itemStyle: { color: '#0EA5A0', borderRadius: [0, 4, 4, 0] },
-    barMaxWidth: 24,
-  }]
-});
+var _volumeEl = document.getElementById('chart-volume');
+var _statusEl = document.getElementById('chart-status');
+var _hospEl   = document.getElementById('chart-hospitals');
 
-window.addEventListener('resize', () => {
-  volumeChart.resize(); statusChart.resize(); hospChart.resize();
+var volumeChart = _volumeEl ? echarts.init(_volumeEl) : null;
+var statusChart = _statusEl ? echarts.init(_statusEl) : null;
+var hospChart   = _hospEl   ? echarts.init(_hospEl)   : null;
+
+if (volumeChart) {
+  var vDates  = JSON.parse(_volumeEl.dataset.dates);
+  var vValues = JSON.parse(_volumeEl.dataset.values);
+  volumeChart.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 40, right: 10, top: 10, bottom: 30 },
+    xAxis: { type: 'category', data: vDates, axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
+    series: [{
+      type: 'line', data: vValues,
+      smooth: true, areaStyle: { opacity: 0.15 },
+      lineStyle: { color: '#3b82f6', width: 2 },
+      itemStyle: { color: '#3b82f6' },
+      symbol: 'circle', symbolSize: 5,
+    }]
+  });
+}
+
+if (statusChart) {
+  var sSeries = JSON.parse(_statusEl.dataset.series);
+  statusChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+    legend: { bottom: 0, textStyle: { fontSize: 10 } },
+    series: [{
+      type: 'pie', radius: ['45%', '70%'],
+      data: sSeries,
+      label: { show: false },
+      emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
+      color: ['#3B82F6', '#EAB308', '#F97316', '#22C55E', '#94A3B8'],
+    }]
+  });
+}
+
+if (hospChart) {
+  var hNames  = JSON.parse(_hospEl.dataset.names);
+  var hValues = JSON.parse(_hospEl.dataset.values);
+  hospChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+    grid: { left: 140, right: 20, top: 10, bottom: 25 },
+    xAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
+    yAxis: {
+      type: 'category', data: hNames,
+      axisLabel: { fontSize: 10, width: 130, overflow: 'truncate' }
+    },
+    series: [{
+      type: 'bar', data: hValues,
+      itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] },
+      barMaxWidth: 24,
+    }]
+  });
+}
+
+window.addEventListener('resize', function () {
+  if (volumeChart) { volumeChart.resize(); }
+  if (statusChart) { statusChart.resize(); }
+  if (hospChart)   { hospChart.resize(); }
 });
 </script>
 {% endblock %}
