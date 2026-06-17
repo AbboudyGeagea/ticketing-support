@@ -55,13 +55,23 @@ FLASK_APP=wsgi:app "${VENV}/bin/flask" db upgrade
 log "Migrations complete."
 
 # ---------------------------------------------------------------------------
-# Step 4: Run seed scripts
+# Step 4: Run seed scripts (each runs only once, tracked by marker files)
 # ---------------------------------------------------------------------------
 log "--- Step 4: Running seed scripts ---"
+SEEDS_DONE_DIR="${APP_DIR}/.seeds_done"
+mkdir -p "${SEEDS_DONE_DIR}"
 for seed in "${APP_DIR}"/scripts/seed_*.py; do
     [[ -f "$seed" ]] || continue
-    log "Running seed: $(basename "$seed")"
-    FLASK_APP=wsgi:app "${VENV}/bin/python" "$seed"
+    name="$(basename "$seed")"
+    marker="${SEEDS_DONE_DIR}/${name}.done"
+    if [[ -f "$marker" ]]; then
+        log "Skipping (already ran): ${name}"
+        continue
+    fi
+    log "Running seed: ${name}"
+    FLASK_APP=wsgi:app "${VENV}/bin/python" "$seed" \
+        && touch "$marker" \
+        || log "WARNING: ${name} failed — will retry next run."
 done
 log "Seed scripts complete."
 
@@ -73,7 +83,7 @@ systemctl restart "${WEB_SERVICE}"
 log "${WEB_SERVICE} restarted."
 
 # ---------------------------------------------------------------------------
-# Step 5: Restart background worker services (if they exist)
+# Step 6: Restart background worker services (if they exist)
 # ---------------------------------------------------------------------------
 log "--- Step 6: Restarting worker services ---"
 for svc in ${WORKER_SERVICES}; do
@@ -86,7 +96,7 @@ for svc in ${WORKER_SERVICES}; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 6: Health check
+# Step 7: Health check
 # ---------------------------------------------------------------------------
 log "--- Step 7: Health check ---"
 MAX_WAIT=60
@@ -102,7 +112,7 @@ done
 log "Health check passed."
 
 # ---------------------------------------------------------------------------
-# Step 7: Reload nginx if config changed
+# Step 8: Reload nginx if config changed
 # ---------------------------------------------------------------------------
 log "--- Step 8: Reloading nginx ---"
 NGINX_SOURCE="${APP_DIR}/nginx/sites-available/support.intermedic.com"
