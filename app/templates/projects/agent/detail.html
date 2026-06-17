@@ -107,21 +107,26 @@
   {% if milestones %}
   <ul class="divide-y divide-slate-100">
     {% for ms in milestones %}
-    <li class="px-5 py-3 flex items-center gap-4">
-      <form method="post" action="{{ url_for('projects.toggle_milestone', project_id=project.id, ms_id=ms.id) }}">
+    <li class="px-5 py-3 flex items-center gap-4" id="ms-row-{{ ms.id }}">
+      <form class="ms-toggle-form" method="post"
+            action="{{ url_for('projects.toggle_milestone', project_id=project.id, ms_id=ms.id) }}">
         {{ comment_form.hidden_tag() }}
         <button type="submit" title="{{ 'Mark pending' if ms.status == 'completed' else 'Mark completed' }}"
                 class="flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-colors
                        {{ 'border-secondary bg-secondary text-white' if ms.status == 'completed' else 'border-slate-300 hover:border-secondary' }}">
           {% if ms.status == 'completed' %}
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-3 h-3 ms-check" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+          </svg>
+          {% else %}
+          <svg class="w-3 h-3 ms-check hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
           </svg>
           {% endif %}
         </button>
       </form>
       <div class="flex-1 min-w-0">
-        <p class="text-sm font-medium text-slate-800 {{ 'line-through text-slate-400' if ms.status == 'completed' else '' }}">{{ ms.name }}</p>
+        <p class="ms-name text-sm font-medium text-slate-800 {{ 'line-through text-slate-400' if ms.status == 'completed' else '' }}">{{ ms.name }}</p>
         {% if ms.description %}
           <p class="text-xs text-slate-400 truncate">{{ ms.description }}</p>
         {% endif %}
@@ -188,9 +193,9 @@
           </span>
           {% endif %}
         </div>
-        <form method="post" action="{{ url_for('projects.update_task_status', project_id=project.id, task_id=task.id) }}" class="flex-shrink-0">
+        <form method="post" action="{{ url_for('projects.update_task_status', project_id=project.id, task_id=task.id) }}" class="flex-shrink-0 ajax-status-form">
           {{ comment_form.hidden_tag() }}
-          <select name="status" onchange="this.form.submit()"
+          <select name="status" onchange="ajaxStatus(this)"
                   class="text-xs border-0 bg-transparent focus:outline-none cursor-pointer font-medium badge-{{ task.status }} rounded px-1.5 py-0.5">
             <option value="todo"        {% if task.status == 'todo'        %}selected{% endif %}>To Do</option>
             <option value="in_progress" {% if task.status == 'in_progress' %}selected{% endif %}>In Progress</option>
@@ -209,9 +214,9 @@
           <span class="w-2 h-2 rounded-full flex-shrink-0
             {% if sub.status == 'done' %}bg-green-400{% elif sub.status == 'in_progress' %}bg-blue-400{% else %}bg-slate-300{% endif %}"></span>
           <span class="flex-1 text-xs text-slate-700">{{ sub.title }}</span>
-          <form method="post" action="{{ url_for('projects.update_task_status', project_id=project.id, task_id=sub.id) }}" class="flex-shrink-0">
+          <form method="post" action="{{ url_for('projects.update_task_status', project_id=project.id, task_id=sub.id) }}" class="flex-shrink-0 ajax-status-form">
             {{ comment_form.hidden_tag() }}
-            <select name="status" onchange="this.form.submit()"
+            <select name="status" onchange="ajaxStatus(this)"
                     class="text-xs border border-slate-200 rounded px-1 py-0.5 bg-white focus:outline-none cursor-pointer">
               <option value="todo"        {% if sub.status == 'todo'        %}selected{% endif %}>To Do</option>
               <option value="in_progress" {% if sub.status == 'in_progress' %}selected{% endif %}>In Progress</option>
@@ -344,10 +349,10 @@
       </div>
       <div class="flex-shrink-0 flex gap-3 items-center">
         <!-- Quick status update -->
-        <form method="POST" action="{{ url_for('projects.requirement_edit', project_id=project.id, req_id=req.id) }}">
+        <form method="POST" action="{{ url_for('projects.requirement_edit', project_id=project.id, req_id=req.id) }}" class="ajax-status-form">
           {{ comment_form.hidden_tag() }}
           <input type="hidden" name="title" value="{{ req.title }}">
-          <select name="status" onchange="this.form.submit()"
+          <select name="status" onchange="ajaxStatus(this)"
                   class="text-xs border border-slate-200 rounded px-1.5 py-0.5 focus:outline-none cursor-pointer bg-white">
             <option value="pending"   {% if req.status == 'pending'   %}selected{% endif %}>Pending</option>
             <option value="submitted" {% if req.status == 'submitted' %}selected{% endif %}>Submitted</option>
@@ -436,6 +441,57 @@ function toggleSubtasks(taskId) {
   el.classList.toggle('hidden');
   if (btn) btn.textContent = el.classList.contains('hidden') ? '▶' : '▼';
 }
+
+// Shared AJAX helper — sends form data without page reload
+async function _ajaxPost(form) {
+  const fd = new FormData(form);
+  const resp = await fetch(form.action, {
+    method: 'POST',
+    body: fd,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  return resp.ok ? resp.json() : null;
+}
+
+// Status select (tasks + requirements): update badge colour in place
+const TASK_BADGE = { todo: 'badge-todo', in_progress: 'badge-in_progress', done: 'badge-done' };
+async function ajaxStatus(select) {
+  const form = select.closest('form');
+  const result = await _ajaxPost(form);
+  if (result && result.ok) {
+    // Update select badge colour
+    Object.values(TASK_BADGE).forEach(c => select.classList.remove(c));
+    if (TASK_BADGE[result.status]) select.classList.add(TASK_BADGE[result.status]);
+  } else {
+    // Fallback: reload if AJAX fails
+    location.reload();
+  }
+}
+
+// Milestone toggle button: flip circle + strikethrough without reload
+document.querySelectorAll('.ms-toggle-form').forEach(function(form) {
+  form.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const result = await _ajaxPost(form);
+    if (!result) { location.reload(); return; }
+    const btn   = form.querySelector('button');
+    const check = form.querySelector('.ms-check');
+    const row   = form.closest('li');
+    const name  = row ? row.querySelector('.ms-name') : null;
+    const done  = result.status === 'completed';
+    // Toggle button appearance
+    btn.classList.toggle('border-secondary', done);
+    btn.classList.toggle('bg-secondary', done);
+    btn.classList.toggle('text-white', done);
+    btn.classList.toggle('border-slate-300', !done);
+    if (check) check.classList.toggle('hidden', !done);
+    // Toggle text strikethrough
+    if (name) {
+      name.classList.toggle('line-through', done);
+      name.classList.toggle('text-slate-400', done);
+    }
+  });
+});
 </script>
 {% if gantt_data %}
 <script>

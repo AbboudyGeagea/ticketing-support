@@ -1,7 +1,7 @@
 import json
 from datetime import date
 from functools import wraps
-from flask import render_template, redirect, url_for, flash, request, abort
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify
 from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -266,6 +266,8 @@ def toggle_milestone(project_id, ms_id):
     ms = ProjectMilestone.query.filter_by(id=ms_id, project_id=project_id).first_or_404()
     ms.status = "completed" if ms.status == "pending" else "pending"
     db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "status": ms.status})
     flash("Milestone status updated.", "success")
     return redirect(url_for("projects.project_detail", project_id=project_id))
 
@@ -347,6 +349,8 @@ def update_task_status(project_id, task_id):
     if new_status in ("todo", "in_progress", "done"):
         task.status = new_status
         db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "status": task.status})
     return redirect(url_for("projects.project_detail", project_id=project_id))
 
 
@@ -612,6 +616,8 @@ def requirement_edit(project_id, req_id):
         req.due_date = None
 
     db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"ok": True, "status": req.status})
     flash("Requirement updated.", "success")
     return redirect(url_for("projects.project_detail", project_id=project_id, tab="requirements"))
 
