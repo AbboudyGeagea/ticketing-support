@@ -222,6 +222,7 @@
 </nav>
 
 <!-- ── Per-page title bar ──────────────────────────────────────────────────── -->
+{% block page_header %}
 <header class="bg-white border-b border-slate-200"
         style="padding:0.875rem 1.5rem; display:flex; align-items:center; justify-content:space-between;
                position:sticky; top:3.25rem; z-index:20;">
@@ -230,6 +231,7 @@
     {% block header_actions %}{% endblock %}
   </div>
 </header>
+{% endblock %}
 
 <!-- ── Flash messages ─────────────────────────────────────────────────────── -->
 <div class="px-6 pt-4 space-y-2">
