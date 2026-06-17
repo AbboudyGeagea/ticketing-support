@@ -87,9 +87,7 @@
 </div>
 
 <!-- Gantt Chart (always visible to agents) -->
-{% set gantt = gantt_data | tojson if gantt_data else gantt_data %}
 {% if gantt_data %}
-{% set parsed = gantt_data | from_json if gantt_data else {} %}
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 mb-6">
   <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
     <h2 class="font-semibold text-slate-800">Gantt Chart</h2>
