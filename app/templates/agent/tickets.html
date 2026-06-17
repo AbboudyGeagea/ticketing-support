@@ -138,6 +138,7 @@
           <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
           <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
           <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assignee</th>
+          <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Reply</th>
           <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Updated</th>
         </tr>
       </thead>
@@ -174,13 +175,30 @@
           <td class="px-4 py-3.5 text-slate-500 text-xs">
             {{ t.assignee.name if t.assignee else '—' }}
           </td>
+          <td class="px-4 py-3.5">
+            {% set lm = last_msg_map.get(t.id) %}
+            {% if lm %}
+              {% if lm.sender_id and lm.sender and lm.sender.is_agent %}
+              <span class="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>Support replied
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 text-xs font-medium text-orange-700 bg-orange-50 border border-orange-200 px-2 py-0.5 rounded-full">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></span>Customer replied
+              </span>
+              {% endif %}
+              <p class="text-xs text-slate-400 mt-0.5 whitespace-nowrap">{{ lm.created_at.strftime('%b %d, %H:%M') }}</p>
+            {% else %}
+              <span class="text-xs text-slate-300">No replies</span>
+            {% endif %}
+          </td>
           <td class="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
             {{ t.updated_at.strftime('%b %d, %H:%M') if t.updated_at else t.created_at.strftime('%b %d, %H:%M') }}
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="9" class="px-5 py-10 text-center text-slate-400 text-sm">No tickets match your filters.</td>
+          <td colspan="10" class="px-5 py-10 text-center text-slate-400 text-sm">No tickets match your filters.</td>
         </tr>
         {% endfor %}
       </tbody>

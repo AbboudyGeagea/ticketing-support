@@ -72,11 +72,25 @@
     </div>
     <div class="divide-y divide-slate-100">
       {% for t in recent_tickets %}
+      {% set lm = dash_last_msg_map.get(t.id) %}
       <a href="{{ url_for('agent.ticket_detail', ref=t.ref) }}"
-         class="flex items-start gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
+         class="flex items-center gap-3 px-5 py-3 hover:bg-slate-50 transition-colors">
         <div class="flex-1 min-w-0">
           <p class="text-sm font-medium text-slate-800 truncate">{{ t.subject }}</p>
-          <p class="text-xs text-slate-400 mt-0.5">{{ t.ref }} · {{ t.hospital.name }}</p>
+          <div class="flex items-center gap-2 mt-0.5">
+            <p class="text-xs text-slate-400">{{ t.ref }} · {{ t.hospital.name }}</p>
+            {% if lm %}
+              {% if lm.sender_id and lm.sender and lm.sender.is_agent %}
+              <span class="inline-flex items-center gap-1 text-xs text-emerald-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Support replied
+              </span>
+              {% else %}
+              <span class="inline-flex items-center gap-1 text-xs font-medium text-orange-600">
+                <span class="w-1.5 h-1.5 rounded-full bg-orange-500"></span>Awaiting support
+              </span>
+              {% endif %}
+            {% endif %}
+          </div>
         </div>
         {{ status_badge(t.status, ticket_status_map) }}
       </a>

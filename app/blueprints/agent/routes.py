@@ -116,6 +116,19 @@ def dashboard():
         .all()
     )
 
+    # Last public message per recent ticket
+    dash_last_msg_map = {}
+    _rt_ids = [t.id for t in recent_tickets]
+    if _rt_ids:
+        _subq = (
+            db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
+            .filter(TicketMessage.ticket_id.in_(_rt_ids), TicketMessage.is_internal == False)
+            .group_by(TicketMessage.ticket_id)
+            .subquery()
+        )
+        for _m in db.session.query(TicketMessage).join(_subq, TicketMessage.id == _subq.c.max_id).all():
+            dash_last_msg_map[_m.ticket_id] = _m
+
     # My tasks
     my_tasks = (
         Task.query.filter_by(assigned_to=current_user.id)
@@ -138,6 +151,7 @@ def dashboard():
         hosp_names=hosp_names,
         hosp_values=hosp_values,
         recent_tickets=recent_tickets,
+        dash_last_msg_map=dash_last_msg_map,
         my_tasks=my_tasks,
     )
 
@@ -183,6 +197,20 @@ def tickets():
         .order_by(Ticket.updated_at.desc())
         .paginate(page=page, per_page=25)
     )
+
+    # Last public message per ticket on this page (one subquery, not N)
+    last_msg_map = {}
+    _ids = [t.id for t in tickets_page.items]
+    if _ids:
+        _subq = (
+            db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
+            .filter(TicketMessage.ticket_id.in_(_ids), TicketMessage.is_internal == False)
+            .group_by(TicketMessage.ticket_id)
+            .subquery()
+        )
+        for _m in db.session.query(TicketMessage).join(_subq, TicketMessage.id == _subq.c.max_id).all():
+            last_msg_map[_m.ticket_id] = _m
+
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
 
     from app.models.saved_filter import SavedFilter
@@ -205,6 +233,7 @@ def tickets():
             "q": search,
         },
         saved_filters=saved_filters,
+        last_msg_map=last_msg_map,
     )
 
 
