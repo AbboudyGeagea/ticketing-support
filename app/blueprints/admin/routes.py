@@ -1158,25 +1158,6 @@ def credential_delete(hospital_id, cred_id):
     return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="access"))
 
 
-@bp.route("/hospitals/<int:hospital_id>/credentials/<int:cred_id>/reveal", methods=["POST"])
-@csrf.exempt
-@login_required
-@_agent_or_admin_required
-def credential_reveal(hospital_id, cred_id):
-    cred = HospitalCredential.query.filter_by(id=cred_id, hospital_id=hospital_id).first_or_404()
-    data = request.get_json(silent=True) or {}
-    entered = data.get("key", "")
-    master = current_app.config.get("CREDENTIAL_MASTER_KEY", "")
-    if not master or entered != master:
-        return jsonify({"ok": False}), 403
-    return jsonify({
-        "ok": True,
-        "password": decrypt(cred.password_enc) if cred.password_enc else "",
-        "host": decrypt(cred.host_enc) if cred.host_enc else "",
-        "role": decrypt(cred.role_enc) if cred.role_enc else "",
-    })
-
-
 @bp.route("/hospitals/<int:hospital_id>/access")
 @login_required
 @_agent_or_admin_required
@@ -1185,6 +1166,10 @@ def hospital_access(hospital_id):
     credentials = HospitalCredential.query.filter_by(hospital_id=hospital_id).order_by(
         HospitalCredential.category, HospitalCredential.label
     ).all()
+    for cred in credentials:
+        cred._password = decrypt(cred.password_enc) if cred.password_enc else ""
+        cred._host = decrypt(cred.host_enc) if cred.host_enc else ""
+        cred._role = decrypt(cred.role_enc) if cred.role_enc else ""
     return render_template("admin/hospital_access.html", hospital=hospital, credentials=credentials)
 
 

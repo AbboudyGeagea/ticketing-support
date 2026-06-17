@@ -65,8 +65,8 @@
             {% if cred.password_enc %}
             <div class="flex items-center gap-2">
               <span class="text-slate-400 text-xs w-20 flex-shrink-0">Password</span>
-              <span class="font-mono text-slate-400 text-xs masked-field" id="pw-{{ cred.id }}">••••••••</span>
-              <button onclick="copyMasked('pw-{{ cred.id }}')" title="Copy" id="copy-pw-{{ cred.id }}"
+              <span class="font-mono text-xs masked-field text-slate-400" id="pw-{{ cred.id }}" data-value="{{ cred._password }}">••••••••</span>
+              <button onclick="copyField('pw-{{ cred.id }}')" title="Copy" id="copy-pw-{{ cred.id }}"
                       class="text-slate-300 hover:text-primary transition-colors flex-shrink-0 hidden">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -78,8 +78,8 @@
             {% if cred.host_enc %}
             <div class="flex items-center gap-2">
               <span class="text-slate-400 text-xs w-20 flex-shrink-0">Host / IP</span>
-              <span class="font-mono text-slate-400 text-xs masked-field" id="host-{{ cred.id }}">••••••••</span>
-              <button onclick="copyMasked('host-{{ cred.id }}')" title="Copy" id="copy-host-{{ cred.id }}"
+              <span class="font-mono text-xs masked-field text-slate-400" id="host-{{ cred.id }}" data-value="{{ cred._host }}">••••••••</span>
+              <button onclick="copyField('host-{{ cred.id }}')" title="Copy" id="copy-host-{{ cred.id }}"
                       class="text-slate-300 hover:text-primary transition-colors flex-shrink-0 hidden">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
@@ -91,7 +91,7 @@
             {% if cred.role_enc %}
             <div class="flex items-center gap-2">
               <span class="text-slate-400 text-xs w-20 flex-shrink-0">Role</span>
-              <span class="font-mono text-slate-400 text-xs masked-field" id="role-{{ cred.id }}">••••••••</span>
+              <span class="font-mono text-xs masked-field text-slate-400" id="role-{{ cred.id }}" data-value="{{ cred._role }}">••••••••</span>
             </div>
             {% endif %}
 
@@ -115,14 +115,13 @@
 
         <div class="flex items-center gap-2 flex-shrink-0">
           {% if cred.password_enc or cred.host_enc or cred.role_enc %}
-          <button onclick="openReveal({{ cred.id }})"
-                  class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:border-primary hover:text-primary transition-colors"
-                  id="reveal-btn-{{ cred.id }}">
+          <button onclick="toggleReveal({{ cred.id }}, this)"
+                  class="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 hover:border-primary hover:text-primary transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
             </svg>
-            Reveal
+            <span>Reveal</span>
           </button>
           {% endif %}
           {% if current_user.is_admin %}
@@ -154,106 +153,46 @@
 
 {% endif %}
 
-<!-- Reveal Modal -->
-<div id="reveal-modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 hidden">
-  <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-    <h3 class="text-base font-semibold text-slate-800 mb-1">Enter Master Key</h3>
-    <p class="text-xs text-slate-400 mb-4">Required to reveal encrypted credentials.</p>
-    <input type="password" id="master-key-input" placeholder="Master key"
-           class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary mb-3"
-           onkeydown="if(event.key==='Enter') doReveal()">
-    <p id="reveal-error" class="text-red-500 text-xs mb-3 hidden">Wrong key. Try again.</p>
-    <div class="flex gap-3">
-      <button onclick="doReveal()"
-              class="flex-1 bg-primary hover:bg-primary-dark text-white text-sm font-semibold py-2.5 rounded-lg transition-colors">
-        Reveal
-      </button>
-      <button onclick="closeReveal()"
-              class="text-slate-500 hover:text-slate-800 text-sm py-2.5 px-4 transition-colors">
-        Cancel
-      </button>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block scripts %}
 <script>
-var _revealed = {};
+function toggleReveal(credId, btn) {
+  var fields = [
+    { el: document.getElementById('pw-' + credId),   copyBtn: document.getElementById('copy-pw-' + credId) },
+    { el: document.getElementById('host-' + credId), copyBtn: document.getElementById('copy-host-' + credId) },
+    { el: document.getElementById('role-' + credId), copyBtn: null },
+  ];
 
-function openReveal(credId) {
-  if (_revealed[credId]) return;
-  var savedKey = sessionStorage.getItem('rd_master_key');
-  if (savedKey) {
-    _fetchReveal(credId, savedKey);
-  } else {
-    document.getElementById('master-key-input').value = '';
-    document.getElementById('reveal-error').classList.add('hidden');
-    document.getElementById('reveal-modal').dataset.cred = credId;
-    document.getElementById('reveal-modal').classList.remove('hidden');
-    setTimeout(() => document.getElementById('master-key-input').focus(), 50);
-  }
-}
+  var isRevealed = btn.dataset.revealed === '1';
 
-function closeReveal() {
-  document.getElementById('reveal-modal').classList.add('hidden');
-}
-
-function doReveal() {
-  var key = document.getElementById('master-key-input').value;
-  var credId = document.getElementById('reveal-modal').dataset.cred;
-  if (!key || !credId) return;
-  _fetchReveal(credId, key);
-}
-
-function _fetchReveal(credId, key) {
-  fetch('{{ url_for("admin.credential_reveal", hospital_id=hospital.id, cred_id=0) }}'.replace('/0/', '/' + credId + '/'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': '{{ csrf_token() }}' },
-    body: JSON.stringify({ key: key })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if (!data.ok) {
-      document.getElementById('reveal-error').classList.remove('hidden');
-      sessionStorage.removeItem('rd_master_key');
-      return;
+  fields.forEach(function(f) {
+    if (!f.el) return;
+    if (isRevealed) {
+      f.el.textContent = '••••••••';
+      f.el.classList.remove('text-slate-800');
+      f.el.classList.add('text-slate-400');
+      if (f.copyBtn) f.copyBtn.classList.add('hidden');
+    } else {
+      f.el.textContent = f.el.dataset.value;
+      f.el.classList.remove('text-slate-400');
+      f.el.classList.add('text-slate-800');
+      if (f.copyBtn) f.copyBtn.classList.remove('hidden');
     }
-    sessionStorage.setItem('rd_master_key', key);
-    _revealed[credId] = true;
-
-    function showField(elId, value, copyBtnId) {
-      var el = document.getElementById(elId);
-      if (el && value) {
-        el.textContent = value;
-        el.classList.remove('text-slate-400');
-        el.classList.add('text-slate-800');
-        if (copyBtnId) { var b = document.getElementById(copyBtnId); if (b) b.classList.remove('hidden'); }
-      }
-    }
-    showField('pw-' + credId, data.password, 'copy-pw-' + credId);
-    showField('host-' + credId, data.host, 'copy-host-' + credId);
-    showField('role-' + credId, data.role, null);
-
-    var btn = document.getElementById('reveal-btn-' + credId);
-    if (btn) btn.classList.add('hidden');
-    closeReveal();
-  })
-  .catch(() => {
-    document.getElementById('reveal-error').classList.remove('hidden');
-    sessionStorage.removeItem('rd_master_key');
   });
+
+  btn.dataset.revealed = isRevealed ? '0' : '1';
+  btn.querySelector('span').textContent = isRevealed ? 'Reveal' : 'Hide';
 }
 
 function copyText(text) {
   navigator.clipboard.writeText(text).then(() => showCopied());
 }
 
-function copyMasked(elId) {
+function copyField(elId) {
   var el = document.getElementById(elId);
-  if (el && el.textContent !== '••••••••') {
-    navigator.clipboard.writeText(el.textContent).then(() => showCopied());
+  if (el && el.dataset.value) {
+    navigator.clipboard.writeText(el.dataset.value).then(() => showCopied());
   }
 }
 
@@ -264,9 +203,5 @@ function showCopied() {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 1500);
 }
-
-document.getElementById('reveal-modal').addEventListener('click', function(e) {
-  if (e.target === this) closeReveal();
-});
 </script>
 {% endblock %}
