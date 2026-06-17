@@ -8,6 +8,7 @@ CREDENTIAL_CATEGORIES = [
     ("network", "Network / IP"),
     ("admin_account", "Admin Account"),
     ("os_account", "OS Account"),
+    ("app_access", "Application Access"),
     ("other", "Other"),
 ]
 

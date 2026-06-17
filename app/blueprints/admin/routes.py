@@ -1128,6 +1128,8 @@ def credential_add(hospital_id):
 def credential_edit(hospital_id, cred_id):
     hospital = Hospital.query.get_or_404(hospital_id)
     cred = HospitalCredential.query.filter_by(id=cred_id, hospital_id=hospital_id).first_or_404()
+    cred._role = decrypt(cred.role_enc) if cred.role_enc else ""
+    cred._host = decrypt(cred.host_enc) if cred.host_enc else ""
     form = CredentialForm(obj=cred)
     if form.validate_on_submit():
         cred.category = form.category.data

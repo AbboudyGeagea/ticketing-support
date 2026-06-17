@@ -18,8 +18,14 @@
   ('network', 'Network / IP'),
   ('admin_account', 'Admin Accounts'),
   ('os_account', 'OS Accounts'),
+  ('app_access', 'Application Access'),
   ('other', 'Other'),
 ] %}
+
+{# Per-category contextual labels for encrypted fields #}
+{% set role_labels  = {'vpn': 'Client', 'os_account': 'Type', 'app_access': 'Application', 'network': 'Type', 'other': 'Type'} %}
+{% set host_labels  = {'vpn': 'Gateway', 'network': 'IP Address', 'os_account': 'Domain'} %}
+{% set url_labels   = {'vpn': 'Port'} %}
 
 {% if not credentials %}
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-16 text-center">
@@ -77,7 +83,7 @@
 
             {% if cred.host_enc %}
             <div class="flex items-center gap-2">
-              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Host / IP</span>
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">{{ host_labels.get(cat_id, 'Host / IP') }}</span>
               <span class="font-mono text-xs masked-field text-slate-400" id="host-{{ cred.id }}" data-value="{{ cred._host }}">••••••••</span>
               <button onclick="copyField('host-{{ cred.id }}')" title="Copy" id="copy-host-{{ cred.id }}"
                       class="text-slate-300 hover:text-primary transition-colors flex-shrink-0 hidden">
@@ -90,16 +96,20 @@
 
             {% if cred.role_enc %}
             <div class="flex items-center gap-2">
-              <span class="text-slate-400 text-xs w-20 flex-shrink-0">Role</span>
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">{{ role_labels.get(cat_id, 'Role') }}</span>
               <span class="font-mono text-xs masked-field text-slate-400" id="role-{{ cred.id }}" data-value="{{ cred._role }}">••••••••</span>
             </div>
             {% endif %}
 
             {% if cred.url %}
             <div class="flex items-center gap-2">
-              <span class="text-slate-400 text-xs w-20 flex-shrink-0">URL</span>
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">{{ url_labels.get(cat_id, 'URL') }}</span>
+              {% if cat_id == 'vpn' %}
+              <span class="font-mono text-slate-700 text-xs">{{ cred.url }}</span>
+              {% else %}
               <a href="{{ cred.url }}" target="_blank" rel="noopener"
                  class="text-primary hover:underline text-xs truncate">{{ cred.url }}</a>
+              {% endif %}
             </div>
             {% endif %}
 
