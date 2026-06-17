@@ -572,6 +572,9 @@ def task_new():
     ticket_ref = request.args.get("ticket_ref")
     linked_ticket = Ticket.query.filter_by(ref=ticket_ref).first() if ticket_ref else None
 
+    if request.method == "GET":
+        form.assigned_to.data = current_user.id
+
     if form.validate_on_submit():
         task = Task(
             ticket_id=linked_ticket.id if linked_ticket else None,
