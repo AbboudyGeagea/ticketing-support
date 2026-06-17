@@ -20,12 +20,13 @@ TEMP_PASSWORD = "12345678"
 app = create_app()
 
 with app.app_context():
-    hospital = Hospital.query.filter(
-        Hospital.name.ilike("%mazloum%")
-    ).first()
+    hospital = (
+        Hospital.query.filter_by(name="New Mazloum Hospital").first()
+        or Hospital.query.filter(Hospital.name.ilike("%mazloum%")).first()
+    )
 
     if not hospital:
-        print("ERROR: No hospital matching 'mazloum' found. Aborting.")
+        print("ERROR: No hospital matching 'New Mazloum Hospital' found. Aborting.")
         sys.exit(1)
 
     print(f"Hospital found: {hospital.name} (id={hospital.id})")
