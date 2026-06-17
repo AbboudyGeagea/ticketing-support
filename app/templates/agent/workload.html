@@ -33,7 +33,9 @@
 <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
   {% for agent in agents %}
   {% set agent_tasks = tasks_by_agent.get(agent.id, []) %}
-  {% if agent_tasks %}
+  {% set t_count = ticket_counts.get(agent.id, 0) %}
+  {% set p_count = project_counts.get(agent.id, 0) %}
+  {% set k_count = open_task_counts.get(agent.id, 0) %}
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
 
     <!-- Agent header -->
@@ -45,15 +47,44 @@
         <p class="font-semibold text-slate-800 text-sm truncate">{{ agent.name }}</p>
         <p class="text-xs text-slate-400">{{ agent.role.title() }}</p>
       </div>
-      <span class="text-xs font-semibold px-2 py-0.5 rounded-full
-        {% if agent_tasks|length == 0 %}bg-slate-100 text-slate-500
-        {% elif agent_tasks|length >= 5 %}bg-red-100 text-red-700
-        {% else %}bg-blue-100 text-blue-700{% endif %}">
-        {{ agent_tasks|length }} task{{ 's' if agent_tasks|length != 1 else '' }}
-      </span>
+      <span class="w-2.5 h-2.5 rounded-full flex-shrink-0 {% if agent.is_available %}bg-green-400{% else %}bg-slate-300{% endif %}"
+            title="{% if agent.is_available %}Available{% else %}Away{% endif %}"></span>
     </div>
 
-    <!-- Task list -->
+    <!-- Workload stats -->
+    <div class="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
+      <div class="px-4 py-3 text-center">
+        <p class="text-xl font-bold {% if t_count >= 10 %}text-red-600{% elif t_count >= 5 %}text-orange-500{% else %}text-slate-800{% endif %}">
+          {{ t_count }}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">Tickets</p>
+      </div>
+      <div class="px-4 py-3 text-center">
+        <p class="text-xl font-bold {% if p_count >= 5 %}text-orange-500{% else %}text-slate-800{% endif %}">
+          {{ p_count }}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">Projects</p>
+      </div>
+      <div class="px-4 py-3 text-center">
+        <p class="text-xl font-bold {% if k_count >= 10 %}text-red-600{% elif k_count >= 5 %}text-orange-500{% else %}text-slate-800{% endif %}">
+          {{ k_count }}
+        </p>
+        <p class="text-xs text-slate-400 mt-0.5">Tasks</p>
+      </div>
+    </div>
+
+    <!-- This week's tasks -->
+    <div class="px-5 py-2 bg-slate-50 border-b border-slate-100">
+      <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+        Due this week
+        <span class="ml-1 font-bold
+          {% if agent_tasks|length >= 5 %}text-red-600
+          {% elif agent_tasks|length > 0 %}text-blue-600
+          {% else %}text-slate-400{% endif %}">
+          ({{ agent_tasks|length }})
+        </span>
+      </p>
+    </div>
     <div class="flex-1 divide-y divide-slate-50">
       {% if agent_tasks %}
         {% for task in agent_tasks %}
@@ -88,14 +119,13 @@
         </a>
         {% endfor %}
       {% else %}
-        <div class="px-5 py-8 text-center">
-          <p class="text-sm text-slate-400">No tasks this week</p>
+        <div class="px-5 py-6 text-center">
+          <p class="text-sm text-slate-300">No tasks due this week</p>
         </div>
       {% endif %}
     </div>
 
   </div>
-  {% endif %}
   {% endfor %}
 
   {% if not agents %}

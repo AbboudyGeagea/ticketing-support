@@ -1421,6 +1421,8 @@ def task_delete_dependency(task_id, dep_id):
 @login_required
 @agent_required
 def workload():
+    from app.models.project import ProjectTask
+
     week_offset = request.args.get("week", 0, type=int)
     today = datetime.utcnow().date()
     week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
@@ -1434,6 +1436,8 @@ def workload():
         User.active == True,
     ).order_by(User.name).all()
 
+    agent_ids = [a.id for a in agents]
+
     # Tasks with deadline in the selected week, not done
     week_tasks = Task.query.filter(
         Task.status != TASK_DONE,
@@ -1441,10 +1445,34 @@ def workload():
         Task.deadline <= week_end_dt,
     ).all()
 
-    tasks_by_agent = {agent.id: [] for agent in agents}
+    tasks_by_agent = {a.id: [] for a in agents}
     for task in week_tasks:
         if task.assigned_to in tasks_by_agent:
             tasks_by_agent[task.assigned_to].append(task)
+
+    # Open tickets per agent (not closed / resolved)
+    ticket_counts = dict(
+        db.session.query(Ticket.assigned_to, func.count(Ticket.id))
+        .filter(Ticket.assigned_to.in_(agent_ids), Ticket.status.notin_(["closed", "resolved"]))
+        .group_by(Ticket.assigned_to)
+        .all()
+    )
+
+    # Open ticket-tasks per agent (not done)
+    open_task_counts = dict(
+        db.session.query(Task.assigned_to, func.count(Task.id))
+        .filter(Task.assigned_to.in_(agent_ids), Task.status != TASK_DONE)
+        .group_by(Task.assigned_to)
+        .all()
+    )
+
+    # Active projects per agent (distinct projects with a non-done ProjectTask assigned to them)
+    project_counts = dict(
+        db.session.query(ProjectTask.assigned_to, func.count(func.distinct(ProjectTask.project_id)))
+        .filter(ProjectTask.assigned_to.in_(agent_ids), ProjectTask.status != "done")
+        .group_by(ProjectTask.assigned_to)
+        .all()
+    )
 
     return render_template(
         "agent/workload.html",
@@ -1453,6 +1481,9 @@ def workload():
         week_start=week_start,
         week_end=week_end,
         week_offset=week_offset,
+        ticket_counts=ticket_counts,
+        open_task_counts=open_task_counts,
+        project_counts=project_counts,
     )
 
 
