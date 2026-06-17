@@ -124,7 +124,16 @@
         </div>
       </div>
 
-      {% if req.response_text %}
+      <!-- Previous response / rejection display -->
+      {% if req.status == 'rejected' and req.rejection_reason %}
+      <div class="mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-xs">
+        <p class="font-semibold text-red-700 mb-1">Your rejection</p>
+        <p class="text-slate-700 mb-2"><span class="font-medium text-slate-500">Reason:</span> {{ req.rejection_reason }}</p>
+        {% if req.rejection_alternative %}
+        <p class="text-slate-700"><span class="font-medium text-slate-500">Alternative:</span> {{ req.rejection_alternative }}</p>
+        {% endif %}
+      </div>
+      {% elif req.response_text %}
       <div class="mb-3 bg-slate-50 rounded-lg px-3 py-2 text-xs text-slate-600 border border-slate-100">
         <span class="font-medium text-slate-500">Your response:</span> {{ req.response_text }}
       </div>
@@ -132,27 +141,61 @@
 
       {% if req.status in ('pending', 'submitted', 'rejected') %}
       <form method="POST" action="{{ url_for('projects.requirement_respond', project_id=project.id, req_id=req.id) }}"
-            class="mt-2 space-y-2">
+            class="mt-2 space-y-2" id="req-form-{{ req.id }}">
         {{ comment_form.hidden_tag() }}
-        <textarea name="response_text" rows="2" placeholder="Your response or comments…"
-                  class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none">{{ req.response_text or '' }}</textarea>
-        <div class="flex gap-2">
-          {% if req.req_type == 'approve' %}
-          <button type="submit" name="action" value="approve"
-                  class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-            Approve
-          </button>
-          <button type="submit" name="action" value="reject"
-                  class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-            Reject
-          </button>
-          {% else %}
-          <button type="submit" name="action" value="submit"
-                  class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
-            Submit Response
-          </button>
-          {% endif %}
+
+        <!-- Standard response textarea (shown always except mid-rejection) -->
+        <div id="req-normal-{{ req.id }}">
+          <textarea name="response_text" rows="2" placeholder="Your response or comments (optional)…"
+                    class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none">{{ req.response_text or '' }}</textarea>
+          <div class="flex gap-2 mt-2">
+            {% if req.req_type == 'approve' %}
+            <button type="button" onclick="showRejectForm({{ req.id }})"
+                    class="bg-red-100 hover:bg-red-200 text-red-700 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              Reject…
+            </button>
+            <button type="submit" name="action" value="approve"
+                    class="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              Approve
+            </button>
+            {% else %}
+            <button type="submit" name="action" value="submit"
+                    class="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors">
+              Submit Response
+            </button>
+            {% endif %}
+          </div>
         </div>
+
+        <!-- Rejection detail fields (hidden until Reject… is clicked) -->
+        {% if req.req_type == 'approve' %}
+        <div id="req-reject-{{ req.id }}" class="hidden space-y-2 border border-red-200 rounded-lg p-3 bg-red-50">
+          <p class="text-xs font-semibold text-red-700">Rejection details</p>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Reason for rejection <span class="text-red-600">*</span></label>
+            <textarea name="rejection_reason" rows="2" required
+                      placeholder="Why are you rejecting this?"
+                      class="w-full text-sm border border-red-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-red-400/40 resize-none bg-white"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Alternative solution <span class="text-slate-400">(optional)</span></label>
+            <textarea name="rejection_alternative" rows="2"
+                      placeholder="What would you accept instead?"
+                      class="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none bg-white"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" name="action" value="reject"
+                    class="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-4 py-1.5 rounded-lg transition-colors">
+              Confirm Rejection
+            </button>
+            <button type="button" onclick="hideRejectForm({{ req.id }})"
+                    class="text-xs text-slate-500 hover:text-slate-700 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
+              Cancel
+            </button>
+          </div>
+        </div>
+        {% endif %}
+
       </form>
       {% endif %}
     </div>
@@ -243,6 +286,17 @@
 {% endblock %}
 
 {% block scripts %}
+<script>
+function showRejectForm(reqId) {
+  document.getElementById('req-normal-' + reqId).classList.add('hidden');
+  document.getElementById('req-reject-' + reqId).classList.remove('hidden');
+  document.getElementById('req-reject-' + reqId).querySelector('textarea').focus();
+}
+function hideRejectForm(reqId) {
+  document.getElementById('req-reject-' + reqId).classList.add('hidden');
+  document.getElementById('req-normal-' + reqId).classList.remove('hidden');
+}
+</script>
 {% if gantt_data %}
 <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 <script>

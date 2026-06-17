@@ -648,14 +648,24 @@ def requirement_respond(project_id, req_id):
     response_text = request.form.get("response_text", "").strip()
     action = request.form.get("action", "submit")  # submit | approve | reject
 
-    if response_text:
-        req.response_text = response_text
-
-    if action == "approve":
-        req.status = "approved"
-    elif action == "reject":
+    if action == "reject":
+        rejection_reason = request.form.get("rejection_reason", "").strip()
+        rejection_alternative = request.form.get("rejection_alternative", "").strip()
+        if not rejection_reason:
+            flash("Please provide a reason for the rejection.", "danger")
+            return redirect(url_for("projects.portal_detail", project_id=project_id))
+        req.rejection_reason = rejection_reason
+        req.rejection_alternative = rejection_alternative or None
+        req.response_text = response_text or None
         req.status = "rejected"
+    elif action == "approve":
+        req.response_text = response_text or None
+        req.rejection_reason = None
+        req.rejection_alternative = None
+        req.status = "approved"
     else:
+        if response_text:
+            req.response_text = response_text
         req.status = "submitted"
 
     db.session.commit()

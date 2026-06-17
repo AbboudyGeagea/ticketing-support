@@ -134,6 +134,8 @@ class ProjectRequirement(db.Model):
     assigned_to_email = db.Column(db.String(254), nullable=True)
     assigned_agent_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     response_text = db.Column(db.Text)
+    rejection_reason = db.Column(db.Text)
+    rejection_alternative = db.Column(db.Text)
     due_date = db.Column(db.Date, nullable=True)
     email_sent = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
