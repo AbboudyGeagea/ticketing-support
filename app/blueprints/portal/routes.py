@@ -60,8 +60,7 @@ def _visible_tickets(user):
 
 
 def _make_ref(ticket_id):
-    now = datetime.utcnow()
-    return f"TKT-{now.year}{now.month:02d}-{ticket_id:05d}"
+    return f"{ticket_id:04d}"
 
 
 @bp.route("/")

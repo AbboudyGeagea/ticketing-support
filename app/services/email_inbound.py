@@ -158,10 +158,10 @@ def _find_existing_ticket(conversation_id: str, subject: str):
         if t:
             return t
 
-    # Fall back: look for ticket ref in subject like [TKT-202605-00001]
-    match = re.search(r"TKT-\d{6}-\d{5}", subject)
+    # Fall back: look for ticket ref in subject like [0042]
+    match = re.search(r"\[(\d{4,})\]", subject)
     if match:
-        return Ticket.query.filter_by(ref=match.group()).first()
+        return Ticket.query.filter_by(ref=match.group(1)).first()
 
     return None
 
@@ -210,8 +210,7 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
     db.session.add(ticket)
     db.session.flush()
 
-    now = datetime.utcnow()
-    ticket.ref = f"TKT-{now.year}{now.month:02d}-{ticket.id:05d}"
+    ticket.ref = f"{ticket.id:04d}"
     if conversation_id:
         _cache_set(conversation_id, ticket.ref)
 

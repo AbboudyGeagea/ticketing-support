@@ -236,7 +236,6 @@ def ticket_new():
             return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
 
         from app.models.ticket import Ticket, TicketMessage
-        _now = datetime.utcnow()
         ticket = Ticket(
             ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=hospital.id,
@@ -250,7 +249,7 @@ def ticket_new():
         )
         db.session.add(ticket)
         db.session.flush()
-        ticket.ref = f"TKT-{_now.year}{_now.month:02d}-{ticket.id:05d}"
+        ticket.ref = f"{ticket.id:04d}"
 
         msg = TicketMessage(
             ticket_id=ticket.id,
