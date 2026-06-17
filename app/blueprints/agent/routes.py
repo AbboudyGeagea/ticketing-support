@@ -106,11 +106,10 @@ def dashboard():
     hosp_names = [r[0] for r in hosp_counts]
     hosp_values = [r[1] for r in hosp_counts]
 
-    # Recent tickets: unassigned pool + tickets assigned to me
+    # Recent tickets
     recent_tickets = (
         Ticket.query
         .filter(Ticket.status.notin_(["closed"]))
-        .filter(or_(Ticket.assigned_to.is_(None), Ticket.assigned_to == current_user.id))
         .options(joinedload(Ticket.hospital))
         .order_by(Ticket.updated_at.desc())
         .limit(10)
@@ -157,13 +156,6 @@ def tickets():
     search = request.args.get("q", "").strip()
 
     query = Ticket.query
-
-    # Visibility rule: show unassigned pool + tickets assigned to me.
-    # When searching, bypass so agents can look up any ticket by ref/subject.
-    if not search:
-        query = query.filter(
-            or_(Ticket.assigned_to.is_(None), Ticket.assigned_to == current_user.id)
-        )
 
     if status_filter:
         query = query.filter_by(status=status_filter)
