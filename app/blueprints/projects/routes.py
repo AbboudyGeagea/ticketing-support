@@ -162,6 +162,7 @@ def project_detail(project_id):
         requirements=requirements,
         req_types=REQ_TYPES,
         agents=agents,
+        today=date.today(),
     )
 
 
