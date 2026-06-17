@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 from app.extensions import db
 
@@ -66,6 +67,8 @@ class Ticket(db.Model):
     tasks = db.relationship("Task", back_populates="ticket", lazy="dynamic")
     attachments = db.relationship("TicketAttachment", back_populates="ticket", lazy="dynamic")
     csat = db.relationship("CSATFeedback", foreign_keys="CSATFeedback.ticket_id", uselist=False)
+    collaborators = db.relationship("TicketCollaborator", back_populates="ticket",
+                                    cascade="all, delete-orphan", lazy="dynamic")
 
     @property
     def status_label(self):
@@ -113,6 +116,26 @@ class TicketMessage(db.Model):
     ticket = db.relationship("Ticket", back_populates="messages")
     sender = db.relationship("User", foreign_keys=[sender_id])
     attachments = db.relationship("TicketAttachment", back_populates="message", lazy="dynamic")
+
+
+class TicketCollaborator(db.Model):
+    __tablename__ = "ticket_collaborators"
+
+    id = db.Column(db.Integer, primary_key=True)
+    ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id"), nullable=False)
+    email = db.Column(db.String(200), nullable=False)
+    name = db.Column(db.String(200))
+    token = db.Column(db.String(64), unique=True, nullable=False,
+                      default=lambda: uuid.uuid4().hex)
+    added_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    added_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    ticket = db.relationship("Ticket", back_populates="collaborators")
+    adder = db.relationship("User", foreign_keys=[added_by])
+
+    __table_args__ = (
+        db.UniqueConstraint("ticket_id", "email", name="uq_collab_ticket_email"),
+    )
 
 
 class TicketHistory(db.Model):

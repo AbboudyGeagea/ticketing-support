@@ -105,4 +105,42 @@
 </div>
 {% endif %}
 
+<!-- Collaborators -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mt-6">
+  <h4 class="text-sm font-semibold text-slate-700 mb-3">Collaborators</h4>
+  <p class="text-xs text-slate-400 mb-4">Collaborators receive email updates and can view and reply to this ticket via a personal link.</p>
+
+  {% if collaborators %}
+  <ul class="divide-y divide-slate-100 mb-4">
+    {% for c in collaborators %}
+    <li class="flex items-center justify-between py-2 gap-3">
+      <div class="min-w-0">
+        <p class="text-sm text-slate-700 truncate">{{ c.name or c.email }}</p>
+        {% if c.name %}<p class="text-xs text-slate-400 truncate">{{ c.email }}</p>{% endif %}
+      </div>
+      <form method="POST" action="{{ url_for('portal.ticket_remove_collaborator', ref=ticket.ref, collab_id=c.id) }}">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit" class="text-xs text-slate-300 hover:text-red-500 transition-colors flex-shrink-0" title="Remove">✕</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+
+  <details class="group">
+    <summary class="text-sm font-medium text-primary hover:text-primary-dark cursor-pointer list-none">+ Add a collaborator</summary>
+    <form method="POST" action="{{ url_for('portal.ticket_add_collaborator', ref=ticket.ref) }}" class="mt-3 space-y-2">
+      {{ reply_form.hidden_tag() }}
+      <input type="text" name="name" placeholder="Name (optional)"
+             class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      <input type="email" name="email" placeholder="Email address" required
+             class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      <button type="submit"
+              class="bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors">
+        Add &amp; Notify
+      </button>
+    </form>
+  </details>
+</div>
+
 {% endblock %}

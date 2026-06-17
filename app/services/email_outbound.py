@@ -251,3 +251,37 @@ def send_csat_survey(ticket):
     subject = f"[{ticket.ref}] How did we do? Quick feedback"
     html = render_template("emails/csat_survey.html", ticket=ticket, feedback_url=feedback_url)
     _send([ticket.creator.email], subject, html=html)
+
+
+def notify_collaborator_added(ticket, collaborator):
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    collab_url = f"{base_url}/portal/collab/{collaborator.token}"
+    subject = f"[{ticket.ref}] You've been added as a collaborator"
+    html = render_template(
+        "emails/collaborator_invite.html",
+        ticket=ticket,
+        collaborator=collaborator,
+        collab_url=collab_url,
+    )
+    _send([collaborator.email], subject, html=html)
+
+
+def notify_collaborators_new_message(ticket, message):
+    from app.models.ticket import TicketCollaborator
+    collabs = TicketCollaborator.query.filter_by(ticket_id=ticket.id).all()
+    if not collabs:
+        return
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    for collab in collabs:
+        if collab.email == (message.sender_email or ""):
+            continue
+        collab_url = f"{base_url}/portal/collab/{collab.token}"
+        subject = f"[{ticket.ref}] New update: {ticket.subject}"
+        html = render_template(
+            "emails/collaborator_update.html",
+            ticket=ticket,
+            collaborator=collab,
+            message=message,
+            collab_url=collab_url,
+        )
+        _send([collab.email], subject, html=html)

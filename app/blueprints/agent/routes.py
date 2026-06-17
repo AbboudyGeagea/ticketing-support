@@ -336,6 +336,9 @@ def ticket_detail(ref):
     from app.models.rustdesk_log import RustDeskLog
     rustdesk_logs = ticket.rustdesk_logs.limit(20).all()
 
+    from app.models.ticket import TicketCollaborator
+    collaborators = TicketCollaborator.query.filter_by(ticket_id=ticket.id).all()
+
     return render_template(
         "agent/ticket_detail.html",
         ticket=ticket,
@@ -349,6 +352,7 @@ def ticket_detail(ref):
         priority_form=priority_form,
         assign_form=assign_form,
         rustdesk_logs=rustdesk_logs,
+        collaborators=collaborators,
     )
 
 
@@ -406,6 +410,11 @@ def ticket_reply(ref):
         if not form.is_internal.data:
             try:
                 notify_customer_reply(ticket, msg)
+            except Exception:
+                pass
+            try:
+                from app.services.email_outbound import notify_collaborators_new_message
+                notify_collaborators_new_message(ticket, msg)
             except Exception:
                 pass
 
@@ -945,6 +954,52 @@ def ticket_escalation(ref):
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
     flash("Escalation details updated.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── Collaborators ─────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/collaborators/add", methods=["POST"])
+@login_required
+@agent_required
+def ticket_add_collaborator(ref):
+    from app.models.ticket import TicketCollaborator
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    email = request.form.get("email", "").strip().lower()
+    name = request.form.get("name", "").strip()
+    if not email:
+        flash("Email is required.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+    if TicketCollaborator.query.filter_by(ticket_id=ticket.id, email=email).first():
+        flash(f"{email} is already a collaborator.", "warning")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+    collab = TicketCollaborator(
+        ticket_id=ticket.id,
+        email=email,
+        name=name or None,
+        added_by=current_user.id,
+    )
+    db.session.add(collab)
+    db.session.commit()
+    try:
+        from app.services.email_outbound import notify_collaborator_added
+        notify_collaborator_added(ticket, collab)
+    except Exception:
+        logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
+    flash(f"{email} added as a collaborator.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/collaborators/<int:collab_id>/remove", methods=["POST"])
+@login_required
+@agent_required
+def ticket_remove_collaborator(ref, collab_id):
+    from app.models.ticket import TicketCollaborator
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    collab = TicketCollaborator.query.filter_by(id=collab_id, ticket_id=ticket.id).first_or_404()
+    db.session.delete(collab)
+    db.session.commit()
+    flash("Collaborator removed.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 

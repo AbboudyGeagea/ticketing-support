@@ -7,7 +7,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from app.blueprints.portal import bp
 from app.blueprints.portal.forms import NewTicketForm, ReplyForm
-from app.models.ticket import Ticket, TicketMessage, TicketHistory
+from app.models.ticket import Ticket, TicketMessage, TicketHistory, TicketCollaborator
 from app.models.product import Product
 from app.extensions import db
 from app.services.email_outbound import notify_agents_new_ticket
@@ -208,12 +208,14 @@ def ticket_detail(ref):
             msg_attachments.setdefault(att.message_id, []).append(att)
 
     reply_form = ReplyForm()
+    collaborators = TicketCollaborator.query.filter_by(ticket_id=ticket.id).all()
     return render_template(
         "portal/ticket_detail.html",
         ticket=ticket,
         messages=messages,
         msg_attachments=msg_attachments,
         reply_form=reply_form,
+        collaborators=collaborators,
     )
 
 
@@ -268,6 +270,13 @@ def ticket_reply(ref):
             db.session.add(entry)
         ticket.updated_at = datetime.utcnow()
         db.session.commit()
+
+        try:
+            from app.services.email_outbound import notify_collaborators_new_message
+            notify_collaborators_new_message(ticket, msg)
+        except Exception:
+            logger.exception("collab notify failed for portal reply on %s", ticket.ref)
+
         flash("Reply sent.", "success")
     return redirect(url_for("portal.ticket_detail", ref=ref))
 
@@ -378,6 +387,111 @@ def kb_article(article_id):
     article.views += 1
     db.session.commit()
     return render_template("portal/kb_article.html", article=article)
+
+
+@bp.route("/tickets/<ref>/collaborators/add", methods=["POST"])
+@login_required
+@customer_required
+def ticket_add_collaborator(ref):
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
+    email = request.form.get("email", "").strip().lower()
+    name = request.form.get("name", "").strip()
+    if not email:
+        flash("Email is required.", "danger")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    if TicketCollaborator.query.filter_by(ticket_id=ticket.id, email=email).first():
+        flash(f"{email} is already a collaborator.", "warning")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    collab = TicketCollaborator(
+        ticket_id=ticket.id,
+        email=email,
+        name=name or None,
+        added_by=current_user.id,
+    )
+    db.session.add(collab)
+    db.session.commit()
+    try:
+        from app.services.email_outbound import notify_collaborator_added
+        notify_collaborator_added(ticket, collab)
+    except Exception:
+        logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
+    flash(f"{email} added as a collaborator.", "success")
+    return redirect(url_for("portal.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/collaborators/<int:collab_id>/remove", methods=["POST"])
+@login_required
+@customer_required
+def ticket_remove_collaborator(ref, collab_id):
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
+    collab = TicketCollaborator.query.filter_by(id=collab_id, ticket_id=ticket.id).first_or_404()
+    db.session.delete(collab)
+    db.session.commit()
+    flash("Collaborator removed.", "success")
+    return redirect(url_for("portal.ticket_detail", ref=ref))
+
+
+@bp.route("/collab/<token>")
+def collab_view(token):
+    collab = TicketCollaborator.query.filter_by(token=token).first_or_404()
+    ticket = collab.ticket
+    messages = ticket.messages.filter_by(is_internal=False).all()
+    from app.models.attachment import TicketAttachment
+    msg_ids = [m.id for m in messages]
+    msg_attachments = {}
+    if msg_ids:
+        for att in TicketAttachment.query.filter(TicketAttachment.message_id.in_(msg_ids)).all():
+            msg_attachments.setdefault(att.message_id, []).append(att)
+    collaborators = TicketCollaborator.query.filter_by(ticket_id=ticket.id).all()
+    return render_template(
+        "portal/collab_ticket.html",
+        ticket=ticket,
+        collab=collab,
+        messages=messages,
+        msg_attachments=msg_attachments,
+        collaborators=collaborators,
+    )
+
+
+@bp.route("/collab/<token>/reply", methods=["POST"])
+def collab_reply(token):
+    collab = TicketCollaborator.query.filter_by(token=token).first_or_404()
+    ticket = collab.ticket
+    body = request.form.get("body", "").strip()
+    if not body:
+        flash("Message cannot be empty.", "danger")
+        return redirect(url_for("portal.collab_view", token=token))
+    if ticket.status == "closed":
+        flash("This ticket is closed.", "danger")
+        return redirect(url_for("portal.collab_view", token=token))
+    msg = TicketMessage(
+        ticket_id=ticket.id,
+        sender_id=None,
+        sender_name=collab.name or collab.email,
+        sender_email=collab.email,
+        body=body,
+        is_internal=False,
+    )
+    db.session.add(msg)
+    if ticket.status in ("resolved", "pending"):
+        old_status = ticket.status
+        ticket.status = "open"
+        db.session.add(TicketHistory(
+            ticket_id=ticket.id,
+            changed_by=None,
+            action="status_change",
+            old_value=old_status,
+            new_value="open",
+        ))
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    try:
+        from app.services.email_outbound import notify_collaborators_new_message
+        notify_collaborators_new_message(ticket, msg)
+    except Exception:
+        logger.exception("collab notify failed on collab reply for %s", ticket.ref)
+    flash("Reply sent.", "success")
+    return redirect(url_for("portal.collab_view", token=token))
 
 
 @bp.route("/attachments/<int:att_id>/download")
