@@ -118,6 +118,88 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
         logger.error("Failed to send email to %s: %s", recipients, exc)
 
 
+def notify_customer_ticket_created(ticket):
+    """Confirmation email to the customer (creator) when a ticket is opened via the portal."""
+    if not ticket.creator or not ticket.creator.email:
+        return
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
+    subject = f"[{ticket.ref}] Your ticket has been received — {ticket.subject}"
+    html = render_template(
+        "emails/ticket_created_customer.html",
+        ticket=ticket,
+        ticket_url=ticket_url,
+    )
+    _send([ticket.creator.email], subject, html=html)
+
+
+def notify_agent_ticket_assigned(ticket, assigned_by_id):
+    """
+    Notify the newly assigned agent (unless they assigned themselves) and the customer.
+    assigned_by_id: the user id of the person who performed the assignment action.
+    """
+    from app.models.user import User
+    assignee = User.query.get(ticket.assigned_to) if ticket.assigned_to else None
+    assigner = User.query.get(assigned_by_id) if assigned_by_id else None
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    agent_ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+    portal_ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
+
+    # Notify assigned agent (skip if they assigned themselves)
+    if assignee and ticket.assigned_to != assigned_by_id:
+        subject = f"[{ticket.ref}] Ticket assigned to you — {ticket.subject}"
+        html = render_template(
+            "emails/ticket_assigned_agent.html",
+            ticket=ticket,
+            assignee=assignee,
+            assigned_by=assigner,
+            ticket_url=agent_ticket_url,
+        )
+        _send([assignee.email], subject, html=html)
+
+    # Always notify the customer when an agent is assigned
+    if ticket.creator and ticket.creator.email and assignee:
+        subject = f"[{ticket.ref}] An agent has been assigned to your ticket"
+        html = render_template(
+            "emails/ticket_assigned_customer.html",
+            ticket=ticket,
+            assignee=assignee,
+            ticket_url=portal_ticket_url,
+        )
+        _send([ticket.creator.email], subject, html=html)
+
+
+def notify_assigned_agent_new_message(ticket, message):
+    """
+    Notify the assigned agent when a customer or collaborator posts a message.
+    Falls back to all active agents if the ticket is unassigned.
+    """
+    from app.models.user import User
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+
+    if ticket.assigned_to and ticket.assignee:
+        recipients = [ticket.assignee.email]
+    else:
+        agents = User.query.filter(
+            User.role.in_(["agent", "admin"]),
+            User.active == True,
+        ).all()
+        recipients = [a.email for a in agents]
+
+    if not recipients:
+        return
+
+    subject = f"[{ticket.ref}] New message — {ticket.subject}"
+    html = render_template(
+        "emails/agent_new_message.html",
+        ticket=ticket,
+        message=message,
+        ticket_url=ticket_url,
+    )
+    _send(recipients, subject, html=html)
+
+
 def notify_agents_new_ticket(ticket):
     from app.models.user import User
     agents = User.query.filter(
@@ -288,6 +370,31 @@ def notify_collaborators_new_message(ticket, message):
             collab_url=collab_url,
         )
         _send([collab.email], subject, html=html)
+
+
+def notify_agent_ticket_reopened(ticket):
+    """Notify the assigned agent (or all agents) when a customer reopens a ticket via email link."""
+    from app.models.user import User
+    if ticket.assigned_to and ticket.assignee:
+        recipients = [ticket.assignee.email]
+    else:
+        agents = User.query.filter(
+            User.role.in_(["agent", "admin"]),
+            User.active == True,
+        ).all()
+        recipients = [a.email for a in agents]
+    if not recipients:
+        return
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+    subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
+    text = (
+        f"The customer has reopened ticket {ticket.ref}.\n\n"
+        f"Subject: {ticket.subject}\n"
+        f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
+        f"View ticket: {ticket_url}"
+    )
+    _send(recipients, subject, text=text)
 
 
 def notify_agent_close_request(ticket):

@@ -522,6 +522,12 @@ def ticket_assign(ref):
         _log_history(ticket, current_user.id, "status_change", "new", "assigned")
         ticket.status = "assigned"
     db.session.commit()
+    if agent_id:
+        try:
+            from app.services.email_outbound import notify_agent_ticket_assigned
+            notify_agent_ticket_assigned(ticket, current_user.id)
+        except Exception:
+            pass
     flash("Ticket assigned.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -541,6 +547,11 @@ def ticket_pull(ref):
         _log_history(ticket, current_user.id, "status_change", "new", "assigned")
         ticket.status = "assigned"
     db.session.commit()
+    try:
+        from app.services.email_outbound import notify_agent_ticket_assigned
+        notify_agent_ticket_assigned(ticket, current_user.id)
+    except Exception:
+        pass
     flash("Ticket pulled to your queue.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -557,6 +568,12 @@ def ticket_reopen(ref):
     ticket.updated_at = datetime.utcnow()
     _log_history(ticket, current_user.id, "status_change", old, "in_progress")
     db.session.commit()
+    if ticket.creator:
+        try:
+            from app.services.email_outbound import notify_customer_status_change
+            notify_customer_status_change(ticket)
+        except Exception:
+            pass
     flash("Ticket reopened.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -1026,6 +1043,12 @@ def ticket_approve_close(ref):
         ticket.updated_at = datetime.utcnow()
         _log_history(ticket, current_user.id, "status_change", old, "closed")
         db.session.commit()
+        if ticket.creator:
+            try:
+                from app.services.email_outbound import notify_customer_status_change
+                notify_customer_status_change(ticket)
+            except Exception:
+                pass
         flash("Customer close request approved — ticket closed.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 

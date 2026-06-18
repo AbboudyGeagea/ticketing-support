@@ -186,6 +186,12 @@ def ticket_new():
         except Exception:
             logger.exception("notify failed for portal ticket %s", ticket.ref)
 
+        try:
+            from app.services.email_outbound import notify_customer_ticket_created
+            notify_customer_ticket_created(ticket)
+        except Exception:
+            logger.exception("customer confirm notify failed for portal ticket %s", ticket.ref)
+
         flash(f"Ticket {ticket.ref} submitted successfully.", "success")
         return redirect(url_for("portal.ticket_detail", ref=ticket.ref))
 
@@ -277,6 +283,12 @@ def ticket_reply(ref):
         except Exception:
             logger.exception("collab notify failed for portal reply on %s", ticket.ref)
 
+        try:
+            from app.services.email_outbound import notify_assigned_agent_new_message
+            notify_assigned_agent_new_message(ticket, msg)
+        except Exception:
+            logger.exception("agent notify failed for portal reply on %s", ticket.ref)
+
         flash("Reply sent.", "success")
     return redirect(url_for("portal.ticket_detail", ref=ref))
 
@@ -316,6 +328,12 @@ def ticket_confirm(ref):
         db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=None,
                                      action="status_change", old_value=old, new_value="in_progress"))
         db.session.commit()
+        # Notify assigned agent that the customer reopened the ticket
+        try:
+            from app.services.email_outbound import notify_agent_ticket_reopened
+            notify_agent_ticket_reopened(ticket)
+        except Exception:
+            pass
         flash("Your ticket has been reopened. Our team will follow up shortly.", "info")
     else:
         flash("Nothing to do — ticket is already in this state.", "info")
@@ -519,11 +537,28 @@ def collab_reply(token):
         ))
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
+
     try:
         from app.services.email_outbound import notify_collaborators_new_message
         notify_collaborators_new_message(ticket, msg)
     except Exception:
         logger.exception("collab notify failed on collab reply for %s", ticket.ref)
+
+    # Notify assigned agent of any collaborator message (customer or vendor)
+    try:
+        from app.services.email_outbound import notify_assigned_agent_new_message
+        notify_assigned_agent_new_message(ticket, msg)
+    except Exception:
+        logger.exception("agent notify failed on collab reply for %s", ticket.ref)
+
+    # Notify ticket creator when a customer collaborator posts (vendor replies are internal)
+    if not is_vendor:
+        try:
+            from app.services.email_outbound import notify_customer_reply
+            notify_customer_reply(ticket, msg)
+        except Exception:
+            logger.exception("customer notify failed on customer collab reply for %s", ticket.ref)
+
     flash("Reply sent.", "success")
     return redirect(url_for("portal.collab_view", token=token))
 
