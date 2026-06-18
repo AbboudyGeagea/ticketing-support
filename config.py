@@ -41,7 +41,7 @@ class Config:
     MAX_CONTENT_LENGTH = 10 * 1024 * 1024  # 10 MB
 
     # App
-    APP_BASE_URL = os.environ.get("APP_BASE_URL", "http://localhost:5000")
+    APP_BASE_URL = os.environ.get("APP_BASE_URL", "https://support.intermedic.com")
     ITEMS_PER_PAGE = int(os.environ.get("ITEMS_PER_PAGE", 25))
     WTF_CSRF_ENABLED = True
     USE_BUNDLED_CSS = os.environ.get("USE_BUNDLED_CSS", "false").lower() == "true"

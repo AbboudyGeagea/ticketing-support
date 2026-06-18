@@ -1,29 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head><meta charset="UTF-8"></head>
-<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
-  <div style="background:#1B4F8A;padding:20px;border-radius:8px 8px 0 0;">
-    <h2 style="color:white;margin:0;font-size:18px;">New Support Ticket</h2>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+  <div style="background:#1B4F8A;padding:24px 28px;">
+    <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">New Support Ticket</h1>
+    <p style="color:#93c5fd;margin:4px 0 0;font-size:14px;">A new ticket has been submitted</p>
   </div>
-  <div style="border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 8px 8px;">
-    <p style="margin:0 0 16px;">A new ticket has been submitted:</p>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px;">
-      <tr><td style="padding:8px;background:#f8fafc;font-weight:bold;width:120px;">Reference</td>
-          <td style="padding:8px;font-family:monospace;">{{ ticket.ref }}</td></tr>
-      <tr><td style="padding:8px;background:#f8fafc;font-weight:bold;">Hospital</td>
-          <td style="padding:8px;">{{ ticket.hospital.name }}</td></tr>
-      <tr><td style="padding:8px;background:#f8fafc;font-weight:bold;">Subject</td>
-          <td style="padding:8px;">{{ ticket.subject }}</td></tr>
-      <tr><td style="padding:8px;background:#f8fafc;font-weight:bold;">Priority</td>
-          <td style="padding:8px;">{{ ticket.priority_label }}</td></tr>
-      <tr><td style="padding:8px;background:#f8fafc;font-weight:bold;">Source</td>
-          <td style="padding:8px;">{{ ticket.source.title() }}</td></tr>
-    </table>
-    <a href="{{ ticket_url }}"
-       style="background:#1B4F8A;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;display:inline-block;font-weight:bold;">
-      View Ticket
-    </a>
+  <div style="padding:28px;">
+    <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 20px;">
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
+      <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Priority</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.priority_label }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Source</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.source.title() }}</p>
+    </div>
+    <a href="{{ ticket_url }}" style="display:inline-block;background:#1B4F8A;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
   </div>
-  <p style="color:#999;font-size:12px;margin-top:16px;text-align:center;">Intermedic Support Desk</p>
+  <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">Intermedic Support — {{ ticket_url }}</p>
+  </div>
+</div>
 </body>
 </html>
