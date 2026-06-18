@@ -275,6 +275,9 @@ def notify_collaborators_new_message(ticket, message):
     for collab in collabs:
         if collab.email == (message.sender_email or ""):
             continue
+        # Vendor collab messages (internal) are not forwarded to customer collaborators
+        if message.is_internal and collab.collab_type == "customer":
+            continue
         collab_url = f"{base_url}/portal/collab/{collab.token}"
         subject = f"[{ticket.ref}] New update: {ticket.subject}"
         html = render_template(
@@ -285,3 +288,28 @@ def notify_collaborators_new_message(ticket, message):
             collab_url=collab_url,
         )
         _send([collab.email], subject, html=html)
+
+
+def notify_agent_close_request(ticket):
+    """Notify the assigned agent (or all agents) that a customer requested closure."""
+    from app.models.user import User
+    if ticket.assigned_to and ticket.assignee:
+        recipients = [ticket.assignee.email]
+    else:
+        agents = User.query.filter(
+            User.role.in_(["agent", "admin"]),
+            User.active == True,
+        ).all()
+        recipients = [a.email for a in agents]
+    if not recipients:
+        return
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+    subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
+    text = (
+        f"The customer has requested to close ticket {ticket.ref}.\n\n"
+        f"Subject: {ticket.subject}\n"
+        f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
+        f"Approve or deny the request: {ticket_url}"
+    )
+    _send(recipients, subject, text=text)

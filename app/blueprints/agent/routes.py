@@ -273,7 +273,7 @@ def ticket_new():
             assigned_to=current_user.id,
             subject=form.subject.data,
             priority=form.priority.data,
-            status="open",
+            status="assigned",
             source="agent",
         )
         db.session.add(ticket)
@@ -457,17 +457,26 @@ def ticket_reply(ref):
 def ticket_status(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
     new_status = request.form.get("status")
+
+    if new_status == "escalated":
+        esc_number = request.form.get("escalation_number", "").strip()
+        if esc_number:
+            ticket.escalation_number = esc_number
+        elif not ticket.escalation_number:
+            flash("An escalation number is required when setting status to Escalated.", "danger")
+            return redirect(url_for("agent.ticket_detail", ref=ref))
+
     if new_status in ALL_STATUSES and new_status != ticket.status:
         old = ticket.status
         ticket.status = new_status
         ticket.updated_at = datetime.utcnow()
         if new_status == "closed":
             ticket.closed_at = datetime.utcnow()
+            ticket.close_requested = False
         elif old == "closed":
             ticket.closed_at = None
         _log_history(ticket, current_user.id, "status_change", old, new_status)
         db.session.commit()
-        # Notify customer of status change
         if ticket.creator:
             try:
                 from app.services.email_outbound import notify_customer_status_change, notify_customer_resolved_confirmation
@@ -476,7 +485,7 @@ def ticket_status(ref):
                     notify_customer_resolved_confirmation(ticket)
             except Exception:
                 pass
-        flash(f"Status changed to {new_status}.", "success")
+        flash(f"Status changed to {new_status.replace('_', ' ').title()}.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
@@ -508,6 +517,10 @@ def ticket_assign(ref):
     _log_history(ticket, current_user.id, "assigned",
                  str(old_assignee) if old_assignee else "none",
                  str(agent_id) if agent_id else "none")
+    # Auto-advance from New → Assigned when an agent is assigned
+    if agent_id and ticket.status == "new":
+        _log_history(ticket, current_user.id, "status_change", "new", "assigned")
+        ticket.status = "assigned"
     db.session.commit()
     flash("Ticket assigned.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -524,6 +537,9 @@ def ticket_pull(ref):
     _log_history(ticket, current_user.id, "assigned",
                  str(old_assignee) if old_assignee else "none",
                  str(current_user.id))
+    if ticket.status == "new":
+        _log_history(ticket, current_user.id, "status_change", "new", "assigned")
+        ticket.status = "assigned"
     db.session.commit()
     flash("Ticket pulled to your queue.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -535,10 +551,11 @@ def ticket_pull(ref):
 def ticket_reopen(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
     old = ticket.status
-    ticket.status = "open"
+    ticket.status = "in_progress"
     ticket.closed_at = None
+    ticket.close_requested = False
     ticket.updated_at = datetime.utcnow()
-    _log_history(ticket, current_user.id, "status_change", old, "open")
+    _log_history(ticket, current_user.id, "status_change", old, "in_progress")
     db.session.commit()
     flash("Ticket reopened.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -858,9 +875,16 @@ def ticket_bulk():
         if action == "assign_me":
             ticket.assigned_to = current_user.id
             _log_history(ticket, current_user.id, "assigned", str(ticket.assigned_to or "none"), str(current_user.id))
-        elif action in ("close", "resolve", "open", "in_progress", "pending"):
-            status_map = {"close": "closed", "resolve": "resolved",
-                          "open": "open", "in_progress": "in_progress", "pending": "pending"}
+            if ticket.status == "new":
+                _log_history(ticket, current_user.id, "status_change", "new", "assigned")
+                ticket.status = "assigned"
+        elif action in ("close", "resolve", "new", "assigned", "awaiting_info", "in_progress", "escalated"):
+            status_map = {
+                "close": "closed", "resolve": "resolved",
+                "new": "new", "assigned": "assigned",
+                "awaiting_info": "awaiting_info", "in_progress": "in_progress",
+                "escalated": "escalated",
+            }
             new_status = status_map.get(action, action)
             if new_status != ticket.status:
                 old = ticket.status
@@ -868,6 +892,7 @@ def ticket_bulk():
                 if new_status == "closed":
                     from datetime import datetime as _dt
                     ticket.closed_at = _dt.utcnow()
+                    ticket.close_requested = False
                 _log_history(ticket, current_user.id, "status_change", old, new_status)
         ticket.updated_at = datetime.utcnow()
 
@@ -986,6 +1011,37 @@ def ticket_escalation(ref):
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
+# ── Close Request ─────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/close-request/approve", methods=["POST"])
+@login_required
+@agent_required
+def ticket_approve_close(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.close_requested:
+        old = ticket.status
+        ticket.status = "closed"
+        ticket.closed_at = datetime.utcnow()
+        ticket.close_requested = False
+        ticket.updated_at = datetime.utcnow()
+        _log_history(ticket, current_user.id, "status_change", old, "closed")
+        db.session.commit()
+        flash("Customer close request approved — ticket closed.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/close-request/deny", methods=["POST"])
+@login_required
+@agent_required
+def ticket_deny_close(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    ticket.close_requested = False
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    flash("Close request dismissed.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
 # ── Collaborators ─────────────────────────────────────────────────────────────
 
 @bp.route("/tickets/<ref>/collaborators/add", methods=["POST"])
@@ -1002,11 +1058,15 @@ def ticket_add_collaborator(ref):
     if TicketCollaborator.query.filter_by(ticket_id=ticket.id, email=email).first():
         flash(f"{email} is already a collaborator.", "warning")
         return redirect(url_for("agent.ticket_detail", ref=ref))
+    collab_type = request.form.get("collab_type", "customer")
+    if collab_type not in ("customer", "vendor"):
+        collab_type = "customer"
     collab = TicketCollaborator(
         ticket_id=ticket.id,
         email=email,
         name=name or None,
         added_by=current_user.id,
+        collab_type=collab_type,
     )
     db.session.add(collab)
     db.session.commit()
@@ -1015,7 +1075,7 @@ def ticket_add_collaborator(ref):
         notify_collaborator_added(ticket, collab)
     except Exception:
         logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
-    flash(f"{email} added as a collaborator.", "success")
+    flash(f"{email} added as a {collab_type} collaborator.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 

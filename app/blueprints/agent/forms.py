@@ -27,9 +27,11 @@ class ReplyForm(FlaskForm):
 
 class StatusForm(FlaskForm):
     status = SelectField("Status", choices=[
-        ("open", "Open"),
+        ("new", "New"),
+        ("assigned", "Assigned"),
+        ("awaiting_info", "Awaiting Info"),
         ("in_progress", "In Progress"),
-        ("pending", "Pending"),
+        ("escalated", "Escalated"),
         ("resolved", "Resolved"),
         ("closed", "Closed"),
     ])

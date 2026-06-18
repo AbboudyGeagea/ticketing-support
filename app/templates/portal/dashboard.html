@@ -58,11 +58,14 @@
         <p class="text-xs text-slate-400 mt-0.5">{{ t.ref }} · Updated {{ t.updated_at.strftime('%b %d, %Y') if t.updated_at else t.created_at.strftime('%b %d, %Y') }}</p>
       </div>
       <span class="text-xs font-medium px-2.5 py-0.5 rounded-full flex-shrink-0
-        {% if t.status == 'open' %}bg-blue-100 text-blue-800
+        {% if t.status == 'new' %}bg-blue-100 text-blue-800
+        {% elif t.status == 'assigned' %}bg-indigo-100 text-indigo-800
+        {% elif t.status == 'awaiting_info' %}bg-orange-100 text-orange-800
+        {% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-800
+        {% elif t.status == 'escalated' %}bg-red-100 text-red-800
         {% elif t.status == 'resolved' %}bg-green-100 text-green-700
         {% elif t.status == 'closed' %}bg-slate-100 text-slate-600
-        {% elif t.status == 'in_progress' %}bg-yellow-100 text-yellow-800
-        {% else %}bg-orange-100 text-orange-700{% endif %}">
+        {% else %}bg-slate-100 text-slate-600{% endif %}">
         {{ t.status_label }}
       </span>
     </a>

@@ -130,7 +130,7 @@ def ticket_new():
             created_by=current_user.id,
             subject=form.subject.data,
             priority=form.priority.data,
-            status="open",
+            status="new",
             source="portal",
         )
         db.session.add(ticket)
@@ -257,15 +257,15 @@ def ticket_reply(ref):
                 logger.exception("Attachment save failed for ticket %s", ticket.ref)
                 flash("Attachment could not be saved — reply submitted without it.", "warning")
 
-        if ticket.status in ("resolved", "pending"):
-            old_status = ticket.status   # capture first
-            ticket.status = "open"
+        if ticket.status in ("resolved", "awaiting_info"):
+            old_status = ticket.status
+            ticket.status = "in_progress"
             entry = TicketHistory(
                 ticket_id=ticket.id,
                 changed_by=current_user.id,
                 action="status_change",
                 old_value=old_status,
-                new_value="open",
+                new_value="in_progress",
             )
             db.session.add(entry)
         ticket.updated_at = datetime.utcnow()
@@ -309,11 +309,12 @@ def ticket_confirm(ref):
         flash("Thank you — your ticket has been closed.", "success")
     elif action == "reopen" and ticket.status in ("resolved", "closed"):
         old = ticket.status
-        ticket.status = "open"
+        ticket.status = "in_progress"
         ticket.closed_at = None
+        ticket.close_requested = False
         ticket.updated_at = dt.utcnow()
         db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=None,
-                                     action="status_change", old_value=old, new_value="open"))
+                                     action="status_change", old_value=old, new_value="in_progress"))
         db.session.commit()
         flash("Your ticket has been reopened. Our team will follow up shortly.", "info")
     else:
@@ -321,6 +322,31 @@ def ticket_confirm(ref):
 
     # Redirect to login (customer may not be logged in)
     return redirect(url_for("auth.login"))
+
+
+@bp.route("/tickets/<ref>/request-close", methods=["POST"])
+@login_required
+@customer_required
+def ticket_request_close(ref):
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
+    if ticket.status == "closed":
+        flash("This ticket is already closed.", "info")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    if ticket.close_requested:
+        flash("A closure request is already pending.", "info")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    ticket.close_requested = True
+    ticket.updated_at = datetime.utcnow()
+    db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=current_user.id,
+                                  action="close_requested", old_value=None, new_value="requested"))
+    db.session.commit()
+    try:
+        from app.services.email_outbound import notify_agent_close_request
+        notify_agent_close_request(ticket)
+    except Exception:
+        logger.exception("close request notify failed for %s", ticket.ref)
+    flash("Your closure request has been sent to the support team.", "success")
+    return redirect(url_for("portal.ticket_detail", ref=ref))
 
 
 @bp.route("/profile", methods=["GET", "POST"])
@@ -435,7 +461,14 @@ def ticket_remove_collaborator(ref, collab_id):
 def collab_view(token):
     collab = TicketCollaborator.query.filter_by(token=token).first_or_404()
     ticket = collab.ticket
-    messages = ticket.messages.filter_by(is_internal=False).all()
+    # Vendor collabs can see their own (internal) messages; customer collabs see only public ones
+    from app.models.ticket import TicketMessage as _TM
+    messages = ticket.messages.filter(
+        db.or_(
+            _TM.is_internal == False,
+            _TM.sender_email == collab.email,
+        )
+    ).all()
     from app.models.attachment import TicketAttachment
     msg_ids = [m.id for m in messages]
     msg_attachments = {}
@@ -464,24 +497,25 @@ def collab_reply(token):
     if ticket.status == "closed":
         flash("This ticket is closed.", "danger")
         return redirect(url_for("portal.collab_view", token=token))
+    is_vendor = (collab.collab_type == "vendor")
     msg = TicketMessage(
         ticket_id=ticket.id,
         sender_id=None,
         sender_name=collab.name or collab.email,
         sender_email=collab.email,
         body=body,
-        is_internal=False,
+        is_internal=is_vendor,
     )
     db.session.add(msg)
-    if ticket.status in ("resolved", "pending"):
+    if not is_vendor and ticket.status in ("resolved", "awaiting_info"):
         old_status = ticket.status
-        ticket.status = "open"
+        ticket.status = "in_progress"
         db.session.add(TicketHistory(
             ticket_id=ticket.id,
             changed_by=None,
             action="status_change",
             old_value=old_status,
-            new_value="open",
+            new_value="in_progress",
         ))
     ticket.updated_at = datetime.utcnow()
     db.session.commit()

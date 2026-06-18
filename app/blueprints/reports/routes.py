@@ -127,12 +127,13 @@ def dashboard():
     priority_data = [{"name": p, "value": c} for p, c in priority_counts]
 
     # Metric 7 — SLA Breach rate
+    _active_statuses = ["new", "assigned", "awaiting_info", "in_progress", "escalated"]
     sla_breached = Ticket.query.filter(
-        Ticket.status.in_(["open", "in_progress"]),
+        Ticket.status.in_(_active_statuses),
         Ticket.created_at < datetime.utcnow() - timedelta(hours=24),
     ).count()
     total_open = Ticket.query.filter(
-        Ticket.status.in_(["open", "in_progress"])
+        Ticket.status.in_(_active_statuses)
     ).count()
     breach_rate = round(sla_breached / total_open * 100, 1) if total_open > 0 else 0
 

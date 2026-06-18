@@ -202,7 +202,7 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
         product_id=product_id,
         created_by=sender_user.id if sender_user else None,
         subject=subject,
-        status="open",
+        status="new",
         priority="medium",
         source="email",
         email_thread_id=conversation_id,
@@ -258,8 +258,8 @@ def _append_reply(ticket, sender_email, sender_name, body, db):
     )
     db.session.add(msg)
 
-    if ticket.status in ("resolved", "pending", "closed"):
-        ticket.status = "open"
+    if ticket.status in ("resolved", "awaiting_info", "closed"):
+        ticket.status = "in_progress"
         ticket.closed_at = None
 
     ticket.updated_at = datetime.utcnow()

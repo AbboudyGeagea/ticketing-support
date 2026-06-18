@@ -19,11 +19,14 @@
         <h1 class="text-xl font-bold text-slate-800 mt-1">{{ ticket.subject }}</h1>
       </div>
       <span class="inline-flex text-sm font-medium px-3 py-1 rounded-full flex-shrink-0
-        {% if ticket.status == 'open' %}bg-blue-100 text-blue-800
+        {% if ticket.status == 'new' %}bg-blue-100 text-blue-800
+        {% elif ticket.status == 'assigned' %}bg-indigo-100 text-indigo-800
+        {% elif ticket.status == 'awaiting_info' %}bg-orange-100 text-orange-800
+        {% elif ticket.status == 'in_progress' %}bg-yellow-100 text-yellow-800
+        {% elif ticket.status == 'escalated' %}bg-red-100 text-red-800
         {% elif ticket.status == 'resolved' %}bg-green-100 text-green-700
         {% elif ticket.status == 'closed' %}bg-slate-100 text-slate-600
-        {% elif ticket.status == 'in_progress' %}bg-yellow-100 text-yellow-800
-        {% else %}bg-orange-100 text-orange-700{% endif %}">
+        {% else %}bg-slate-100 text-slate-600{% endif %}">
         {{ ticket.status_label }}
       </span>
     </div>

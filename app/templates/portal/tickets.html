@@ -13,7 +13,7 @@
 
 <!-- Status filter tabs -->
 <div class="flex gap-2 mb-5">
-  {% set tab_statuses = [('', 'All'), ('open', 'Open'), ('in_progress', 'In Progress'), ('pending', 'Pending'), ('resolved', 'Resolved'), ('closed', 'Closed')] %}
+  {% set tab_statuses = [('', 'All'), ('new', 'New'), ('assigned', 'Assigned'), ('awaiting_info', 'Awaiting Info'), ('in_progress', 'In Progress'), ('escalated', 'Escalated'), ('resolved', 'Resolved'), ('closed', 'Closed')] %}
   {% for val, label in tab_statuses %}
   <a href="{{ url_for('portal.tickets', status=val) }}"
      class="px-4 py-2 rounded-lg text-sm font-medium transition-colors

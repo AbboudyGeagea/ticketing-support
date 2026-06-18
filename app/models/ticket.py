@@ -3,9 +3,11 @@ from datetime import datetime
 from app.extensions import db
 
 
-STATUS_OPEN = "open"
+STATUS_NEW = "new"
+STATUS_ASSIGNED = "assigned"
+STATUS_AWAITING_INFO = "awaiting_info"
 STATUS_IN_PROGRESS = "in_progress"
-STATUS_PENDING = "pending"
+STATUS_ESCALATED = "escalated"
 STATUS_RESOLVED = "resolved"
 STATUS_CLOSED = "closed"
 
@@ -14,13 +16,18 @@ PRIORITY_MEDIUM = "medium"
 PRIORITY_HIGH = "high"
 PRIORITY_URGENT = "urgent"
 
-ALL_STATUSES = [STATUS_OPEN, STATUS_IN_PROGRESS, STATUS_PENDING, STATUS_RESOLVED, STATUS_CLOSED]
+ALL_STATUSES = [
+    STATUS_NEW, STATUS_ASSIGNED, STATUS_AWAITING_INFO,
+    STATUS_IN_PROGRESS, STATUS_ESCALATED, STATUS_RESOLVED, STATUS_CLOSED,
+]
 ALL_PRIORITIES = [PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_URGENT]
 
 STATUS_LABELS = {
-    STATUS_OPEN: "Open",
+    STATUS_NEW: "New",
+    STATUS_ASSIGNED: "Assigned",
+    STATUS_AWAITING_INFO: "Awaiting Info",
     STATUS_IN_PROGRESS: "In Progress",
-    STATUS_PENDING: "Pending",
+    STATUS_ESCALATED: "Escalated",
     STATUS_RESOLVED: "Resolved",
     STATUS_CLOSED: "Closed",
 }
@@ -53,6 +60,7 @@ class Ticket(db.Model):
     escalation_url = db.Column(db.String(1000), nullable=True)
     escalation_number = db.Column(db.String(100), nullable=True)
     csat_sent = db.Column(db.Boolean, default=False)
+    close_requested = db.Column(db.Boolean, default=False)
     first_response_at = db.Column(db.DateTime, nullable=True)
     sla_response_due = db.Column(db.DateTime, nullable=True)
     sla_resolve_due = db.Column(db.DateTime, nullable=True)
@@ -127,6 +135,7 @@ class TicketCollaborator(db.Model):
     name = db.Column(db.String(200))
     token = db.Column(db.String(64), unique=True, nullable=False,
                       default=lambda: uuid.uuid4().hex)
+    collab_type = db.Column(db.String(20), nullable=False, default="customer")  # customer | vendor
     added_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     added_at = db.Column(db.DateTime, default=datetime.utcnow)
 
