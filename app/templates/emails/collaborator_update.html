@@ -13,6 +13,7 @@
     <p style="color:#64748b;font-size:13px;margin:0 0 16px;">
       New message from <strong>{{ message.sender_name or message.sender_email }}</strong>
       {% if ticket.hospital %} · {{ ticket.hospital.name }}{% endif %}
+      {% if ticket.product %} · {{ ticket.product.name }}{% endif %}
     </p>
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 16px;">
     <p style="white-space:pre-wrap;color:#334155;line-height:1.6;margin:0 0 20px;">{{ message.body[:500] }}{% if message.body|length > 500 %}…{% endif %}</p>

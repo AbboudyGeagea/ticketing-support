@@ -15,7 +15,11 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
       <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
-      <p style="margin:0;color:#1e293b;">{{ ticket.subject }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
+      {% if ticket.product %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.product.name }}</p>
+      {% endif %}
     </div>
     <a href="{{ ticket_url }}" style="display:inline-block;background:#1B4F8A;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
   </div>

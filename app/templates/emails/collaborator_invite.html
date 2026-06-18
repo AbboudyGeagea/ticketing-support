@@ -18,7 +18,11 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
-      <p style="margin:0;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      {% if ticket.product %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.product.name }}</p>
+      {% endif %}
     </div>
     <a href="{{ collab_url }}" style="display:inline-block;background:#1B4F8A;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
     <p style="color:#94a3b8;font-size:12px;margin:16px 0 0;">This link is personal to you. Do not share it with others.</p>

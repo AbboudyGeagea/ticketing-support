@@ -11,6 +11,7 @@ TEMPLATE_REGISTRY = [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
             ("ticket.priority_label", "Priority"),
+            ("ticket.product.name", "Product"),
             ("ticket.creator.name", "Customer Name"),
             ("ticket.hospital.name", "Hospital"),
             ("ticket_url", "Ticket Link"),
@@ -25,6 +26,7 @@ TEMPLATE_REGISTRY = [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
             ("ticket.priority_label", "Priority"),
+            ("ticket.product.name", "Product"),
             ("ticket.hospital.name", "Hospital"),
             ("ticket.source", "Source"),
             ("ticket_url", "Ticket Link"),
@@ -39,6 +41,7 @@ TEMPLATE_REGISTRY = [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
             ("ticket.priority_label", "Priority"),
+            ("ticket.product.name", "Product"),
             ("ticket.hospital.name", "Hospital"),
             ("assignee.name", "Agent Name"),
             ("assigned_by.name", "Assigned By"),
@@ -53,6 +56,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.creator.name", "Customer Name"),
             ("assignee.name", "Agent Name"),
             ("ticket_url", "Ticket Link"),
@@ -66,6 +70,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.creator.name", "Customer Name"),
             ("message.body", "Message Body"),
             ("ticket_url", "Ticket Link"),
@@ -79,6 +84,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.hospital.name", "Hospital"),
             ("message.sender_name", "Sender Name"),
             ("message.body", "Message Body"),
@@ -93,6 +99,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.status_label", "New Status"),
             ("ticket.creator.name", "Customer Name"),
             ("ticket_url", "Ticket Link"),
@@ -106,6 +113,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.creator.name", "Customer Name"),
             ("ticket.hospital.name", "Hospital"),
             ("ticket.assignee.name", "Assigned Agent"),
@@ -120,6 +128,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.creator.name", "Customer Name"),
             ("ticket.hospital.name", "Hospital"),
             ("ticket.assignee.name", "Assigned Agent"),
@@ -134,6 +143,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.hospital.name", "Hospital"),
             ("collaborator.name", "Collaborator Name"),
             ("collab_url", "Collaborator Link"),
@@ -147,6 +157,7 @@ TEMPLATE_REGISTRY = [
         "variables": [
             ("ticket.ref", "Ticket Number"),
             ("ticket.subject", "Subject"),
+            ("ticket.product.name", "Product"),
             ("ticket.hospital.name", "Hospital"),
             ("collaborator.name", "Collaborator Name"),
             ("message.sender_name", "Sender Name"),

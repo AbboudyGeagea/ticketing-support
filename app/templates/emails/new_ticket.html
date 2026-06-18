@@ -13,6 +13,10 @@
       <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      {% if ticket.product %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.product.name }}</p>
+      {% endif %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Priority</p>

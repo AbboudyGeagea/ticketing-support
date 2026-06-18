@@ -1458,6 +1458,7 @@ def email_template_preview(slug):
         source="portal",
         creator=SimpleNamespace(name="Sarah Johnson", email="sarah.j@hospital.com"),
         hospital=SimpleNamespace(name="Beirut Medical Center"),
+        product=SimpleNamespace(name="RIS/PACS"),
         assignee=SimpleNamespace(name="Georges Abboud", email="g.abboud@intermedic.com"),
         created_at=datetime.utcnow(),
     )

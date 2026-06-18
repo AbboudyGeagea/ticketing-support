@@ -8,7 +8,8 @@
     <p style="color:#93c5fd;margin:4px 0 0;font-size:14px;">{{ ticket.ref }}</p>
   </div>
   <div style="padding:28px;">
-    <p style="color:#374151;margin:0 0 8px;font-weight:600;">{{ ticket.subject }}</p>
+    <p style="color:#374151;margin:0 0 4px;font-weight:600;">{{ ticket.subject }}</p>
+    {% if ticket.product %}<p style="color:#94a3b8;font-size:12px;margin:0 0 8px;">{{ ticket.product.name }}</p>{% endif %}
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:16px 0;">
     <p style="white-space:pre-wrap;color:#334155;line-height:1.6;margin:0 0 20px;">{{ message.body }}</p>
     <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;">

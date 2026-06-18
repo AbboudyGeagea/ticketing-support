@@ -20,7 +20,11 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Customer</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.creator.name if ticket.creator else '—' }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
-      <p style="margin:0;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      {% if ticket.product %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.product.name }}</p>
+      {% endif %}
     </div>
     <a href="{{ ticket_url }}" style="display:inline-block;background:#0f766e;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
   </div>
