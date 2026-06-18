@@ -49,7 +49,7 @@ class Ticket(db.Model):
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     subject = db.Column(db.String(500), nullable=False)
-    status = db.Column(db.String(20), nullable=False, default=STATUS_OPEN)
+    status = db.Column(db.String(20), nullable=False, default=STATUS_NEW)
     priority = db.Column(db.String(20), nullable=False, default=PRIORITY_MEDIUM)
     source = db.Column(db.String(20), default="portal")  # portal | email
     email_thread_id = db.Column(db.String(500))  # Graph API conversationId
