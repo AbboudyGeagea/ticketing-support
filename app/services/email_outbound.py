@@ -388,13 +388,8 @@ def notify_agent_ticket_reopened(ticket):
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
     subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
-    text = (
-        f"The customer has reopened ticket {ticket.ref}.\n\n"
-        f"Subject: {ticket.subject}\n"
-        f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
-        f"View ticket: {ticket_url}"
-    )
-    _send(recipients, subject, text=text)
+    html = render_template("emails/agent_ticket_reopened.html", ticket=ticket, ticket_url=ticket_url)
+    _send(recipients, subject, html=html)
 
 
 def notify_agent_close_request(ticket):
@@ -413,10 +408,5 @@ def notify_agent_close_request(ticket):
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
     subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
-    text = (
-        f"The customer has requested to close ticket {ticket.ref}.\n\n"
-        f"Subject: {ticket.subject}\n"
-        f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
-        f"Approve or deny the request: {ticket_url}"
-    )
-    _send(recipients, subject, text=text)
+    html = render_template("emails/agent_close_request.html", ticket=ticket, ticket_url=ticket_url)
+    _send(recipients, subject, html=html)
