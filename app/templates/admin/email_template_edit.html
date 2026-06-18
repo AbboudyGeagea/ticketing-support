@@ -1,0 +1,236 @@
+{% extends "base_agent.html" %}
+{% block title %}Edit — {{ meta.name }}{% endblock %}
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:32px 24px;">
+
+  {# Breadcrumb #}
+  <div style="margin-bottom:20px;font-size:13px;color:#94a3b8;">
+    <a href="{{ url_for('admin.email_templates') }}" style="color:#3b82f6;text-decoration:none;">Email Templates</a>
+    <span style="margin:0 6px;">›</span>
+    <span style="color:#475569;">{{ meta.name }}</span>
+  </div>
+
+  <div style="display:flex;gap:24px;align-items:flex-start;">
+
+    {# ── Left: Variable tokens panel ── #}
+    <div style="width:230px;flex-shrink:0;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;position:sticky;top:20px;">
+        <div style="background:#f8fafc;padding:12px 16px;border-bottom:1px solid #e2e8f0;">
+          <p style="margin:0;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;">Insert Variable</p>
+          <p style="margin:4px 0 0;font-size:11px;color:#94a3b8;">Drag onto a field, or click to insert at cursor</p>
+        </div>
+        <div style="padding:12px;">
+
+          <p style="margin:0 0 6px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">This Template</p>
+          {% for expr, label in meta.variables %}
+          <div class="var-token"
+               data-expr="{{ expr }}"
+               draggable="true"
+               title="{{ '{{ ' + expr + ' }}' }}"
+               style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:5px;cursor:grab;user-select:none;font-size:12px;color:#1d4ed8;">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="opacity:0.5;flex-shrink:0;">
+              <circle cx="3" cy="2" r="1" fill="currentColor"/>
+              <circle cx="7" cy="2" r="1" fill="currentColor"/>
+              <circle cx="3" cy="5" r="1" fill="currentColor"/>
+              <circle cx="7" cy="5" r="1" fill="currentColor"/>
+              <circle cx="3" cy="8" r="1" fill="currentColor"/>
+              <circle cx="7" cy="8" r="1" fill="currentColor"/>
+            </svg>
+            <span>{{ label }}</span>
+          </div>
+          {% endfor %}
+
+          <p style="margin:10px 0 6px;font-size:11px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:0.04em;">Global</p>
+          {% for expr, label in [
+              ("now.strftime('%d %b %Y')", "Today's Date"),
+              ("now.strftime('%H:%M')", "Current Time"),
+          ] %}
+          <div class="var-token"
+               data-expr="{{ expr }}"
+               draggable="true"
+               title="{{ '{{ ' + expr + ' }}' }}"
+               style="display:flex;align-items:center;gap:6px;padding:6px 10px;margin-bottom:4px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:5px;cursor:grab;user-select:none;font-size:12px;color:#15803d;">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="opacity:0.5;flex-shrink:0;">
+              <circle cx="3" cy="2" r="1" fill="currentColor"/>
+              <circle cx="7" cy="2" r="1" fill="currentColor"/>
+              <circle cx="3" cy="5" r="1" fill="currentColor"/>
+              <circle cx="7" cy="5" r="1" fill="currentColor"/>
+              <circle cx="3" cy="8" r="1" fill="currentColor"/>
+              <circle cx="7" cy="8" r="1" fill="currentColor"/>
+            </svg>
+            <span>{{ label }}</span>
+          </div>
+          {% endfor %}
+
+        </div>
+      </div>
+    </div>
+
+    {# ── Right: Editor form ── #}
+    <div style="flex:1;min-width:0;">
+      <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+
+        {# Header #}
+        <div style="padding:20px 24px;border-bottom:1px solid #e2e8f0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+            <div>
+              <h1 style="font-size:17px;font-weight:700;color:#1e293b;margin:0 0 3px;">{{ meta.name }}</h1>
+              <p style="margin:0;font-size:13px;color:#64748b;">{{ meta.description }} · Sent to: <strong>{{ meta.recipient }}</strong></p>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              {% if tpl %}
+              <form method="POST" action="{{ url_for('admin.email_template_reset', slug=meta.slug) }}" style="margin:0;"
+                    onsubmit="return confirm('Reset to built-in default? All your customizations will be lost.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" style="padding:7px 14px;background:#fff;border:1px solid #fca5a5;color:#dc2626;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;">
+                  Reset to Default
+                </button>
+              </form>
+              {% endif %}
+              <a href="{{ url_for('admin.email_template_preview', slug=meta.slug) }}" target="_blank"
+                 style="padding:7px 14px;background:#f1f5f9;color:#475569;text-decoration:none;border-radius:5px;font-size:13px;font-weight:500;">
+                Preview
+              </a>
+              <button id="btn-load-default" type="button"
+                      style="padding:7px 14px;background:#f1f5f9;color:#475569;border:none;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;">
+                Load Default
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {# Flash messages #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in messages %}
+          <div style="padding:12px 24px;background:{% if cat=='success' %}#f0fdf4{% else %}#fef2f2{% endif %};border-bottom:1px solid {% if cat=='success' %}#bbf7d0{% else %}#fecaca{% endif %};">
+            <p style="margin:0;font-size:13px;color:{% if cat=='success' %}#15803d{% else %}#dc2626{% endif %};">{{ msg }}</p>
+          </div>
+          {% endfor %}
+        {% endwith %}
+
+        {# Form #}
+        <form method="POST" id="tpl-form">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div style="padding:20px 24px;border-bottom:1px solid #f1f5f9;">
+            <label for="subject" style="display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">
+              Subject Line
+            </label>
+            <input type="text" id="subject" name="subject"
+                   value="{{ tpl.subject if tpl else default_subject }}"
+                   placeholder="e.g. [{{ '{{' }} ticket.ref {{ '}}' }}] Your ticket has been received"
+                   style="width:100%;box-sizing:border-box;padding:9px 12px;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;font-family:monospace;color:#1e293b;outline:none;transition:border-color 0.15s;"
+                   onfocus="lastFocused=this" required>
+            <p style="margin:5px 0 0;font-size:11px;color:#94a3b8;">Use <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">{{ '{{' }} variable {{ '}}' }}</code> tokens. Drag chips from the left panel to insert.</p>
+          </div>
+
+          <div style="padding:20px 24px;">
+            <label for="body" style="display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">
+              Email Body <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8;">(HTML)</span>
+            </label>
+            <div id="drop-zone" style="position:relative;border:2px dashed #e2e8f0;border-radius:6px;transition:border-color 0.15s;">
+              <textarea id="body" name="body"
+                        rows="22"
+                        style="width:100%;box-sizing:border-box;padding:12px;border:none;border-radius:6px;font-size:12px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;color:#1e293b;resize:vertical;outline:none;background:transparent;"
+                        onfocus="lastFocused=this"
+                        required>{{ tpl.body if tpl else default_body }}</textarea>
+              <div id="drop-hint" style="display:none;position:absolute;inset:0;border-radius:6px;background:rgba(59,130,246,0.07);border:2px dashed #3b82f6;pointer-events:none;align-items:center;justify-content:center;">
+                <p style="color:#3b82f6;font-weight:600;font-size:14px;margin:0;">Drop to insert</p>
+              </div>
+            </div>
+            <p style="margin:5px 0 0;font-size:11px;color:#94a3b8;">Full HTML is supported. Variables are rendered server-side via Jinja2.</p>
+          </div>
+
+          <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;gap:10px;">
+            <button type="submit"
+                    style="padding:9px 20px;background:#1B4F8A;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
+              Save Template
+            </button>
+            <a href="{{ url_for('admin.email_templates') }}"
+               style="padding:9px 20px;background:#fff;color:#475569;text-decoration:none;border:1px solid #e2e8f0;border-radius:6px;font-size:14px;font-weight:500;">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const slug = {{ meta.slug | tojson }};
+let lastFocused = document.getElementById('body');
+
+// ── Drag and drop token insertion ──────────────────────────────
+const dropZone = document.getElementById('drop-zone');
+const dropHint = document.getElementById('drop-hint');
+const bodyEl   = document.getElementById('body');
+const subjEl   = document.getElementById('subject');
+
+document.querySelectorAll('.var-token').forEach(token => {
+  token.addEventListener('dragstart', e => {
+    e.dataTransfer.setData('text/plain', '{{ "{{" }} ' + token.dataset.expr + ' {{ "}}" }}');
+    e.dataTransfer.effectAllowed = 'copy';
+    token.style.opacity = '0.5';
+  });
+  token.addEventListener('dragend', () => { token.style.opacity = ''; });
+
+  token.addEventListener('click', () => {
+    insertAtCursor(lastFocused, '{{ "{{" }} ' + token.dataset.expr + ' {{ "}}" }}');
+    lastFocused.focus();
+  });
+});
+
+// Drop onto body textarea via the wrapping drop-zone
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'copy';
+  dropHint.style.display = 'flex';
+});
+dropZone.addEventListener('dragleave', e => {
+  if (!dropZone.contains(e.relatedTarget)) dropHint.style.display = 'none';
+});
+dropZone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropHint.style.display = 'none';
+  insertAtCursor(bodyEl, e.dataTransfer.getData('text/plain'));
+  bodyEl.focus();
+});
+
+// Drop onto subject input
+subjEl.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+subjEl.addEventListener('drop', e => {
+  e.preventDefault();
+  insertAtCursor(subjEl, e.dataTransfer.getData('text/plain'));
+  subjEl.focus();
+});
+
+function insertAtCursor(el, text) {
+  const start = el.selectionStart ?? el.value.length;
+  const end   = el.selectionEnd   ?? el.value.length;
+  el.value = el.value.slice(0, start) + text + el.value.slice(end);
+  el.selectionStart = el.selectionEnd = start + text.length;
+  el.dispatchEvent(new Event('input'));
+}
+
+// ── Load Default button ────────────────────────────────────────
+document.getElementById('btn-load-default').addEventListener('click', async () => {
+  try {
+    const resp = await fetch(`/admin/email-templates/${slug}/default`);
+    if (!resp.ok) throw new Error('Server error');
+    const data = await resp.json();
+    subjEl.value = data.subject;
+    bodyEl.value = data.body;
+  } catch (e) {
+    alert('Could not load default template.');
+  }
+});
+
+// ── Focus border highlight ─────────────────────────────────────
+[subjEl, bodyEl].forEach(el => {
+  el.addEventListener('focus', () => { lastFocused = el; el.style.borderColor = '#3b82f6'; });
+  el.addEventListener('blur',  () => { el.style.borderColor = ''; });
+});
+</script>
+{% endblock %}

@@ -23,6 +23,7 @@ from app.models.ticket_template import TicketTemplate
 from app.models.sla_policy import SLAPolicy
 from app.models.shared_installation import SharedInstallation
 from app.models.ticket_status import TicketStatus
+from app.models.email_template import EmailTemplate, TEMPLATE_REGISTRY, TEMPLATE_MAP, DEFAULT_SUBJECTS
 from app.extensions import db, csrf
 from functools import wraps
 
@@ -1356,3 +1357,138 @@ def import_excel():
         return redirect(url_for("admin.import_excel"))
 
     return render_template("admin/import_excel.html")
+
+
+# ── Email Templates ────────────────────────────────────────────────────────────
+
+@bp.route("/email-templates")
+@admin_required
+def email_templates():
+    db_slugs = {t.slug for t in EmailTemplate.query.all()}
+    templates = [
+        {**tpl, "customized": tpl["slug"] in db_slugs}
+        for tpl in TEMPLATE_REGISTRY
+    ]
+    return render_template("admin/email_templates.html", templates=templates)
+
+
+@bp.route("/email-templates/<slug>", methods=["GET", "POST"])
+@admin_required
+def email_template_edit(slug):
+    meta = TEMPLATE_MAP.get(slug)
+    if not meta:
+        abort(404)
+
+    tpl = EmailTemplate.query.filter_by(slug=slug).first()
+
+    if request.method == "POST":
+        subject = request.form.get("subject", "").strip()
+        body = request.form.get("body", "").strip()
+        if not subject or not body:
+            flash("Subject and body are required.", "error")
+        else:
+            if tpl:
+                tpl.subject = subject
+                tpl.body = body
+                tpl.updated_by = current_user.id
+            else:
+                tpl = EmailTemplate(slug=slug, subject=subject, body=body, updated_by=current_user.id)
+                db.session.add(tpl)
+            db.session.commit()
+            flash("Email template saved.", "success")
+            return redirect(url_for("admin.email_template_edit", slug=slug))
+
+    default_subject = DEFAULT_SUBJECTS.get(slug, "")
+    default_body = _read_default_email_template(slug)
+    return render_template(
+        "admin/email_template_edit.html",
+        meta=meta,
+        tpl=tpl,
+        default_subject=default_subject,
+        default_body=default_body,
+    )
+
+
+@bp.route("/email-templates/<slug>/reset", methods=["POST"])
+@admin_required
+def email_template_reset(slug):
+    tpl = EmailTemplate.query.filter_by(slug=slug).first()
+    if tpl:
+        db.session.delete(tpl)
+        db.session.commit()
+        flash("Template reset to built-in default.", "success")
+    return redirect(url_for("admin.email_template_edit", slug=slug))
+
+
+@bp.route("/email-templates/<slug>/default")
+@admin_required
+def email_template_default(slug):
+    from flask import jsonify
+    if slug not in TEMPLATE_MAP:
+        abort(404)
+    return jsonify({
+        "subject": DEFAULT_SUBJECTS.get(slug, ""),
+        "body": _read_default_email_template(slug),
+    })
+
+
+@bp.route("/email-templates/<slug>/preview")
+@admin_required
+def email_template_preview(slug):
+    import os
+    from types import SimpleNamespace
+    from datetime import datetime
+    from jinja2.sandbox import SandboxedEnvironment
+
+    meta = TEMPLATE_MAP.get(slug)
+    if not meta:
+        abort(404)
+
+    tpl = EmailTemplate.query.filter_by(slug=slug).first()
+    if tpl:
+        body_src = tpl.body
+    else:
+        body_src = _read_default_email_template(slug)
+
+    dummy_ticket = SimpleNamespace(
+        ref="TKT-0042",
+        subject="Printer not working on 3rd floor",
+        status_label="In Progress",
+        priority_label="High",
+        source="portal",
+        creator=SimpleNamespace(name="Sarah Johnson", email="sarah.j@hospital.com"),
+        hospital=SimpleNamespace(name="Beirut Medical Center"),
+        assignee=SimpleNamespace(name="Georges Abboud", email="g.abboud@intermedic.com"),
+        created_at=datetime.utcnow(),
+    )
+    ctx = dict(
+        ticket=dummy_ticket,
+        ticket_url="https://support.intermedic.com/portal/tickets/TKT-0042",
+        collab_url="https://support.intermedic.com/portal/collab/abc123token",
+        assignee=SimpleNamespace(name="Georges Abboud"),
+        assigned_by=SimpleNamespace(name="Michel Khoury"),
+        collaborator=SimpleNamespace(name="Jean Khalil"),
+        message=SimpleNamespace(
+            body="Hello, I checked the device and the IP configuration seems off. Could you send me the current network settings?",
+            sender_name="Georges Abboud",
+            sender_email="g.abboud@intermedic.com",
+            created_at=datetime.utcnow(),
+        ),
+        now=datetime.utcnow(),
+    )
+    try:
+        env = SandboxedEnvironment(autoescape=True)
+        rendered = env.from_string(body_src).render(**ctx)
+    except Exception as exc:
+        rendered = f"<pre style='color:red;padding:20px;'>Template error: {exc}</pre>"
+
+    return rendered, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+def _read_default_email_template(slug):
+    import os
+    path = os.path.join(current_app.root_path, "templates", "emails", f"{slug}.html")
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    return ""

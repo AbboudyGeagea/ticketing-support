@@ -118,18 +118,36 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
         logger.error("Failed to send email to %s: %s", recipients, exc)
 
 
+def _render_db_template(slug, **context):
+    """Return (subject, html) from a DB-stored template, or (None, None) to fall back to file."""
+    try:
+        from app.models.email_template import EmailTemplate
+        tpl = EmailTemplate.query.filter_by(slug=slug).first()
+        if not tpl:
+            return None, None
+        from datetime import datetime
+        from jinja2.sandbox import SandboxedEnvironment
+        env = SandboxedEnvironment(autoescape=True)
+        context.setdefault("now", datetime.utcnow())
+        html = env.from_string(tpl.body).render(**context)
+        subject = env.from_string(tpl.subject).render(**context)
+        return subject, html
+    except Exception as exc:
+        logger.error("DB email template render failed [%s]: %s", slug, exc)
+        return None, None
+
+
 def notify_customer_ticket_created(ticket):
     """Confirmation email to the customer (creator) when a ticket is opened via the portal."""
     if not ticket.creator or not ticket.creator.email:
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
-    subject = f"[{ticket.ref}] Your ticket has been received — {ticket.subject}"
-    html = render_template(
-        "emails/ticket_created_customer.html",
-        ticket=ticket,
-        ticket_url=ticket_url,
-    )
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("ticket_created_customer", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] Your ticket has been received — {ticket.subject}"
+        html = render_template("emails/ticket_created_customer.html", **ctx)
     _send([ticket.creator.email], subject, html=html)
 
 
@@ -147,25 +165,20 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
 
     # Notify assigned agent (skip if they assigned themselves)
     if assignee and ticket.assigned_to != assigned_by_id:
-        subject = f"[{ticket.ref}] Ticket assigned to you — {ticket.subject}"
-        html = render_template(
-            "emails/ticket_assigned_agent.html",
-            ticket=ticket,
-            assignee=assignee,
-            assigned_by=assigner,
-            ticket_url=agent_ticket_url,
-        )
+        agent_ctx = dict(ticket=ticket, assignee=assignee, assigned_by=assigner, ticket_url=agent_ticket_url)
+        subject, html = _render_db_template("ticket_assigned_agent", **agent_ctx)
+        if not html:
+            subject = f"[{ticket.ref}] Ticket assigned to you — {ticket.subject}"
+            html = render_template("emails/ticket_assigned_agent.html", **agent_ctx)
         _send([assignee.email], subject, html=html)
 
     # Always notify the customer when an agent is assigned
     if ticket.creator and ticket.creator.email and assignee:
-        subject = f"[{ticket.ref}] An agent has been assigned to your ticket"
-        html = render_template(
-            "emails/ticket_assigned_customer.html",
-            ticket=ticket,
-            assignee=assignee,
-            ticket_url=portal_ticket_url,
-        )
+        cust_ctx = dict(ticket=ticket, assignee=assignee, ticket_url=portal_ticket_url)
+        subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
+        if not html:
+            subject = f"[{ticket.ref}] An agent has been assigned to your ticket"
+            html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
         _send([ticket.creator.email], subject, html=html)
 
 
@@ -190,13 +203,11 @@ def notify_assigned_agent_new_message(ticket, message):
     if not recipients:
         return
 
-    subject = f"[{ticket.ref}] New message — {ticket.subject}"
-    html = render_template(
-        "emails/agent_new_message.html",
-        ticket=ticket,
-        message=message,
-        ticket_url=ticket_url,
-    )
+    ctx = dict(ticket=ticket, message=message, ticket_url=ticket_url)
+    subject, html = _render_db_template("agent_new_message", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] New message — {ticket.subject}"
+        html = render_template("emails/agent_new_message.html", **ctx)
     _send(recipients, subject, html=html)
 
 
@@ -209,25 +220,26 @@ def notify_agents_new_ticket(ticket):
     if not agents:
         return
     recipients = [a.email for a in agents]
-    subject = f"[New Ticket] {ticket.ref} — {ticket.subject}"
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
-    html = render_template("emails/new_ticket.html", ticket=ticket, ticket_url=ticket_url)
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("new_ticket", **ctx)
+    if not html:
+        subject = f"[New Ticket] {ticket.ref} — {ticket.subject}"
+        html = render_template("emails/new_ticket.html", **ctx)
     _send(recipients, subject, html=html)
 
 
 def notify_customer_reply(ticket, message):
     if not ticket.creator or not ticket.creator.email:
         return
-    subject = f"[{ticket.ref}] Update on your ticket: {ticket.subject}"
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
-    html = render_template(
-        "emails/reply_notification.html",
-        ticket=ticket,
-        message=message,
-        ticket_url=ticket_url,
-    )
+    ctx = dict(ticket=ticket, message=message, ticket_url=ticket_url)
+    subject, html = _render_db_template("reply_notification", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] Update on your ticket: {ticket.subject}"
+        html = render_template("emails/reply_notification.html", **ctx)
     _send([ticket.creator.email], subject, html=html)
 
 
@@ -244,10 +256,13 @@ def send_task_reminder(task):
 def notify_customer_status_change(ticket):
     if not ticket.creator or not ticket.creator.email:
         return
-    subject = f"[{ticket.ref}] Your ticket status changed to: {ticket.status_label}"
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
-    html = render_template("emails/status_change.html", ticket=ticket, ticket_url=ticket_url)
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("status_change", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] Your ticket status changed to: {ticket.status_label}"
+        html = render_template("emails/status_change.html", **ctx)
     _send([ticket.creator.email], subject, html=html)
 
 
@@ -338,13 +353,11 @@ def send_csat_survey(ticket):
 def notify_collaborator_added(ticket, collaborator):
     base_url = current_app.config.get("APP_BASE_URL", "")
     collab_url = f"{base_url}/portal/collab/{collaborator.token}"
-    subject = f"[{ticket.ref}] You've been added as a collaborator"
-    html = render_template(
-        "emails/collaborator_invite.html",
-        ticket=ticket,
-        collaborator=collaborator,
-        collab_url=collab_url,
-    )
+    ctx = dict(ticket=ticket, collaborator=collaborator, collab_url=collab_url)
+    subject, html = _render_db_template("collaborator_invite", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] You've been added as a collaborator"
+        html = render_template("emails/collaborator_invite.html", **ctx)
     _send([collaborator.email], subject, html=html)
 
 
@@ -361,14 +374,11 @@ def notify_collaborators_new_message(ticket, message):
         if message.is_internal and collab.collab_type == "customer":
             continue
         collab_url = f"{base_url}/portal/collab/{collab.token}"
-        subject = f"[{ticket.ref}] New update: {ticket.subject}"
-        html = render_template(
-            "emails/collaborator_update.html",
-            ticket=ticket,
-            collaborator=collab,
-            message=message,
-            collab_url=collab_url,
-        )
+        ctx = dict(ticket=ticket, collaborator=collab, message=message, collab_url=collab_url)
+        subject, html = _render_db_template("collaborator_update", **ctx)
+        if not html:
+            subject = f"[{ticket.ref}] New update: {ticket.subject}"
+            html = render_template("emails/collaborator_update.html", **ctx)
         _send([collab.email], subject, html=html)
 
 
@@ -387,8 +397,11 @@ def notify_agent_ticket_reopened(ticket):
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
-    subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
-    html = render_template("emails/agent_ticket_reopened.html", ticket=ticket, ticket_url=ticket_url)
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("agent_ticket_reopened", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
+        html = render_template("emails/agent_ticket_reopened.html", **ctx)
     _send(recipients, subject, html=html)
 
 
@@ -407,6 +420,9 @@ def notify_agent_close_request(ticket):
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
-    subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
-    html = render_template("emails/agent_close_request.html", ticket=ticket, ticket_url=ticket_url)
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("agent_close_request", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
+        html = render_template("emails/agent_close_request.html", **ctx)
     _send(recipients, subject, html=html)

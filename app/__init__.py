@@ -27,6 +27,7 @@ def create_app(config_class=Config):
     from app.models import kb_article, ticket_template, sla_policy  # noqa: F401
     from app.models import shared_installation, ticket_status  # noqa: F401
     from app.models import email_config  # noqa: F401
+    from app.models import email_template  # noqa: F401
     from app.models import rustdesk_log  # noqa: F401
 
     from app.blueprints.auth import bp as auth_bp

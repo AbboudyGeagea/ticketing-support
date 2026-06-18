@@ -1,0 +1,54 @@
+{% extends "base_agent.html" %}
+{% block title %}Email Templates{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:32px 24px;">
+
+  <div style="margin-bottom:28px;">
+    <h1 style="font-size:22px;font-weight:700;color:#1e293b;margin:0 0 6px;">Email Templates</h1>
+    <p style="color:#64748b;font-size:14px;margin:0;">
+      Customize the content of outbound email notifications. Changes take effect immediately.
+      Templates fall back to the built-in design if not customized.
+    </p>
+  </div>
+
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+          <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Template</th>
+          <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Sent To</th>
+          <th style="padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Status</th>
+          <th style="padding:12px 16px;text-align:right;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tpl in templates %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:14px 16px;">
+            <p style="margin:0 0 3px;font-weight:600;color:#1e293b;font-size:14px;">{{ tpl.name }}</p>
+            <p style="margin:0;color:#94a3b8;font-size:12px;">{{ tpl.description }}</p>
+          </td>
+          <td style="padding:14px 16px;">
+            <span style="font-size:13px;color:#475569;">{{ tpl.recipient }}</span>
+          </td>
+          <td style="padding:14px 16px;">
+            {% if tpl.customized %}
+            <span style="display:inline-block;background:#dbeafe;color:#1d4ed8;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;">Customized</span>
+            {% else %}
+            <span style="display:inline-block;background:#f1f5f9;color:#64748b;font-size:11px;font-weight:600;padding:2px 8px;border-radius:99px;">Default</span>
+            {% endif %}
+          </td>
+          <td style="padding:14px 16px;text-align:right;">
+            <a href="{{ url_for('admin.email_template_edit', slug=tpl.slug) }}"
+               style="display:inline-block;background:#1B4F8A;color:#fff;text-decoration:none;padding:6px 14px;border-radius:5px;font-size:13px;font-weight:500;">
+              Edit
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+</div>
+{% endblock %}
