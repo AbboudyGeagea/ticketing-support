@@ -115,12 +115,10 @@
             <div class="flex items-center justify-end gap-3">
               <a href="{{ url_for('admin.user_edit', hospital_id=hospital.id, user_id=u.id) }}"
                  class="text-primary hover:underline text-xs">Edit</a>
-              {% if not u.password_hash %}
               <form method="POST" action="{{ url_for('admin.resend_invite', user_id=u.id) }}" style="margin:0;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                <button type="submit" class="text-amber-500 hover:text-amber-700 text-xs">Resend Invite</button>
+                <button type="submit" class="text-amber-500 hover:text-amber-700 text-xs">Send Login Link</button>
               </form>
-              {% endif %}
               {% if u.active %}
               <form method="POST" action="{{ url_for('admin.user_remove', hospital_id=hospital.id, user_id=u.id) }}"
                     onsubmit="return confirm('Deactivate {{ u.name }}?')">
