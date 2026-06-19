@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 from flask import render_template, redirect, url_for, flash, request
 from flask_login import login_user, logout_user, login_required, current_user
 from app.blueprints.auth import bp
-from app.blueprints.auth.forms import LoginForm, ChangePasswordForm
+from app.blueprints.auth.forms import LoginForm, ChangePasswordForm, SetPasswordForm
 from app.models.user import User
 from app.extensions import db, limiter
 
@@ -67,6 +67,36 @@ def _redirect_url(user):
 
 def _redirect_by_role(user):
     return redirect(_redirect_url(user))
+
+
+@bp.route("/set-password/<token>", methods=["GET", "POST"])
+@limiter.limit("10 per hour")
+def set_password(token):
+    from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadSignature
+    s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    try:
+        user_id = s.loads(token, salt="user-invite", max_age=72 * 3600)
+    except SignatureExpired:
+        flash("This invitation link has expired. Please contact support.", "danger")
+        return redirect(url_for("auth.login"))
+    except BadSignature:
+        flash("Invalid invitation link.", "danger")
+        return redirect(url_for("auth.login"))
+
+    user = User.query.get(user_id)
+    if not user or not user.active:
+        flash("Invalid invitation link.", "danger")
+        return redirect(url_for("auth.login"))
+
+    form = SetPasswordForm()
+    if form.validate_on_submit():
+        user.set_password(form.password.data)
+        db.session.commit()
+        login_user(user)
+        flash("Password set successfully. Welcome!", "success")
+        return redirect(_redirect_url(user))
+
+    return render_template("auth/set_password.html", form=form, user=user)
 
 
 @bp.route("/lookup", methods=["GET", "POST"])

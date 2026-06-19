@@ -120,21 +120,21 @@ def hospital_detail(hospital_id):
     if request.method == "POST" and request.form.get("_action") == "add_user":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
         product_ids = request.form.getlist("product_ids", type=int)
 
-        if not name or not email or len(password) < 8:
-            add_error = "Name, email and password (min 8 chars) are required."
+        if not name or not email:
+            add_error = "Name and email are required."
         elif User.query.filter_by(email=email).first():
             add_error = f"{email} is already registered."
         else:
             u = User(hospital_id=hospital_id, email=email, name=name, role="customer", active=True)
-            u.set_password(password)
             valid_ids = {p.id for p in hospital.products}
             u.products = Product.query.filter(Product.id.in_(set(product_ids) & valid_ids)).all()
             db.session.add(u)
             db.session.commit()
-            flash(f'User "{u.name}" created.', "success")
+            from app.services.email_outbound import send_invite_email
+            send_invite_email(u)
+            flash(f'User "{u.name}" created. An invitation email has been sent.', "success")
             return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="users"))
 
     credentials = HospitalCredential.query.filter_by(hospital_id=hospital_id).order_by(
@@ -319,10 +319,11 @@ def user_new(hospital_id):
             role="customer",
             active=True,
         )
-        u.set_password(form.password.data)
         db.session.add(u)
         db.session.commit()
-        flash(f'User "{u.name}" created.', "success")
+        from app.services.email_outbound import send_invite_email
+        send_invite_email(u)
+        flash(f'User "{u.name}" created. An invitation email has been sent.', "success")
         return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id))
     return render_template("admin/user_form.html", form=form, hospital=hospital, edit_user=None)
 
@@ -385,10 +386,11 @@ def agent_new():
             role=form.role.data,
             active=True,
         )
-        u.set_password(form.password.data)
         db.session.add(u)
         db.session.commit()
-        flash(f'Agent "{u.name}" created.', "success")
+        from app.services.email_outbound import send_invite_email
+        send_invite_email(u)
+        flash(f'Agent "{u.name}" created. An invitation email has been sent.', "success")
         return redirect(url_for("admin.agents"))
     return render_template("admin/agent_form.html", form=form, edit_agent=None)
 
