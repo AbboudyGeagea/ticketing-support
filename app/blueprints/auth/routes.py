@@ -1,7 +1,7 @@
 import hmac
 from datetime import datetime
 from urllib.parse import urlparse
-from flask import render_template, redirect, url_for, flash, request
+from flask import render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from app.blueprints.auth import bp
 from app.blueprints.auth.forms import LoginForm, ChangePasswordForm, SetPasswordForm
