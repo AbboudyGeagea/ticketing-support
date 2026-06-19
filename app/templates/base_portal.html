@@ -15,7 +15,7 @@
       theme: {
         extend: {
           colors: {
-            primary: { DEFAULT: '#0072e5', dark: '#005bb5', light: '#3391f0' },
+            primary: { DEFAULT: '#00A651', dark: '#008f45', light: '#33b870' },
             secondary: { DEFAULT: '#015e54', dark: '#013d35' },
           },
           fontFamily: {
@@ -34,22 +34,24 @@
     <div class="flex items-center gap-3">
       <img src="{{ url_for('static', filename='INTERMEDIC LOGO-1.png') }}"
            alt="Intermedic" class="h-7 w-auto brightness-0 invert">
-      <span class="text-blue-200 text-xs font-medium">Support Portal</span>
+      <span class="text-green-100 text-xs font-medium">Support Portal</span>
     </div>
 
     {% if current_user.is_authenticated %}
     <div class="flex items-center gap-4">
-      <a href="{{ url_for('portal.tickets') }}" class="text-blue-100 hover:text-white text-sm transition-colors">My Tickets</a>
-      <a href="{{ url_for('portal.kb_list') }}" class="text-blue-100 hover:text-white text-sm transition-colors">Help Center</a>
-      <a href="{{ url_for('projects.portal_list') }}" class="text-blue-100 hover:text-white text-sm transition-colors">Projects</a>
-      <a href="{{ url_for('portal.profile') }}" class="text-blue-100 hover:text-white text-sm transition-colors">Profile</a>
+      <a href="{{ url_for('portal.tickets') }}" class="text-green-100 hover:text-white text-sm transition-colors">My Tickets</a>
+      <a href="{{ url_for('portal.kb_list') }}" class="text-green-100 hover:text-white text-sm transition-colors">Help Center</a>
+      {% if portal_has_projects %}
+      <a href="{{ url_for('projects.portal_list') }}" class="text-green-100 hover:text-white text-sm transition-colors">Projects</a>
+      {% endif %}
+      <a href="{{ url_for('portal.profile') }}" class="text-green-100 hover:text-white text-sm transition-colors">Profile</a>
       <a href="{{ url_for('portal.ticket_new') }}"
-         class="bg-white text-primary px-3 py-1.5 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors">
+         class="bg-white text-primary px-3 py-1.5 rounded-md text-sm font-medium hover:bg-green-50 transition-colors">
         + New Ticket
       </a>
-      <div class="flex items-center gap-2 border-l border-blue-400 pl-4">
-        <span class="text-blue-200 text-xs">{{ current_user.name }}</span>
-        <a href="{{ url_for('auth.logout') }}" class="text-blue-200 hover:text-white text-xs transition-colors">Sign out</a>
+      <div class="flex items-center gap-2 border-l border-green-400 pl-4">
+        <span class="text-green-100 text-xs">{{ current_user.name }}</span>
+        <a href="{{ url_for('auth.logout') }}" class="text-green-100 hover:text-white text-xs transition-colors">Sign out</a>
       </div>
     </div>
     {% endif %}

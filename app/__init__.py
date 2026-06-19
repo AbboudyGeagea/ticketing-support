@@ -67,9 +67,27 @@ def create_app(config_class=Config):
         response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         return response
 
+    import os
+    os.makedirs(app.config.get("UPLOAD_FOLDER", "uploads"), exist_ok=True)
+
     @app.context_processor
     def inject_now():
         return {"now": datetime.utcnow()}
+
+    @app.context_processor
+    def inject_portal_projects():
+        from flask_login import current_user
+        try:
+            if current_user.is_authenticated and current_user.is_customer:
+                from app.models.project import Project
+                has = Project.query.filter_by(
+                    is_customer_visible=True,
+                    hospital_id=current_user.hospital_id,
+                ).limit(1).count() > 0
+                return {"portal_has_projects": has}
+        except Exception:
+            pass
+        return {"portal_has_projects": False}
 
     _status_cache: dict = {"data": None, "ts": 0.0}
 
