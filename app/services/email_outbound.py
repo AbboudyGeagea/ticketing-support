@@ -143,7 +143,7 @@ def send_invite_email(user):
     s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
     token = s.dumps(user.id, salt="user-invite")
     base_url = current_app.config.get("APP_BASE_URL", "")
-    set_password_url = f"{base_url}/set-password/{token}"
+    set_password_url = f"{base_url}/auth/set-password/{token}"
     subject = "Welcome to Intermedic Support — Set your password"
     html = render_template("emails/invite.html", user=user, set_password_url=set_password_url)
     _send([user.email], subject, html=html)
