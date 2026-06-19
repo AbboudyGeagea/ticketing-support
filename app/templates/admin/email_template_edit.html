@@ -1,5 +1,17 @@
 {% extends "base_agent.html" %}
 {% block title %}Edit — {{ meta.name }}{% endblock %}
+{% block head_extra %}
+<link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
+<style>
+  #quill-editor .ql-editor { min-height: 340px; font-size: 14px; font-family: Arial, sans-serif; }
+  #quill-editor .ql-toolbar { border-radius: 6px 6px 0 0; border-color: #e2e8f0; background: #f8fafc; }
+  #quill-editor .ql-container { border-radius: 0 0 6px 6px; border-color: #e2e8f0; }
+  #quill-editor.focused .ql-container { border-color: #3b82f6; }
+  #quill-editor.focused .ql-toolbar { border-color: #3b82f6; }
+  .mode-btn { padding: 5px 14px; font-size: 12px; font-weight: 600; border-radius: 5px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.15s; background: #fff; color: #64748b; }
+  .mode-btn.active { background: #1B4F8A; color: #fff; border-color: #1B4F8A; }
+</style>
+{% endblock %}
 {% block content %}
 <div style="max-width:1100px;margin:0 auto;padding:32px 24px;">
 
@@ -125,20 +137,36 @@
           </div>
 
           <div style="padding:20px 24px;">
-            <label for="body" style="display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">
-              Email Body <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8;">(HTML)</span>
-            </label>
-            <div id="drop-zone" style="position:relative;border:2px dashed #e2e8f0;border-radius:6px;transition:border-color 0.15s;">
-              <textarea id="body" name="body"
-                        rows="22"
-                        style="width:100%;box-sizing:border-box;padding:12px;border:none;border-radius:6px;font-size:12px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;color:#1e293b;resize:vertical;outline:none;background:transparent;"
-                        onfocus="lastFocused=this"
-                        required>{{ tpl.body if tpl else default_body }}</textarea>
-              <div id="drop-hint" style="display:none;position:absolute;inset:0;border-radius:6px;background:rgba(59,130,246,0.07);border:2px dashed #3b82f6;pointer-events:none;align-items:center;justify-content:center;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+              <label style="display:block;font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.05em;">
+                Email Body
+              </label>
+              <div style="display:flex;gap:4px;">
+                <button id="btn-visual" type="button" class="mode-btn active">Visual Editor</button>
+                <button id="btn-source" type="button" class="mode-btn">HTML Source</button>
+              </div>
+            </div>
+
+            {# Hidden input that gets submitted — populated by JS before submit #}
+            <input type="hidden" id="body" name="body">
+
+            {# Quill rich-text editor (visual mode) #}
+            <div id="quill-wrapper" style="position:relative;">
+              <div id="quill-editor"></div>
+              <div id="drop-hint" style="display:none;position:absolute;inset:0;border-radius:0 0 6px 6px;background:rgba(59,130,246,0.07);border:2px dashed #3b82f6;pointer-events:none;align-items:center;justify-content:center;z-index:10;">
                 <p style="color:#3b82f6;font-weight:600;font-size:14px;margin:0;">Drop to insert</p>
               </div>
             </div>
-            <p style="margin:5px 0 0;font-size:11px;color:#94a3b8;">Full HTML is supported. Variables are rendered server-side via Jinja2.</p>
+
+            {# Raw textarea (source mode, hidden by default) #}
+            <textarea id="body-source"
+                      rows="24"
+                      style="display:none;width:100%;box-sizing:border-box;padding:12px;border:1px solid #e2e8f0;border-radius:6px;font-size:12px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;color:#1e293b;resize:vertical;outline:none;"
+                      onfocus="lastFocused=this">{{ tpl.body if tpl else default_body }}</textarea>
+
+            <p style="margin:6px 0 0;font-size:11px;color:#94a3b8;">
+              Use the Visual Editor for formatting. Switch to HTML Source for full control. Variables like <code style="background:#f1f5f9;padding:1px 4px;border-radius:3px;">{{ '{{' }} ticket.ref {{ '}}' }}</code> are rendered when the email is sent.
+            </p>
           </div>
 
           <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;gap:10px;">
@@ -158,44 +186,117 @@
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
 <script>
-const slug = {{ meta.slug | tojson }};
-let lastFocused = document.getElementById('body');
+const slug    = {{ meta.slug | tojson }};
+const subjEl  = document.getElementById('subject');
+const sourceEl = document.getElementById('body-source');
+const bodyHidden = document.getElementById('body');
+const dropHint   = document.getElementById('drop-hint');
+const quillWrapper = document.getElementById('quill-wrapper');
+let mode = 'visual';   // 'visual' | 'source'
 
-// ── Drag and drop token insertion ──────────────────────────────
-const dropZone = document.getElementById('drop-zone');
-const dropHint = document.getElementById('drop-hint');
-const bodyEl   = document.getElementById('body');
-const subjEl   = document.getElementById('subject');
+// ── Init Quill ─────────────────────────────────────────────────
+const quill = new Quill('#quill-editor', {
+  theme: 'snow',
+  placeholder: 'Write your email here…',
+  modules: {
+    toolbar: [
+      [{ header: [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ color: [] }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      ['link'],
+      ['clean'],
+    ]
+  }
+});
+
+// Load initial content into Quill
+const initialHtml = sourceEl.value;
+quill.clipboard.dangerouslyPasteHTML(initialHtml);
+
+// Focus styling
+quill.on('selection-change', (range) => {
+  const el = document.getElementById('quill-editor');
+  if (range) el.classList.add('focused');
+  else el.classList.remove('focused');
+});
+
+// ── Mode toggle ────────────────────────────────────────────────
+document.getElementById('btn-visual').addEventListener('click', () => {
+  if (mode === 'visual') return;
+  // Sync source → Quill
+  quill.clipboard.dangerouslyPasteHTML(sourceEl.value);
+  sourceEl.style.display = 'none';
+  quillWrapper.style.display = '';
+  document.getElementById('btn-visual').classList.add('active');
+  document.getElementById('btn-source').classList.remove('active');
+  mode = 'visual';
+});
+
+document.getElementById('btn-source').addEventListener('click', () => {
+  if (mode === 'source') return;
+  // Sync Quill → source
+  sourceEl.value = quill.root.innerHTML;
+  quillWrapper.style.display = 'none';
+  sourceEl.style.display = 'block';
+  document.getElementById('btn-source').classList.add('active');
+  document.getElementById('btn-visual').classList.remove('active');
+  mode = 'source';
+});
+
+// ── Form submit: write body to hidden input ────────────────────
+document.getElementById('tpl-form').addEventListener('submit', () => {
+  bodyHidden.value = (mode === 'visual') ? quill.root.innerHTML : sourceEl.value;
+});
+
+// ── Variable token insertion ───────────────────────────────────
+function tokenText(expr) {
+  return '{{ ' + expr + ' }}';
+}
 
 document.querySelectorAll('.var-token').forEach(token => {
   token.addEventListener('dragstart', e => {
-    e.dataTransfer.setData('text/plain', '{{ "{{" }} ' + token.dataset.expr + ' {{ "}}" }}');
+    e.dataTransfer.setData('text/plain', tokenText(token.dataset.expr));
     e.dataTransfer.effectAllowed = 'copy';
     token.style.opacity = '0.5';
   });
   token.addEventListener('dragend', () => { token.style.opacity = ''; });
 
   token.addEventListener('click', () => {
-    insertAtCursor(lastFocused, '{{ "{{" }} ' + token.dataset.expr + ' {{ "}}" }}');
-    lastFocused.focus();
+    if (mode === 'visual') {
+      const range = quill.getSelection(true);
+      quill.insertText(range.index, tokenText(token.dataset.expr), 'user');
+      quill.setSelection(range.index + tokenText(token.dataset.expr).length);
+    } else {
+      insertAtCursor(sourceEl, tokenText(token.dataset.expr));
+    }
   });
 });
 
-// Drop onto body textarea via the wrapping drop-zone
-dropZone.addEventListener('dragover', e => {
+// Drop onto Quill editor
+quillWrapper.addEventListener('dragover', e => {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'copy';
   dropHint.style.display = 'flex';
 });
-dropZone.addEventListener('dragleave', e => {
-  if (!dropZone.contains(e.relatedTarget)) dropHint.style.display = 'none';
+quillWrapper.addEventListener('dragleave', e => {
+  if (!quillWrapper.contains(e.relatedTarget)) dropHint.style.display = 'none';
 });
-dropZone.addEventListener('drop', e => {
+quillWrapper.addEventListener('drop', e => {
   e.preventDefault();
   dropHint.style.display = 'none';
-  insertAtCursor(bodyEl, e.dataTransfer.getData('text/plain'));
-  bodyEl.focus();
+  const text = e.dataTransfer.getData('text/plain');
+  const range = quill.getSelection(true) || { index: quill.getLength() - 1 };
+  quill.insertText(range.index, text, 'user');
+});
+
+// Drop onto source textarea
+sourceEl.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+sourceEl.addEventListener('drop', e => {
+  e.preventDefault();
+  insertAtCursor(sourceEl, e.dataTransfer.getData('text/plain'));
 });
 
 // Drop onto subject input
@@ -221,16 +322,18 @@ document.getElementById('btn-load-default').addEventListener('click', async () =
     if (!resp.ok) throw new Error('Server error');
     const data = await resp.json();
     subjEl.value = data.subject;
-    bodyEl.value = data.body;
+    if (mode === 'visual') {
+      quill.clipboard.dangerouslyPasteHTML(data.body);
+    } else {
+      sourceEl.value = data.body;
+    }
   } catch (e) {
     alert('Could not load default template.');
   }
 });
 
-// ── Focus border highlight ─────────────────────────────────────
-[subjEl, bodyEl].forEach(el => {
-  el.addEventListener('focus', () => { lastFocused = el; el.style.borderColor = '#3b82f6'; });
-  el.addEventListener('blur',  () => { el.style.borderColor = ''; });
-});
+// ── Subject focus highlight ────────────────────────────────────
+subjEl.addEventListener('focus', () => { subjEl.style.borderColor = '#3b82f6'; });
+subjEl.addEventListener('blur',  () => { subjEl.style.borderColor = ''; });
 </script>
 {% endblock %}
