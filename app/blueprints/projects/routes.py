@@ -1,4 +1,3 @@
-import json
 from datetime import date
 from functools import wraps
 from flask import render_template, redirect, url_for, flash, request, abort, jsonify
@@ -167,7 +166,7 @@ def project_detail(project_id):
 
 
 def _build_gantt_data(project, tasks, milestones):
-    """Return JSON string with tasks and milestones for the ECharts Gantt chart."""
+    """Return a dict with tasks and milestones for the ECharts Gantt chart, or None."""
     proj_start = project.start_date or date.today()
     gantt_tasks = []
     for t in tasks:
@@ -184,7 +183,9 @@ def _build_gantt_data(project, tasks, milestones):
         {"name": ms.name, "date": ms.due_date.isoformat(), "done": ms.status == "completed"}
         for ms in milestones if ms.due_date
     ]
-    return json.dumps({"tasks": gantt_tasks, "milestones": gantt_milestones})
+    if not gantt_tasks and not gantt_milestones:
+        return None
+    return {"tasks": gantt_tasks, "milestones": gantt_milestones}
 
 
 @bp.route("/project/<int:project_id>/toggle-gantt", methods=["POST"])
