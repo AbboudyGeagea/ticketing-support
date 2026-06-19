@@ -124,7 +124,7 @@
       </div>
 
       <!-- Admin gear -->
-      {% if current_user.is_admin %}
+      {% if current_user.is_agent %}
       {% set in_admin = request.endpoint and request.endpoint.startswith('admin.') %}
       <div style="border-left:1px solid #475569; padding-left:0.5rem; position:relative;" id="admin-menu-wrapper">
         <button onclick="toggleAdminMenu()" title="Admin settings"

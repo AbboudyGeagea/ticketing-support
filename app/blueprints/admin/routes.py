@@ -31,7 +31,7 @@ from functools import wraps
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if not current_user.is_authenticated or not current_user.is_admin:
+        if not current_user.is_authenticated or not current_user.is_agent:
             abort(403)
         return f(*args, **kwargs)
     return decorated
