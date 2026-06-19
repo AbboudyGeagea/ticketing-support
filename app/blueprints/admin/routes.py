@@ -410,6 +410,20 @@ def agent_edit(agent_id):
     return render_template("admin/agent_form.html", form=form, edit_agent=edit_agent)
 
 
+@bp.route("/users/<int:user_id>/resend-invite", methods=["POST"])
+@login_required
+@admin_required
+def resend_invite(user_id):
+    from app.models.user import User
+    user = User.query.get_or_404(user_id)
+    from app.services.email_outbound import send_invite_email
+    send_invite_email(user)
+    flash(f'Invitation email resent to {user.email}.', "success")
+    if user.role == "customer" and user.hospital_id:
+        return redirect(url_for("admin.hospital_detail", hospital_id=user.hospital_id, tab="users"))
+    return redirect(url_for("admin.agents"))
+
+
 @bp.route("/agents/<int:agent_id>/reset-password", methods=["GET", "POST"])
 @login_required
 @admin_required
