@@ -163,7 +163,7 @@ def dashboard():
 @agent_required
 def tickets():
     page = request.args.get("page", 1, type=int)
-    status_filter = request.args.get("status", "")
+    status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     assigned_filter = request.args.get("assigned", "")
@@ -171,8 +171,8 @@ def tickets():
 
     query = Ticket.query
 
-    if status_filter:
-        query = query.filter_by(status=status_filter)
+    if status_filters:
+        query = query.filter(Ticket.status.in_(status_filters))
     if priority_filter:
         query = query.filter_by(priority=priority_filter)
     if hospital_filter:
@@ -226,7 +226,7 @@ def tickets():
         statuses=ALL_STATUSES,
         priorities=ALL_PRIORITIES,
         filters={
-            "status": status_filter,
+            "status": status_filters,
             "priority": priority_filter,
             "hospital_id": hospital_filter,
             "assigned": assigned_filter,
@@ -1190,15 +1190,15 @@ def tickets_export():
     import io
     from flask import Response, stream_with_context
 
-    status_filter = request.args.get("status", "")
+    status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     assigned_filter = request.args.get("assigned", "")
     search = request.args.get("q", "").strip()
 
     query = Ticket.query
-    if status_filter:
-        query = query.filter_by(status=status_filter)
+    if status_filters:
+        query = query.filter(Ticket.status.in_(status_filters))
     if priority_filter:
         query = query.filter_by(priority=priority_filter)
     if hospital_filter:
@@ -1264,8 +1264,14 @@ def save_filter():
     """Save current filter params as a named view."""
     from app.models.saved_filter import SavedFilter
     name = request.form.get("filter_name", "").strip()
-    params = {k: v for k, v in request.form.items()
-              if k in ("status", "priority", "hospital_id", "assigned", "q") and v}
+    params = {}
+    statuses = request.form.getlist("status")
+    if statuses:
+        params["status"] = statuses
+    for k in ("priority", "hospital_id", "assigned", "q"):
+        v = request.form.get(k, "")
+        if v:
+            params[k] = v
     if not name:
         flash("Please enter a name for this filter.", "warning")
         return redirect(url_for("agent.tickets", **params))

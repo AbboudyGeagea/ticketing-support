@@ -45,14 +45,34 @@
       <input type="text" name="q" value="{{ filters.q }}" placeholder="Subject or ref…"
              class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-48">
     </div>
-    <div>
+    <div class="relative" id="status-dropdown-wrapper">
       <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
-      <select name="status" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-        <option value="">All</option>
+      <button type="button" id="status-dropdown-btn" onclick="toggleStatusDropdown()"
+              class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary min-w-[160px]">
+        <span id="status-btn-label">
+          {%- if filters.status | length == 1 -%}
+            {{ ticket_status_map[filters.status[0]].label if filters.status[0] in ticket_status_map else filters.status[0] }}
+          {%- elif filters.status | length > 1 -%}
+            {{ filters.status | length }} statuses
+          {%- else -%}
+            All statuses
+          {%- endif -%}
+        </span>
+        <svg class="w-3.5 h-3.5 text-slate-400 ml-auto flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      <div id="status-dropdown-panel"
+           class="hidden absolute z-20 mt-1 bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[180px]">
         {% for s in ticket_status_map.values() | sort(attribute='order') %}
-        <option value="{{ s.slug }}" {% if filters.status == s.slug %}selected{% endif %}>{{ s.label }}</option>
+        <label class="flex items-center gap-2 px-3 py-1.5 hover:bg-slate-50 cursor-pointer text-sm text-slate-700">
+          <input type="checkbox" name="status" value="{{ s.slug }}"
+                 {% if s.slug in filters.status %}checked{% endif %}
+                 onchange="updateStatusLabel()">
+          {{ s.label }}
+        </label>
         {% endfor %}
-      </select>
+      </div>
     </div>
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Priority</label>
@@ -100,7 +120,11 @@
 <!-- Save Filter Form (hidden, referenced by the Save button above) -->
 <form id="save-filter-form" method="POST" action="{{ url_for('agent.save_filter') }}">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% for k, v in filters.items() %}{% if v %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endif %}{% endfor %}
+  {% for k, v in filters.items() %}
+    {%- if k == 'status' -%}
+      {%- for slug in v %}<input type="hidden" name="status" value="{{ slug }}">{%- endfor -%}
+    {%- elif v -%}<input type="hidden" name="{{ k }}" value="{{ v }}">{%- endif -%}
+  {% endfor %}
 </form>
 
 <!-- Bulk Action Bar -->
@@ -229,6 +253,27 @@
 
 {% block scripts %}
 <script>
+function toggleStatusDropdown() {
+  document.getElementById('status-dropdown-panel').classList.toggle('hidden');
+}
+document.addEventListener('click', function(e) {
+  var wrapper = document.getElementById('status-dropdown-wrapper');
+  if (wrapper && !wrapper.contains(e.target)) {
+    document.getElementById('status-dropdown-panel').classList.add('hidden');
+  }
+});
+function updateStatusLabel() {
+  var checked = document.querySelectorAll('#status-dropdown-panel input[type="checkbox"]:checked');
+  var label = document.getElementById('status-btn-label');
+  if (checked.length === 0) {
+    label.textContent = 'All statuses';
+  } else if (checked.length === 1) {
+    label.textContent = checked[0].closest('label').textContent.trim();
+  } else {
+    label.textContent = checked.length + ' statuses';
+  }
+}
+
 document.getElementById('select-all').addEventListener('change', function() {
   document.querySelectorAll('.ticket-checkbox').forEach(cb => cb.checked = this.checked);
   updateBulkBar();
