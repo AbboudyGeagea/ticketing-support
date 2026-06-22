@@ -40,6 +40,8 @@ class Task(db.Model):
     ticket_id = db.Column(db.Integer, db.ForeignKey("tickets.id"), nullable=True)
     sprint_id = db.Column(db.Integer, db.ForeignKey("sprints.id"), nullable=True)
     parent_id = db.Column(db.Integer, db.ForeignKey("tasks.id"), nullable=True)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=True)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     title = db.Column(db.String(500), nullable=False)
@@ -58,6 +60,8 @@ class Task(db.Model):
 
     ticket = db.relationship("Ticket", back_populates="tasks")
     sprint = db.relationship("Sprint", back_populates="tasks")
+    hospital = db.relationship("Hospital", foreign_keys=[hospital_id])
+    product = db.relationship("Product", foreign_keys=[product_id])
     creator = db.relationship("User", foreign_keys=[created_by], back_populates="created_tasks")
     assignee = db.relationship("User", foreign_keys=[assigned_to], back_populates="assigned_tasks")
     subtasks = db.relationship("Task", foreign_keys="Task.parent_id", backref=db.backref("parent", remote_side="Task.id"), lazy="dynamic")

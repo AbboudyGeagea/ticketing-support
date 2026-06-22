@@ -639,7 +639,11 @@ def tasks():
 def task_new():
     form = TaskForm()
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
     form.assigned_to.choices = [(a.id, a.name) for a in agents]
+    form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
+    form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
     ticket_ref = request.args.get("ticket_ref")
     linked_ticket = Ticket.query.filter_by(ref=ticket_ref).first() if ticket_ref else None
 
@@ -651,6 +655,8 @@ def task_new():
             ticket_id=linked_ticket.id if linked_ticket else None,
             created_by=current_user.id,
             assigned_to=form.assigned_to.data,
+            hospital_id=form.hospital_id.data or None,
+            product_id=form.product_id.data or None,
             title=form.title.data,
             description=form.description.data,
             priority=form.priority.data,
@@ -674,13 +680,19 @@ def task_new():
 def task_detail(task_id):
     task = Task.query.get_or_404(task_id)
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
     form = TaskForm(obj=task)
     form.assigned_to.choices = [(a.id, a.name) for a in agents]
+    form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
+    form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
 
     if form.validate_on_submit():
         task.title = form.title.data
         task.description = form.description.data
         task.assigned_to = form.assigned_to.data
+        task.hospital_id = form.hospital_id.data or None
+        task.product_id = form.product_id.data or None
         task.priority = form.priority.data
         task.status = form.status.data
         task.deadline = form.deadline.data

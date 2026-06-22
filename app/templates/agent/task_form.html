@@ -55,6 +55,17 @@
         </div>
       </div>
 
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Hospital</label>
+          {{ form.hospital_id(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Product</label>
+          {{ form.product_id(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        </div>
+      </div>
+
       <div class="mb-4">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Status</label>
         {{ form.status(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}

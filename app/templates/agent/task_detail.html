@@ -282,6 +282,22 @@
       </div>
       {% endif %}
 
+      <!-- Hospital -->
+      {% if task.hospital %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-slate-500 text-xs">Hospital</span>
+        <span class="text-slate-700 font-medium text-xs">{{ task.hospital.name }}</span>
+      </div>
+      {% endif %}
+
+      <!-- Product -->
+      {% if task.product %}
+      <div class="flex items-center justify-between text-sm">
+        <span class="text-slate-500 text-xs">Product</span>
+        <span class="text-slate-700 font-medium text-xs">{{ task.product.name }}</span>
+      </div>
+      {% endif %}
+
       <!-- Created at -->
       <div class="flex items-center justify-between text-sm">
         <span class="text-slate-500 text-xs">Created</span>
@@ -313,6 +329,17 @@
         <div class="mb-3">
           <label class="block text-xs font-medium text-slate-600 mb-1">Assign To</label>
           {{ form.assigned_to(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 mb-3">
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Hospital</label>
+            {{ form.hospital_id(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-600 mb-1">Product</label>
+            {{ form.product_id(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-2 mb-3">
