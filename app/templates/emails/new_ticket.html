@@ -24,6 +24,14 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Source</p>
       <p style="margin:0;color:#1e293b;">{{ ticket.source.title() }}</p>
     </div>
+    {% if first_message %}
+    <div style="margin:0 0 20px;">
+      <p style="margin:0 0 8px;color:#64748b;font-size:13px;">Message</p>
+      <div style="background:#f8fafc;border-left:3px solid #1B4F8A;padding:12px 16px;border-radius:0 4px 4px 0;">
+        <p style="margin:0;white-space:pre-wrap;color:#334155;font-size:14px;line-height:1.6;">{{ first_message.body }}</p>
+      </div>
+    </div>
+    {% endif %}
     <a href="{{ ticket_url }}" style="display:inline-block;background:#1B4F8A;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
   </div>
   <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
