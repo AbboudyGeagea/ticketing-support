@@ -419,3 +419,35 @@
   </div>
 </div>
 {% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const map = {{ hospital_products_map | tojson }};
+  const hospitalSel = document.getElementById('hospital_id');
+  const productSel  = document.getElementById('product_id');
+  const allOpts = Array.from(productSel.options).map(o => ({ value: o.value, text: o.text }));
+
+  function filterProducts() {
+    const hid = parseInt(hospitalSel.value) || 0;
+    const current = productSel.value;
+    const allowed = hid ? (map[hid] || []).map(String) : null;
+
+    productSel.innerHTML = '';
+    allOpts.forEach(({ value, text }) => {
+      if (value === '0' || allowed === null || allowed.includes(value)) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.textContent = text;
+        productSel.appendChild(opt);
+      }
+    });
+
+    productSel.value = productSel.querySelector(`[value="${current}"]`) ? current : '0';
+  }
+
+  hospitalSel.addEventListener('change', filterProducts);
+  filterProducts();
+})();
+</script>
+{% endblock %}

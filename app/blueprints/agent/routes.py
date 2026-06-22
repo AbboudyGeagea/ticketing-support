@@ -639,8 +639,9 @@ def tasks():
 def task_new():
     form = TaskForm()
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
-    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).options(joinedload(Hospital.products)).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    hospital_products_map = {h.id: [p.id for p in h.products] for h in hospitals}
     form.assigned_to.choices = [(a.id, a.name) for a in agents]
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
@@ -671,7 +672,8 @@ def task_new():
             return redirect(url_for("agent.ticket_detail", ref=linked_ticket.ref))
         return redirect(url_for("agent.tasks"))
 
-    return render_template("agent/task_form.html", form=form, task=None, linked_ticket=linked_ticket)
+    return render_template("agent/task_form.html", form=form, task=None, linked_ticket=linked_ticket,
+                           hospital_products_map=hospital_products_map)
 
 
 @bp.route("/tasks/<int:task_id>", methods=["GET", "POST"])
@@ -680,8 +682,9 @@ def task_new():
 def task_detail(task_id):
     task = Task.query.get_or_404(task_id)
     agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
-    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).options(joinedload(Hospital.products)).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    hospital_products_map = {h.id: [p.id for p in h.products] for h in hospitals}
     form = TaskForm(obj=task)
     form.assigned_to.choices = [(a.id, a.name) for a in agents]
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
@@ -730,7 +733,8 @@ def task_detail(task_id):
                            linked_ticket=task.ticket, subtasks=subtasks,
                            checklist_items=checklist_items, agents=agents,
                            time_entries=time_entries,
-                           dep_list=dep_list, dependent_list=dependent_list)
+                           dep_list=dep_list, dependent_list=dependent_list,
+                           hospital_products_map=hospital_products_map)
 
 
 @bp.route("/tasks/<int:task_id>/subtasks", methods=["POST"])
