@@ -135,6 +135,37 @@ def create_app(config_class=Config):
 def _register_cli(app):
     import click
 
+    @app.cli.command("cleanup-old-tasks")
+    @click.option("--dry-run", is_flag=True, help="Preview what would be deleted without making changes.")
+    def cleanup_old_tasks(dry_run):
+        """Delete all tasks created before today (keeps tasks created today)."""
+        from datetime import date, datetime
+        from sqlalchemy import or_
+        from app.models.task import Task, TaskChecklist, TimeEntry, TaskDependency
+
+        today_start = datetime.combine(date.today(), datetime.min.time())
+        old_ids = [t.id for t in Task.query.filter(Task.created_at < today_start).all()]
+
+        if not old_ids:
+            click.echo("No tasks found created before today.")
+            return
+
+        prefix = "[DRY RUN] " if dry_run else ""
+        click.echo(f"{prefix}Found {len(old_ids)} task(s) to delete (created before {date.today()}).")
+
+        if dry_run:
+            return
+
+        TaskDependency.query.filter(
+            or_(TaskDependency.task_id.in_(old_ids), TaskDependency.depends_on_id.in_(old_ids))
+        ).delete(synchronize_session=False)
+        TaskChecklist.query.filter(TaskChecklist.task_id.in_(old_ids)).delete(synchronize_session=False)
+        TimeEntry.query.filter(TimeEntry.task_id.in_(old_ids)).delete(synchronize_session=False)
+        Task.query.filter(Task.parent_id.in_(old_ids)).update({"parent_id": None}, synchronize_session=False)
+        Task.query.filter(Task.id.in_(old_ids)).delete(synchronize_session=False)
+        db.session.commit()
+        click.echo(f"Deleted {len(old_ids)} task(s).")
+
     @app.cli.command("seed-admin")
     @click.argument("email")
     @click.argument("name")
