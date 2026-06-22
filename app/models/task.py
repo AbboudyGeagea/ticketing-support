@@ -73,6 +73,10 @@ class Task(db.Model):
     dependents = db.relationship("TaskDependency", foreign_keys="TaskDependency.depends_on_id", back_populates="depends_on", lazy="dynamic")
 
     @property
+    def ref(self):
+        return f"TSK-{self.id:05d}"
+
+    @property
     def is_overdue(self):
         return self.deadline and self.deadline < datetime.utcnow() and self.status != TASK_DONE
 

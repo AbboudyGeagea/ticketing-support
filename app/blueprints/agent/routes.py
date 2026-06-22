@@ -15,7 +15,7 @@ from app.models.product import Product
 from app.models.user import User
 from app.models.hospital import Hospital
 from app.extensions import db
-from app.services.email_outbound import notify_customer_reply
+from app.services.email_outbound import notify_customer_reply, notify_secondary_assignee
 from functools import wraps
 
 
@@ -670,6 +670,8 @@ def task_new():
         )
         db.session.add(task)
         db.session.commit()
+        if task.assigned_to_2:
+            notify_secondary_assignee(task)
         flash("Task created.", "success")
         if linked_ticket:
             return redirect(url_for("agent.ticket_detail", ref=linked_ticket.ref))
@@ -696,6 +698,7 @@ def task_detail(task_id):
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
 
     if form.validate_on_submit():
+        prev_secondary = task.assigned_to_2
         task.title = form.title.data
         task.description = form.description.data
         task.assigned_to = form.assigned_to.data
@@ -714,6 +717,8 @@ def task_detail(task_id):
         except (TypeError, ValueError):
             pass
         db.session.commit()
+        if task.assigned_to_2 and task.assigned_to_2 != prev_secondary:
+            notify_secondary_assignee(task)
         flash("Task updated.", "success")
         return redirect(url_for("agent.task_detail", task_id=task_id))
 

@@ -282,6 +282,14 @@ def send_task_reminder(task):
     _send([assignee.email], subject, html=html)
 
 
+def notify_secondary_assignee(task):
+    if not task.secondary_assignee or not task.secondary_assignee.email:
+        return
+    subject = f"[{task.ref}] You were assigned as a secondary resource"
+    html = render_template("emails/task_secondary_assigned.html", task=task)
+    _send([task.secondary_assignee.email], subject, html=html)
+
+
 def notify_customer_status_change(ticket):
     if not ticket.creator or not ticket.creator.email:
         return

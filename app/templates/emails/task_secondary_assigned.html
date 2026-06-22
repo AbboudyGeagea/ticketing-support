@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;color:#333;">
+  <div style="background:#0EA5A0;padding:20px;border-radius:8px 8px 0 0;">
+    <h2 style="color:white;margin:0;font-size:18px;">Task Assignment — Secondary Resource</h2>
+  </div>
+  <div style="border:1px solid #e2e8f0;border-top:none;padding:24px;border-radius:0 0 8px 8px;">
+    <p style="margin:0 0 16px;">You were assigned as a secondary / alternative resource for the following task:</p>
+
+    <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:16px;margin:0 0 16px;">
+      <p style="font-size:13px;color:#64748b;margin:0 0 4px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;">Task</p>
+      <p style="font-weight:bold;font-size:16px;color:#1e293b;margin:0 0 8px;">{{ task.ref }} — {{ task.title }}</p>
+      {% if task.description %}
+      <p style="color:#475569;white-space:pre-wrap;font-size:14px;margin:0 0 8px;">{{ task.description }}</p>
+      {% endif %}
+      {% if task.deadline %}
+      <p style="color:#64748b;font-size:13px;margin:0;">
+        <strong>Deadline:</strong> {{ task.deadline.strftime('%B %d, %Y %H:%M') }}
+      </p>
+      {% endif %}
+    </div>
+
+    <p style="margin:0 0 8px;">Please coordinate with the primary task owner:
+      <strong>{{ task.assignee.name }}</strong>.
+    </p>
+  </div>
+  <p style="color:#999;font-size:12px;margin-top:16px;text-align:center;">Intermedic Support Desk</p>
+</body>
+</html>
