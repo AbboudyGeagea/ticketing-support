@@ -55,9 +55,16 @@ FLASK_APP=wsgi:app "${VENV}/bin/flask" db upgrade
 log "Migrations complete."
 
 # ---------------------------------------------------------------------------
-# Step 4: Run seed scripts (each runs only once, tracked by marker files)
+# Step 4: Clean up tasks created before today
 # ---------------------------------------------------------------------------
-log "--- Step 4: Running seed scripts ---"
+log "--- Step 4: Cleaning up old tasks ---"
+FLASK_APP=wsgi:app "${VENV}/bin/flask" cleanup-old-tasks
+log "Old task cleanup complete."
+
+# ---------------------------------------------------------------------------
+# Step 5: Run seed scripts (each runs only once, tracked by marker files)
+# ---------------------------------------------------------------------------
+log "--- Step 5: Running seed scripts ---"
 SEEDS_DONE_DIR="${APP_DIR}/.seeds_done"
 mkdir -p "${SEEDS_DONE_DIR}"
 for seed in "${APP_DIR}"/scripts/seed_*.py; do
@@ -76,16 +83,16 @@ done
 log "Seed scripts complete."
 
 # ---------------------------------------------------------------------------
-# Step 5: Restart web service
+# Step 6: Restart web service
 # ---------------------------------------------------------------------------
-log "--- Step 5: Restarting web service (${WEB_SERVICE}) ---"
+log "--- Step 6: Restarting web service (${WEB_SERVICE}) ---"
 systemctl restart "${WEB_SERVICE}"
 log "${WEB_SERVICE} restarted."
 
 # ---------------------------------------------------------------------------
-# Step 6: Restart background worker services (if they exist)
+# Step 7: Restart background worker services (if they exist)
 # ---------------------------------------------------------------------------
-log "--- Step 6: Restarting worker services ---"
+log "--- Step 7: Restarting worker services ---"
 for svc in ${WORKER_SERVICES}; do
     if systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
         systemctl restart "${svc}"
@@ -96,9 +103,9 @@ for svc in ${WORKER_SERVICES}; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 7: Health check
+# Step 8: Health check
 # ---------------------------------------------------------------------------
-log "--- Step 7: Health check ---"
+log "--- Step 8: Health check ---"
 MAX_WAIT=60
 ELAPSED=0
 until curl -sf http://127.0.0.1:5000/health &>/dev/null; do
@@ -112,9 +119,9 @@ done
 log "Health check passed."
 
 # ---------------------------------------------------------------------------
-# Step 8: Reload nginx if config changed
+# Step 9: Reload nginx if config changed
 # ---------------------------------------------------------------------------
-log "--- Step 8: Reloading nginx ---"
+log "--- Step 9: Reloading nginx ---"
 NGINX_SOURCE="${APP_DIR}/nginx/sites-available/support.intermedic.com"
 NGINX_DEST="/etc/nginx/sites-available/support.intermedic.com"
 if [[ -f "${NGINX_SOURCE}" ]]; then

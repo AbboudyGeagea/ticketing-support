@@ -642,7 +642,9 @@ def task_new():
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).options(joinedload(Hospital.products)).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
     hospital_products_map = {h.id: [p.id for p in h.products] for h in hospitals}
-    form.assigned_to.choices = [(a.id, a.name) for a in agents]
+    agent_choices = [(a.id, a.name) for a in agents]
+    form.assigned_to.choices = agent_choices
+    form.assigned_to_2.choices = [(0, "— None —")] + agent_choices
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
     ticket_ref = request.args.get("ticket_ref")
@@ -656,6 +658,7 @@ def task_new():
             ticket_id=linked_ticket.id if linked_ticket else None,
             created_by=current_user.id,
             assigned_to=form.assigned_to.data,
+            assigned_to_2=form.assigned_to_2.data or None,
             hospital_id=form.hospital_id.data or None,
             product_id=form.product_id.data or None,
             title=form.title.data,
@@ -685,8 +688,10 @@ def task_detail(task_id):
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).options(joinedload(Hospital.products)).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
     hospital_products_map = {h.id: [p.id for p in h.products] for h in hospitals}
+    agent_choices = [(a.id, a.name) for a in agents]
     form = TaskForm(obj=task)
-    form.assigned_to.choices = [(a.id, a.name) for a in agents]
+    form.assigned_to.choices = agent_choices
+    form.assigned_to_2.choices = [(0, "— None —")] + agent_choices
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
 
@@ -694,6 +699,7 @@ def task_detail(task_id):
         task.title = form.title.data
         task.description = form.description.data
         task.assigned_to = form.assigned_to.data
+        task.assigned_to_2 = form.assigned_to_2.data or None
         task.hospital_id = form.hospital_id.data or None
         task.product_id = form.product_id.data or None
         task.priority = form.priority.data

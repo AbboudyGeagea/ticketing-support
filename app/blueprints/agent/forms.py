@@ -70,6 +70,7 @@ class TaskForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=500)])
     description = TextAreaField("Description", validators=[Optional()])
     assigned_to = SelectField("Assign To", coerce=int)
+    assigned_to_2 = SelectField("Secondary Assignee", coerce=int, validators=[Optional()], validate_choice=False)
     hospital_id = SelectField("Hospital", coerce=int, validators=[Optional()], validate_choice=False)
     product_id = SelectField("Product", coerce=int, validators=[Optional()], validate_choice=False)
     priority = SelectField("Priority", choices=[
