@@ -203,22 +203,16 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
 
 
 def notify_assigned_agent_new_message(ticket, message):
-    """
-    Notify the assigned agent when a customer or collaborator posts a message.
-    Falls back to all active agents if the ticket is unassigned.
-    """
+    """Notify all active agents when a customer or collaborator posts a message."""
     from app.models.user import User
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
 
-    if ticket.assigned_to and ticket.assignee:
-        recipients = [ticket.assignee.email]
-    else:
-        agents = User.query.filter(
-            User.role.in_(["agent", "admin"]),
-            User.active == True,
-        ).all()
-        recipients = [a.email for a in agents]
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).all()
+    recipients = [a.email for a in agents if a.email]
 
     if not recipients:
         return
@@ -228,7 +222,7 @@ def notify_assigned_agent_new_message(ticket, message):
     if not html:
         subject = f"[{ticket.ref}] New message — {ticket.subject}"
         html = render_template("emails/agent_new_message.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
 
 
 def notify_agents_new_ticket(ticket):
@@ -412,16 +406,13 @@ def notify_collaborators_new_message(ticket, message):
 
 
 def notify_agent_ticket_reopened(ticket):
-    """Notify the assigned agent (or all agents) when a customer reopens a ticket via email link."""
+    """Notify all active agents when a customer reopens a ticket via email link."""
     from app.models.user import User
-    if ticket.assigned_to and ticket.assignee:
-        recipients = [ticket.assignee.email]
-    else:
-        agents = User.query.filter(
-            User.role.in_(["agent", "admin"]),
-            User.active == True,
-        ).all()
-        recipients = [a.email for a in agents]
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).all()
+    recipients = [a.email for a in agents if a.email]
     if not recipients:
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
@@ -431,20 +422,17 @@ def notify_agent_ticket_reopened(ticket):
     if not html:
         subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
         html = render_template("emails/agent_ticket_reopened.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
 
 
 def notify_agent_close_request(ticket):
-    """Notify the assigned agent (or all agents) that a customer requested closure."""
+    """Notify all active agents that a customer requested closure."""
     from app.models.user import User
-    if ticket.assigned_to and ticket.assignee:
-        recipients = [ticket.assignee.email]
-    else:
-        agents = User.query.filter(
-            User.role.in_(["agent", "admin"]),
-            User.active == True,
-        ).all()
-        recipients = [a.email for a in agents]
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).all()
+    recipients = [a.email for a in agents if a.email]
     if not recipients:
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
@@ -454,4 +442,23 @@ def notify_agent_close_request(ticket):
     if not html:
         subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
         html = render_template("emails/agent_close_request.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
+
+
+def notify_all_agents_activity(ticket, event, actor_name=None):
+    """Notify all active agents about any ticket activity (reply, status change, close, etc.)."""
+    from app.models.user import User
+    agents = User.query.filter(
+        User.role.in_(["agent", "admin"]),
+        User.active == True,
+    ).all()
+    recipients = [a.email for a in agents if a.email]
+    if not recipients:
+        return
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+    subject = f"[{ticket.ref}] {event}"
+    html = render_template("emails/agent_activity.html",
+                           ticket=ticket, event=event,
+                           actor_name=actor_name, ticket_url=ticket_url)
+    _send(recipients, subject, html=html)

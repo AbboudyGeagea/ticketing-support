@@ -446,6 +446,11 @@ def ticket_reply(ref):
                 notify_collaborators_new_message(ticket, msg)
             except Exception:
                 pass
+            try:
+                from app.services.email_outbound import notify_all_agents_activity
+                notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name)
+            except Exception:
+                current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
 
         flash("Reply sent.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -485,6 +490,11 @@ def ticket_status(ref):
                     notify_customer_resolved_confirmation(ticket)
             except Exception:
                 pass
+        try:
+            from app.services.email_outbound import notify_all_agents_activity
+            notify_all_agents_activity(ticket, f"Status → {new_status.replace('_', ' ').title()}", actor_name=current_user.name)
+        except Exception:
+            current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
         flash(f"Status changed to {new_status.replace('_', ' ').title()}.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -501,6 +511,11 @@ def ticket_priority(ref):
         ticket.updated_at = datetime.utcnow()
         _log_history(ticket, current_user.id, "priority_change", old, new_priority)
         db.session.commit()
+        try:
+            from app.services.email_outbound import notify_all_agents_activity
+            notify_all_agents_activity(ticket, f"Priority → {new_priority.title()}", actor_name=current_user.name)
+        except Exception:
+            current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
         flash(f"Priority changed to {new_priority}.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -528,6 +543,12 @@ def ticket_assign(ref):
             notify_agent_ticket_assigned(ticket, current_user.id)
         except Exception:
             current_app.logger.exception("notify_agent_ticket_assigned failed for %s", ticket.ref)
+        try:
+            from app.services.email_outbound import notify_all_agents_activity
+            assignee_name = ticket.assignee.name if ticket.assignee else "an agent"
+            notify_all_agents_activity(ticket, f"Assigned to {assignee_name}", actor_name=current_user.name)
+        except Exception:
+            current_app.logger.exception("notify_all_agents_activity failed for %s", ticket.ref)
     flash("Ticket assigned.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -552,6 +573,11 @@ def ticket_pull(ref):
         notify_agent_ticket_assigned(ticket, current_user.id)
     except Exception:
         current_app.logger.exception("notify_agent_ticket_assigned failed for %s", ticket.ref)
+    try:
+        from app.services.email_outbound import notify_all_agents_activity
+        notify_all_agents_activity(ticket, f"Pulled by {current_user.name}", actor_name=current_user.name)
+    except Exception:
+        current_app.logger.exception("notify_all_agents_activity failed for %s", ticket.ref)
     flash("Ticket pulled to your queue.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -574,7 +600,40 @@ def ticket_reopen(ref):
             notify_customer_status_change(ticket)
         except Exception:
             pass
+    try:
+        from app.services.email_outbound import notify_all_agents_activity
+        notify_all_agents_activity(ticket, "Ticket Reopened", actor_name=current_user.name)
+    except Exception:
+        current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
     flash("Ticket reopened.", "success")
+    return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/close", methods=["POST"])
+@login_required
+@agent_required
+def ticket_close(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.status != "closed":
+        old = ticket.status
+        ticket.status = "closed"
+        ticket.closed_at = datetime.utcnow()
+        ticket.close_requested = False
+        ticket.updated_at = datetime.utcnow()
+        _log_history(ticket, current_user.id, "status_change", old, "closed")
+        db.session.commit()
+        if ticket.creator:
+            try:
+                from app.services.email_outbound import notify_customer_status_change
+                notify_customer_status_change(ticket)
+            except Exception:
+                current_app.logger.exception("notify_customer_status_change failed for %s", ref)
+        try:
+            from app.services.email_outbound import notify_all_agents_activity
+            notify_all_agents_activity(ticket, "Ticket Closed", actor_name=current_user.name)
+        except Exception:
+            current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
+        flash("Ticket closed.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
@@ -1125,6 +1184,11 @@ def ticket_add_collaborator(ref):
         notify_collaborator_added(ticket, collab)
     except Exception:
         logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
+    try:
+        from app.services.email_outbound import notify_all_agents_activity
+        notify_all_agents_activity(ticket, f"Collaborator Added: {email}", actor_name=current_user.name)
+    except Exception:
+        logger.exception("notify_all_agents_activity failed for %s", ref)
     flash(f"{email} added as a {collab_type} collaborator.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 

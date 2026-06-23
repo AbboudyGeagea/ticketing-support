@@ -76,6 +76,20 @@
         Copy link
       </button>
 
+      {% if ticket.status != 'closed' %}
+      <form method="POST" action="{{ url_for('agent.ticket_close', ref=ticket.ref) }}"
+            onsubmit="return confirm('Close this ticket? This will notify the customer and all agents.')">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 text-sm font-semibold bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+          Close Ticket
+        </button>
+      </form>
+      {% endif %}
+
     </div>
   </div>
 
@@ -421,7 +435,7 @@
           <div class="flex gap-2">
             <select id="status-select" name="status" onchange="toggleEscalationField(this.value)"
                     class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-              {% for s in ticket_status_map.values() | sort(attribute='order') %}
+              {% for s in ticket_status_map.values() | sort(attribute='order') if s.slug != 'closed' %}
               <option value="{{ s.slug }}" {% if ticket.status == s.slug %}selected{% endif %}>{{ s.label }}</option>
               {% endfor %}
             </select>
