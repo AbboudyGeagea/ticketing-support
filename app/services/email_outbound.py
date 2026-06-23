@@ -92,7 +92,8 @@ def _send(
     ticket_ref: str = None,
     is_thread_root: bool = False,
 ):
-    if not recipients:
+    valid_recipients = [r for r in recipients if r and r.strip()]
+    if not valid_recipients:
         return
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
@@ -107,20 +108,11 @@ def _send(
             "subject": subject,
             "body": {"contentType": content_type, "content": content},
             "toRecipients": [
-                {"emailAddress": {"address": r}} for r in recipients
+                {"emailAddress": {"address": r}} for r in valid_recipients
             ],
         },
         "saveToSentItems": True,
     }
-    if ticket_ref:
-        domain = mailbox.split("@")[-1] if "@" in mailbox else "mail.intermedic.com"
-        thread_msg_id = f"<ticket-{ticket_ref}@{domain}>"
-        internet_headers = []
-        if is_thread_root:
-            internet_headers.append({"name": "Message-ID", "value": thread_msg_id})
-        internet_headers.append({"name": "In-Reply-To", "value": thread_msg_id})
-        internet_headers.append({"name": "References", "value": thread_msg_id})
-        payload["message"]["internetMessageHeaders"] = internet_headers
     try:
         resp = requests.post(
             f"{_GRAPH_BASE}/users/{mailbox}/sendMail",
@@ -129,9 +121,9 @@ def _send(
             timeout=15,
         )
         if resp.status_code not in (200, 202):
-            logger.error("Graph sendMail failed %s: %s", resp.status_code, resp.text)
+            logger.error("Graph sendMail failed %s: %s", resp.status_code, resp.text[:500])
     except Exception as exc:
-        logger.error("Failed to send email to %s: %s", recipients, exc)
+        logger.error("Failed to send email to %s: %s", valid_recipients, exc)
 
 
 def _render_db_template(slug, **context):

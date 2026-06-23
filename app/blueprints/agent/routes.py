@@ -308,7 +308,7 @@ def ticket_new():
             from app.services.email_outbound import notify_agents_new_ticket
             notify_agents_new_ticket(ticket)
         except Exception:
-            pass
+            current_app.logger.exception("notify_agents_new_ticket failed for %s", ticket.ref)
 
         flash(f"Ticket {ticket.ref} created.", "success")
         return redirect(url_for("agent.ticket_detail", ref=ticket.ref))
@@ -527,7 +527,7 @@ def ticket_assign(ref):
             from app.services.email_outbound import notify_agent_ticket_assigned
             notify_agent_ticket_assigned(ticket, current_user.id)
         except Exception:
-            pass
+            current_app.logger.exception("notify_agent_ticket_assigned failed for %s", ticket.ref)
     flash("Ticket assigned.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -551,7 +551,7 @@ def ticket_pull(ref):
         from app.services.email_outbound import notify_agent_ticket_assigned
         notify_agent_ticket_assigned(ticket, current_user.id)
     except Exception:
-        pass
+        current_app.logger.exception("notify_agent_ticket_assigned failed for %s", ticket.ref)
     flash("Ticket pulled to your queue.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
