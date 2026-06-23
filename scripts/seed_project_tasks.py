@@ -1,4 +1,4 @@
-"""One-shot script: insert project task list (CVIS/Pyxis/PACS/SMS per hospital)."""
+"""One-shot script: insert project tasks (flat, one row per item)."""
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
@@ -11,100 +11,76 @@ from app.models.product import Product
 from app.models.user import User
 
 # ---------------------------------------------------------------------------
-# Task data
-# parent title → hospital keyword, product keyword, list of (subtask title, done?)
+# (title, hospital_keyword, product_keyword, is_done)
+# hospital_keyword: matched with ILIKE %keyword% against hospitals.name
+# product_keyword:  matched with ILIKE %keyword% against products.name
 # ---------------------------------------------------------------------------
-TASK_TREE = [
-    {
-        "title": "CVIS — SJH",
-        "hospital": "SJH",
-        "product": "CVIS",
-        "subtasks": [
-            ("Worklist (modality + US configuration on IBE)", False),
-            ("List of users",                                 True),   # ✓
-            ("Template",                                      False),
-            ("Measurements mapping (profile)",               False),
-            ("ECGs / Holters",                               False),
-            ("CD-Direct",                                    False),
-            ("Cathlab — List of users",                      False),
-            ("Cathlab — Template",                           False),
-            ("Cathlab — Test right workflow",                False),
-            ("Cathlab — Charting",                           False),
-            ("Testing",                                      False),
-        ],
-    },
-    {
-        "title": "Pyxis — SJH",
-        "hospital": "SJH",
-        "product": "Pyxis",
-        "subtasks": [
-            ("Training",        False),
-            ("Towers (HW team)", False),
-            ("Go-Live",         False),
-        ],
-    },
-    {
-        "title": "SLH",
-        "hospital": "SLH",
-        "product": None,
-        "subtasks": [
-            ("Portal installation", False),
-        ],
-    },
-    {
-        "title": "NDDS",
-        "hospital": "NDDS",
-        "product": None,
-        "subtasks": [
-            ("ORM testing", False),
-        ],
-    },
-    {
-        "title": "CLV",
-        "hospital": "CLV",
-        "product": None,
-        "subtasks": [
-            ("Integration", True),   # ✓
-        ],
-    },
-    {
-        "title": "Makassed",
-        "hospital": "Makassed",
-        "product": None,
-        "subtasks": [
-            ("Modalities configuration", True),   # ✓
-            ("WS installation",          True),   # ✓
-            ("Logo / Master Template",   True),   # ✓
-            ("Application testing",      True),   # ✓
-            ("Training / Go-Live",       True),   # ✓
-        ],
-    },
-    {
-        "title": "Pyxis — LAU",
-        "hospital": "LAU",
-        "product": "Pyxis",
-        "subtasks": [
-            ("Inventory interface", False),
-        ],
-    },
+TASKS = [
+    # CVIS — SJH
+    ("Worklist (modality + US configuration on IBE)",   "SJH",      "CVIS",  False),
+    ("List of users",                                   "SJH",      "CVIS",  True),
+    ("Template",                                        "SJH",      "CVIS",  False),
+    ("Measurements mapping (profile)",                  "SJH",      "CVIS",  False),
+    ("ECGs / Holters",                                  "SJH",      "CVIS",  False),
+    ("CD-Direct",                                       "SJH",      "CVIS",  False),
+    ("Cathlab (+ License)",                             "SJH",      "CVIS",  False),
+    ("Cathlab — List of users",                         "SJH",      "CVIS",  False),
+    ("Cathlab — Template",                              "SJH",      "CVIS",  False),
+    ("Cathlab — Test right workflow",                   "SJH",      "CVIS",  False),
+    ("Cathlab — Charting",                              "SJH",      "CVIS",  False),
+    ("Testing",                                         "SJH",      "CVIS",  False),
+
+    # Pyxis — SJH
+    ("Training",                                        "SJH",      "Pyxis", False),
+    ("Towers (HW team)",                                "SJH",      "Pyxis", False),
+    ("Go-Live",                                         "SJH",      "Pyxis", False),
+
+    # SLH (Saint Louis Hospital)
+    ("Portal installation",                             "Saint Louis", None, False),
+
+    # NDDS
+    ("ORM testing",                                     "NDDS",     None,    False),
+
+    # CLV
+    ("Integration",                                     "CLV",      None,    True),
+
+    # Makassed — PACS
+    ("Modalities configuration",                        "Makassed", "PACS",  True),
+    ("WS installation",                                 "Makassed", "PACS",  True),
+    ("Logo / Master Template",                          "Makassed", "PACS",  True),
+    ("Application testing",                             "Makassed", "PACS",  True),
+    ("Training / Go-Live",                              "Makassed", "PACS",  True),
+
+    # Pyxis — LAU
+    ("Inventory interface",                             "LAU",      "Pyxis", False),
 ]
+
+
+_hospital_cache = {}
+_product_cache  = {}
 
 
 def find_hospital(keyword):
     if not keyword:
         return None
+    if keyword in _hospital_cache:
+        return _hospital_cache[keyword]
     h = Hospital.query.filter(Hospital.name.ilike(f"%{keyword}%")).first()
     if not h:
-        print(f"  WARNING: hospital not found for keyword '{keyword}'")
+        print(f"  WARNING: hospital not found for '{keyword}'")
+    _hospital_cache[keyword] = h
     return h
 
 
 def find_product(keyword):
     if not keyword:
         return None
+    if keyword in _product_cache:
+        return _product_cache[keyword]
     p = Product.query.filter(Product.name.ilike(f"%{keyword}%")).first()
     if not p:
-        print(f"  WARNING: product not found for keyword '{keyword}'")
+        print(f"  WARNING: product not found for '{keyword}'")
+    _product_cache[keyword] = p
     return p
 
 
@@ -122,48 +98,39 @@ with app.app_context():
 
     print(f"Using creator/assignee: {admin.name} (id={admin.id})\n")
 
-    total_parents = 0
-    total_subtasks = 0
+    created = 0
+    skipped = 0
 
-    for entry in TASK_TREE:
-        # Skip if parent already exists
-        if Task.query.filter_by(title=entry["title"], parent_id=None).first():
-            print(f"  SKIP (already exists): {entry['title']}")
+    for (title, hosp_kw, prod_kw, is_done) in TASKS:
+        hospital = find_hospital(hosp_kw)
+        product  = find_product(prod_kw)
+
+        existing = Task.query.filter_by(
+            title=title,
+            hospital_id=hospital.id if hospital else None,
+            product_id=product.id if product else None,
+        ).first()
+
+        if existing:
+            print(f"  SKIP: {title}")
+            skipped += 1
             continue
 
-        hospital = find_hospital(entry["hospital"])
-        product  = find_product(entry["product"])
-
-        parent = Task(
-            title=entry["title"],
-            status=TASK_TODO,
+        task = Task(
+            title=title,
+            status=TASK_DONE if is_done else TASK_TODO,
             priority="medium",
             hospital_id=hospital.id if hospital else None,
             product_id=product.id if product else None,
             created_by=admin.id,
             assigned_to=admin.id,
         )
-        db.session.add(parent)
-        db.session.flush()  # get parent.id before subtasks
-
-        print(f"  ADD parent: {entry['title']} (hospital={hospital.name if hospital else '—'}, product={product.name if product else '—'})")
-        total_parents += 1
-
-        for (sub_title, is_done) in entry["subtasks"]:
-            subtask = Task(
-                title=sub_title,
-                parent_id=parent.id,
-                status=TASK_DONE if is_done else TASK_TODO,
-                priority="medium",
-                hospital_id=hospital.id if hospital else None,
-                product_id=product.id if product else None,
-                created_by=admin.id,
-                assigned_to=admin.id,
-            )
-            db.session.add(subtask)
-            mark = " ✓" if is_done else ""
-            print(f"       subtask: {sub_title}{mark}")
-            total_subtasks += 1
+        db.session.add(task)
+        mark = " ✓" if is_done else ""
+        h_name = hospital.name if hospital else "—"
+        p_name = product.name if product else "—"
+        print(f"  ADD: [{h_name} / {p_name}] {title}{mark}")
+        created += 1
 
     db.session.commit()
-    print(f"\nDone — {total_parents} parent tasks, {total_subtasks} subtasks created.")
+    print(f"\nDone — {created} created, {skipped} skipped.")
