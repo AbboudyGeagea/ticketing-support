@@ -44,24 +44,6 @@ TASK_TREE = [
         ],
     },
     {
-        "title": "CVIS — RH",
-        "hospital": "RH",
-        "product": "CVIS",
-        "subtasks": [
-            ("ECG worklist (ports)",        False),
-            ("Automatic login (iECG)",      True),   # ✓
-            ("Manual order testing",        False),
-            ("Report (ISCV → Portal)",      False),
-            ("Image in report (Cath)",      False),
-            ("Pending workflow (GE)",       False),
-            ("CD-Direct installation",      False),
-            ("Holters",                     False),
-            ("TAVI study type",             False),
-            ("Analytic reports",            False),
-            ("Formulas",                    False),
-        ],
-    },
-    {
         "title": "SLH",
         "hospital": "SLH",
         "product": None,
@@ -96,18 +78,6 @@ TASK_TREE = [
             ("Application testing",      True),   # ✓
             ("Training / Go-Live",       True),   # ✓
         ],
-    },
-    {
-        "title": "PACS — LAU",
-        "hospital": "LAU",
-        "product": "PACS",
-        "subtasks": [],
-    },
-    {
-        "title": "SMS",
-        "hospital": None,
-        "product": "SMS",
-        "subtasks": [],
     },
     {
         "title": "Pyxis — LAU",
