@@ -18,23 +18,60 @@
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
   <form method="GET" class="flex flex-wrap gap-3 items-end">
     <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
+      <input type="text" name="q" value="{{ filters.q }}" placeholder="Task title…"
+             class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-44">
+    </div>
+    <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Status</label>
       <select name="status" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <option value="">All</option>
-        <option value="todo" {% if filters.status == 'todo' %}selected{% endif %}>To Do</option>
+        <option value="todo"        {% if filters.status == 'todo' %}selected{% endif %}>To Do</option>
         <option value="in_progress" {% if filters.status == 'in_progress' %}selected{% endif %}>In Progress</option>
-        <option value="done" {% if filters.status == 'done' %}selected{% endif %}>Done</option>
+        <option value="done"        {% if filters.status == 'done' %}selected{% endif %}>Done</option>
       </select>
     </div>
     <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Queue</label>
-      <select name="assigned" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-        <option value="me" {% if filters.assigned == 'me' %}selected{% endif %}>Mine</option>
-        <option value="" {% if filters.assigned == '' %}selected{% endif %}>All agents</option>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Priority</label>
+      <select name="priority" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All</option>
+        <option value="low"      {% if filters.priority == 'low' %}selected{% endif %}>Low</option>
+        <option value="medium"   {% if filters.priority == 'medium' %}selected{% endif %}>Medium</option>
+        <option value="high"     {% if filters.priority == 'high' %}selected{% endif %}>High</option>
+        <option value="critical" {% if filters.priority == 'critical' %}selected{% endif %}>Critical</option>
       </select>
     </div>
-    <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Filter</button>
-    <a href="{{ url_for('agent.tasks') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Hospital</label>
+      <select name="hospital_id" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="0">All hospitals</option>
+        {% for h in hospitals %}
+        <option value="{{ h.id }}" {% if filters.hospital_id == h.id %}selected{% endif %}>{{ h.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Product</label>
+      <select name="product_id" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="0">All products</option>
+        {% for p in products %}
+        <option value="{{ p.id }}" {% if filters.product_id == p.id %}selected{% endif %}>{{ p.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Assigned</label>
+      <select name="assigned" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value=""   {% if filters.assigned == '' %}selected{% endif %}>Everyone</option>
+        <option value="me" {% if filters.assigned == 'me' %}selected{% endif %}>Mine</option>
+      </select>
+    </div>
+    <button type="submit"
+            class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+      Filter
+    </button>
+    <a href="{{ url_for('agent.tasks') }}"
+       class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
   </form>
 </div>
 
@@ -44,6 +81,8 @@
     <thead class="bg-slate-50 border-b border-slate-200">
       <tr>
         <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ticket</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned To</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
@@ -68,13 +107,15 @@
           </div>
           {% endif %}
         </td>
+        <td class="px-4 py-3.5 text-slate-600 text-xs">{{ task.hospital.name if task.hospital else '—' }}</td>
+        <td class="px-4 py-3.5 text-slate-500 text-xs">{{ task.product.name if task.product else '—' }}</td>
         <td class="px-4 py-3.5 text-xs font-mono text-slate-500">
           {% if task.ticket %}
           <a href="{{ url_for('agent.ticket_detail', ref=task.ticket.ref) }}" onclick="event.stopPropagation()"
              class="text-primary hover:underline">{{ task.ticket.ref }}</a>
           {% else %}—{% endif %}
         </td>
-        <td class="px-4 py-3.5 text-slate-600">{{ task.assignee.name }}</td>
+        <td class="px-4 py-3.5 text-slate-600 text-xs">{{ task.assignee.name }}</td>
         <td class="px-4 py-3.5">
           <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full badge-{{ task.priority }}">
             {{ task.priority.title() }}
@@ -98,7 +139,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">No tasks found.</td>
+        <td colspan="8" class="px-5 py-10 text-center text-slate-400 text-sm">No tasks found.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -106,7 +147,9 @@
 
   {% if tasks.pages > 1 %}
   <div class="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
-    <p class="text-xs text-slate-500">{{ tasks.total }} tasks total</p>
+    <p class="text-xs text-slate-500">
+      Showing {{ tasks.per_page * (tasks.page - 1) + 1 }}–{{ [tasks.per_page * tasks.page, tasks.total] | min }} of {{ tasks.total }}
+    </p>
     <div class="flex gap-1">
       {% if tasks.has_prev %}
       <a href="{{ url_for('agent.tasks', page=tasks.prev_num, **filters) }}"

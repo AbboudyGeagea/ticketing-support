@@ -668,28 +668,59 @@ def ticket_create_task(ref):
 @agent_required
 def tasks():
     page = request.args.get("page", 1, type=int)
-    status_filter = request.args.get("status", "")
-    assigned_filter = request.args.get("assigned", "me")
+    status_filter   = request.args.get("status", "")
+    priority_filter = request.args.get("priority", "")
+    assigned_filter = request.args.get("assigned", "")
+    hospital_filter = request.args.get("hospital_id", 0, type=int)
+    product_filter  = request.args.get("product_id", 0, type=int)
+    search          = request.args.get("q", "").strip()
 
-    query = Task.query
+    query = Task.query.filter(Task.parent_id.is_(None))
+
     if assigned_filter == "me":
-        query = query.filter_by(assigned_to=current_user.id)
+        query = query.filter(Task.assigned_to == current_user.id)
     if status_filter:
-        query = query.filter_by(status=status_filter)
+        query = query.filter(Task.status == status_filter)
+    if priority_filter:
+        query = query.filter(Task.priority == priority_filter)
+    if hospital_filter:
+        query = query.filter(Task.hospital_id == hospital_filter)
+    if product_filter:
+        query = query.filter(Task.product_id == product_filter)
+    if search:
+        query = query.filter(Task.title.ilike(f"%{search}%"))
 
     tasks_page = (
         query
         .options(
             joinedload(Task.assignee),
             joinedload(Task.ticket),
+            joinedload(Task.hospital),
+            joinedload(Task.product),
         )
         .order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc())
         .paginate(page=page, per_page=25)
     )
-    agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
 
-    return render_template("agent/tasks.html", tasks=tasks_page, agents=agents,
-                           filters={"status": status_filter, "assigned": assigned_filter})
+    agents    = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
+    hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    products  = Product.query.filter_by(active=True).order_by(Product.name).all()
+
+    return render_template(
+        "agent/tasks.html",
+        tasks=tasks_page,
+        agents=agents,
+        hospitals=hospitals,
+        products=products,
+        filters={
+            "status":      status_filter,
+            "priority":    priority_filter,
+            "assigned":    assigned_filter,
+            "hospital_id": hospital_filter,
+            "product_id":  product_filter,
+            "q":           search,
+        },
+    )
 
 
 @bp.route("/tasks/new", methods=["GET", "POST"])
