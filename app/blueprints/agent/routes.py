@@ -382,6 +382,10 @@ def ticket_detail(ref):
     if msg_ids:
         for att in TicketAttachment.query.filter(TicketAttachment.message_id.in_(msg_ids)).all():
             msg_attachments.setdefault(att.message_id, []).append(att)
+    # Ticket-level attachments (submitted with the original portal ticket, message_id=None)
+    ticket_attachments = TicketAttachment.query.filter_by(
+        ticket_id=ticket.id, message_id=None
+    ).all()
 
     reply_form = ReplyForm()
     status_form = StatusForm(status=ticket.status)
@@ -401,6 +405,7 @@ def ticket_detail(ref):
         ticket=ticket,
         messages=messages,
         msg_attachments=msg_attachments,
+        ticket_attachments=ticket_attachments,
         history=history,
         tasks=tasks,
         agents=agents,
@@ -1015,6 +1020,20 @@ def download_attachment(att_id):
     att = TicketAttachment.query.get_or_404(att_id)
     upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], str(att.ticket_id))
     return send_from_directory(upload_dir, att.filename, as_attachment=True, download_name=att.original_name)
+
+
+@bp.route("/attachments/<int:att_id>/view")
+@login_required
+@agent_required
+def view_attachment(att_id):
+    from app.models.attachment import TicketAttachment
+    att = TicketAttachment.query.get_or_404(att_id)
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], str(att.ticket_id))
+    return send_from_directory(
+        upload_dir, att.filename,
+        as_attachment=False,
+        mimetype=att.mimetype or "application/octet-stream",
+    )
 
 
 # ── Bulk Actions ──────────────────────────────────────────────────────────────
