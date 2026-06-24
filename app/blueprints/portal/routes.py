@@ -118,6 +118,13 @@ def ticket_new():
             if tmpl.product_id:
                 form.product_id.data = tmpl.product_id
 
+    # Pre-fill subject when opening a new ticket referencing a closed one
+    related_ref = request.args.get("related_ref", "")
+    if related_ref and request.method == "GET":
+        related = Ticket.query.filter_by(ref=related_ref).first()
+        if related and related.hospital_id == current_user.hospital_id:
+            form.subject.data = f"Re: {related.subject}"
+
     if form.validate_on_submit():
         valid_product_ids = {p.id for p in current_user.products}
         if form.product_id.data not in valid_product_ids:

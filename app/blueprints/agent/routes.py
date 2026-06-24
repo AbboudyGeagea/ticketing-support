@@ -171,6 +171,13 @@ def tickets():
     assigned_filter = request.args.get("assigned", "")
     search = request.args.get("q", "").strip()
 
+    sort_by = request.args.get("sort", "updated")
+    sort_dir = request.args.get("order", "desc")
+    if sort_by not in ("updated", "created", "priority", "status", "ref"):
+        sort_by = "updated"
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"
+
     query = Ticket.query
 
     if status_filters:
@@ -192,6 +199,22 @@ def tickets():
             or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
         )
 
+    _priority_order = db.case(
+        (Ticket.priority == "urgent", 1),
+        (Ticket.priority == "high", 2),
+        (Ticket.priority == "medium", 3),
+        (Ticket.priority == "low", 4),
+        else_=5,
+    )
+    _ticket_sort_col = {
+        "updated":  Ticket.updated_at,
+        "created":  Ticket.created_at,
+        "priority": _priority_order,
+        "status":   Ticket.status,
+        "ref":      Ticket.id,
+    }[sort_by]
+    _ticket_order = _ticket_sort_col.asc() if sort_dir == "asc" else _ticket_sort_col.desc()
+
     tickets_page = (
         query
         .options(
@@ -200,7 +223,7 @@ def tickets():
             joinedload(Ticket.creator),
             joinedload(Ticket.assignee),
         )
-        .order_by(Ticket.updated_at.desc())
+        .order_by(_ticket_order)
         .paginate(page=page, per_page=25)
     )
 
@@ -260,6 +283,8 @@ def tickets():
             "q": search,
         },
         filter_params=filter_params,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
         saved_filters=saved_filters,
         last_msg_map=last_msg_map,
     )
@@ -279,6 +304,14 @@ def ticket_new():
     form.customer_id.choices = [(0, "— No reporter —")]
     form.product_id.choices = [(0, "— Select product —")]
 
+    related_ref = ""
+    if request.method == "GET":
+        related_ref = request.args.get("related_ref", "")
+        if related_ref:
+            related = Ticket.query.filter_by(ref=related_ref).first()
+            if related:
+                form.subject.data = f"Re: {related.subject}"
+
     if form.validate_on_submit():
         hospital = Hospital.query.get_or_404(form.hospital_id.data)
         # Re-validate dynamic choices
@@ -290,7 +323,7 @@ def ticket_new():
 
         if product_id is None:
             form.product_id.errors = ["Please select a product."]
-            return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
+            return render_template("agent/ticket_new.html", form=form, hospitals=hospitals, related_ref=related_ref)
 
         from app.models.ticket import Ticket, TicketMessage
         ticket = Ticket(
@@ -341,7 +374,7 @@ def ticket_new():
         flash(f"Ticket {ticket.ref} created.", "success")
         return redirect(url_for("agent.ticket_detail", ref=ticket.ref))
 
-    return render_template("agent/ticket_new.html", form=form, hospitals=hospitals)
+    return render_template("agent/ticket_new.html", form=form, hospitals=hospitals, related_ref=related_ref)
 
 
 @bp.route("/api/hospitals/<int:hospital_id>/customers")
@@ -423,6 +456,9 @@ def ticket_detail(ref):
 @agent_required
 def ticket_reply(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.status == "closed":
+        flash("Cannot reply to a closed ticket. Please open a new ticket.", "warning")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
     form = ReplyForm()
     if form.validate_on_submit():
         msg = TicketMessage(
@@ -494,6 +530,9 @@ def ticket_reply(ref):
 @agent_required
 def ticket_status(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.status == "closed":
+        flash("Closed tickets cannot be reopened. Open a new ticket instead.", "warning")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
     new_status = request.form.get("status")
 
     if new_status == "escalated":
@@ -723,6 +762,37 @@ def tasks():
     if search:
         query = query.filter(Task.title.ilike(f"%{search}%"))
 
+    task_sort_by = request.args.get("sort", "deadline")
+    task_sort_dir = request.args.get("order", "asc")
+    if task_sort_by not in ("deadline", "created", "priority", "status", "title"):
+        task_sort_by = "deadline"
+    if task_sort_dir not in ("asc", "desc"):
+        task_sort_dir = "asc"
+
+    _task_priority_order = db.case(
+        (Task.priority == "critical", 1),
+        (Task.priority == "high", 2),
+        (Task.priority == "medium", 3),
+        (Task.priority == "low", 4),
+        else_=5,
+    )
+    _task_status_order = db.case(
+        (Task.status == TASK_IN_PROGRESS, 1),
+        (Task.status == TASK_TODO, 2),
+        (Task.status == TASK_DONE, 3),
+        else_=4,
+    )
+    if task_sort_by == "deadline":
+        _task_order_expr = nulls_last(Task.deadline.asc() if task_sort_dir == "asc" else Task.deadline.desc())
+    else:
+        _task_sort_col = {
+            "created":  Task.created_at,
+            "priority": _task_priority_order,
+            "status":   _task_status_order,
+            "title":    Task.title,
+        }[task_sort_by]
+        _task_order_expr = _task_sort_col.asc() if task_sort_dir == "asc" else _task_sort_col.desc()
+
     tasks_page = (
         query
         .options(
@@ -731,13 +801,21 @@ def tasks():
             joinedload(Task.hospital),
             joinedload(Task.product),
         )
-        .order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc())
+        .order_by(_task_order_expr)
         .paginate(page=page, per_page=25)
     )
 
     agents    = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).order_by(User.name).all()
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
     products  = Product.query.filter_by(active=True).order_by(Product.name).all()
+
+    task_filter_params: dict = {}
+    if status_filter:    task_filter_params["status"] = status_filter
+    if priority_filter:  task_filter_params["priority"] = priority_filter
+    if assigned_filter:  task_filter_params["assigned"] = assigned_filter
+    if hospital_filter:  task_filter_params["hospital_id"] = hospital_filter
+    if product_filter:   task_filter_params["product_id"] = product_filter
+    if search:           task_filter_params["q"] = search
 
     return render_template(
         "agent/tasks.html",
@@ -753,6 +831,9 @@ def tasks():
             "product_id":  product_filter,
             "q":           search,
         },
+        filter_params=task_filter_params,
+        sort_by=task_sort_by,
+        sort_dir=task_sort_dir,
     )
 
 

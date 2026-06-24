@@ -85,3 +85,36 @@ def check_sla_escalations():
     if breached:
         db.session.commit()
         logger.info("Marked %d ticket(s) as SLA breached", len(breached))
+
+
+@celery.task(name="app.tasks.reminder_tasks.auto_close_resolved_tickets")
+def auto_close_resolved_tickets():
+    """Auto-close tickets that have been resolved for more than 2 days without customer response."""
+    from datetime import timedelta
+    from app.models.ticket import Ticket, TicketHistory
+    from app.extensions import db
+
+    cutoff = datetime.utcnow() - timedelta(days=2)
+    tickets = Ticket.query.filter(
+        Ticket.status == "resolved",
+        Ticket.updated_at < cutoff,
+    ).all()
+
+    now = datetime.utcnow()
+    for ticket in tickets:
+        ticket.status = "closed"
+        ticket.closed_at = now
+        ticket.updated_at = now
+        db.session.add(TicketHistory(
+            ticket_id=ticket.id,
+            agent_id=None,
+            action="status_change",
+            old_value="resolved",
+            new_value="closed",
+        ))
+        logger.info("Auto-closed ticket %s (resolved for >2 days)", ticket.ref)
+
+    if tickets:
+        db.session.commit()
+        logger.info("Auto-closed %d resolved ticket(s)", len(tickets))
+    return len(tickets)

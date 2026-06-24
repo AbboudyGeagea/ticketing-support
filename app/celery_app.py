@@ -31,6 +31,10 @@ def make_celery(app):
                 "task": "app.tasks.reminder_tasks.check_sla_escalations",
                 "schedule": 900,  # every 15 minutes
             },
+            "auto-close-resolved": {
+                "task": "app.tasks.reminder_tasks.auto_close_resolved_tickets",
+                "schedule": 3600,  # every hour
+            },
         },
     )
 

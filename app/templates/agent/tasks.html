@@ -17,6 +17,8 @@
 <!-- Filters -->
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
   <form method="GET" class="flex flex-wrap gap-3 items-end">
+    <input type="hidden" name="sort" value="{{ sort_by }}">
+    <input type="hidden" name="order" value="{{ sort_dir }}">
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
       <input type="text" name="q" value="{{ filters.q }}" placeholder="Task title…"
@@ -78,16 +80,25 @@
 <!-- Table -->
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
   <table class="w-full text-sm">
+    {% macro tsort(col, label, px="px-4") %}
+    {%- set ndir = 'asc' if (sort_by == col and sort_dir == 'desc') else 'desc' -%}
+    <th class="text-left {{ px }} py-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap">
+      <a href="{{ url_for('agent.tasks', sort=col, order=ndir, **filter_params) }}"
+         class="inline-flex items-center gap-1 transition-colors {% if sort_by == col %}text-slate-800{% else %}text-slate-500 hover:text-slate-700{% endif %}">
+        {{- label -}}{% if sort_by == col %}<span class="text-[10px]">{{ '▲' if sort_dir == 'asc' else '▼' }}</span>{% else %}<span class="text-slate-300 text-[10px]">⇅</span>{% endif %}
+      </a>
+    </th>
+    {% endmacro %}
     <thead class="bg-slate-50 border-b border-slate-200">
       <tr>
-        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Task</th>
+        {{ tsort('title',    'Task',        'px-5') }}
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Hospital</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Product</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Ticket</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Assigned To</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Priority</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Deadline</th>
+        {{ tsort('priority', 'Priority') }}
+        {{ tsort('status',   'Status') }}
+        {{ tsort('deadline', 'Deadline') }}
       </tr>
     </thead>
     <tbody class="divide-y divide-slate-100">
@@ -152,11 +163,11 @@
     </p>
     <div class="flex gap-1">
       {% if tasks.has_prev %}
-      <a href="{{ url_for('agent.tasks', page=tasks.prev_num, **filters) }}"
+      <a href="{{ url_for('agent.tasks', page=tasks.prev_num, sort=sort_by, order=sort_dir, **filter_params) }}"
          class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Prev</a>
       {% endif %}
       {% if tasks.has_next %}
-      <a href="{{ url_for('agent.tasks', page=tasks.next_num, **filters) }}"
+      <a href="{{ url_for('agent.tasks', page=tasks.next_num, sort=sort_by, order=sort_dir, **filter_params) }}"
          class="px-3 py-1.5 text-xs border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors">Next</a>
       {% endif %}
     </div>

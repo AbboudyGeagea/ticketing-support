@@ -118,7 +118,7 @@
 </div>
 {% else %}
 <div class="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-sm text-slate-500 text-center">
-  This ticket is closed. <a href="{{ url_for('portal.ticket_new') }}" class="text-primary hover:underline">Open a new ticket</a> if you need further assistance.
+  This ticket is closed. <a href="{{ url_for('portal.ticket_new', related_ref=ticket.ref) }}" class="text-primary hover:underline">Open a new ticket</a> if you need further assistance.
 </div>
 {% endif %}
 
