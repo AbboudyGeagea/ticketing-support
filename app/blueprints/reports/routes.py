@@ -7,8 +7,12 @@ from app.models.ticket import Ticket, TicketMessage
 from app.models.task import Task, TimeEntry
 from app.models.user import User
 from app.models.hospital import Hospital
+from app.models.csat_feedback import CSATFeedback
 from app.extensions import db
 from functools import wraps
+
+_SEVERITY_LABELS = {"urgent": "Critical", "high": "High", "medium": "Medium", "low": "Low"}
+_SEVERITY_COLORS = {"urgent": "#EF4444", "high": "#F97316", "medium": "#EAB308", "low": "#22C55E"}
 
 
 def agent_required(f):
@@ -118,15 +122,55 @@ def dashboard():
     )
     status_data = [{"name": s, "value": c} for s, c in status_counts]
 
-    # Metric 6 — By Priority (current snapshot)
+    # KPI: Incident Severity — priority distribution (current snapshot)
     priority_counts = (
         db.session.query(Ticket.priority, func.count(Ticket.id))
         .group_by(Ticket.priority)
         .all()
     )
-    priority_data = [{"name": p, "value": c} for p, c in priority_counts]
+    incident_severity = [
+        {
+            "name": _SEVERITY_LABELS.get(p, p.capitalize()),
+            "value": c,
+            "itemStyle": {"color": _SEVERITY_COLORS.get(p, "#94A3B8")},
+        }
+        for p, c in priority_counts
+    ]
 
-    # Metric 7 — SLA Breach rate
+    # KPI: First Response Time — avg hours for tickets with a first response
+    avg_frt_raw = (
+        db.session.query(
+            func.avg(
+                func.extract("epoch", Ticket.first_response_at - Ticket.created_at) / 3600
+            )
+        )
+        .filter(
+            Ticket.first_response_at.isnot(None),
+            Ticket.created_at >= start_date,
+        )
+        .scalar()
+    )
+    avg_frt = round(float(avg_frt_raw), 1) if avg_frt_raw is not None else None
+
+    # KPI: Ticket Backlog — open tickets (not resolved/closed)
+    ticket_backlog = Ticket.query.filter(
+        Ticket.status.notin_(["resolved", "closed"])
+    ).count()
+
+    # KPI: Escalation Rate — escalated / all open tickets
+    escalated_count = Ticket.query.filter(Ticket.status == "escalated").count()
+    escalation_rate = round(escalated_count / ticket_backlog * 100, 1) if ticket_backlog > 0 else 0.0
+
+    # KPI: CSAT — average rating (1–5) from submitted surveys
+    csat_raw = (
+        db.session.query(func.avg(CSATFeedback.rating))
+        .filter(CSATFeedback.rating.isnot(None))
+        .scalar()
+    )
+    csat_score = round(float(csat_raw), 1) if csat_raw is not None else None
+    csat_responses = CSATFeedback.query.filter(CSATFeedback.rating.isnot(None)).count()
+
+    # Metric: SLA Breach rate
     _active_statuses = ["new", "assigned", "awaiting_info", "in_progress", "escalated"]
     sla_breached = Ticket.query.filter(
         Ticket.status.in_(_active_statuses),
@@ -172,6 +216,11 @@ def dashboard():
         days=days,
         total_tickets=total_tickets,
         avg_tat=avg_tat,
+        avg_frt=avg_frt,
+        ticket_backlog=ticket_backlog,
+        escalation_rate=escalation_rate,
+        csat_score=csat_score,
+        csat_responses=csat_responses,
         breach_rate=breach_rate,
         resolution_rate=resolution_rate,
         chart_dates=chart_dates,
@@ -180,7 +229,7 @@ def dashboard():
         tat_values=tat_values,
         agent_activity=agent_activity,
         status_data=status_data,
-        priority_data=priority_data,
+        incident_severity=incident_severity,
         hosp_names=hosp_names,
         hosp_values=hosp_values,
         source_data=source_data,
