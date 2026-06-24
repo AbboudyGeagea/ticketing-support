@@ -1424,9 +1424,9 @@ def save_filter():
     statuses = request.form.getlist("status")
     if statuses:
         params["status"] = statuses
-    for k in ("priority", "hospital_id", "assigned", "q"):
+    for k in ("priority", "hospital_id", "product_id", "source", "assigned", "q"):
         v = request.form.get(k, "")
-        if v:
+        if v and v != "0":
             params[k] = v
     if not name:
         flash("Please enter a name for this filter.", "warning")

@@ -34,21 +34,21 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
 <div class="flex flex-wrap gap-2 mb-3">
   <span class="text-xs text-slate-500 self-center">Saved views:</span>
   {% for sf in saved_filters %}
-  <a href="{{ url_for('agent.tickets', **sf.params) }}"
-     class="inline-flex items-center gap-1.5 text-xs bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg transition-colors">
-    {{ sf.name }}
+  <span class="inline-flex items-center text-xs bg-white border border-slate-200 rounded-lg transition-colors hover:bg-slate-50">
+    <a href="{{ url_for('agent.tickets', **sf.params) }}"
+       class="text-slate-600 px-3 py-1.5">{{ sf.name }}</a>
     <form method="POST" action="{{ url_for('agent.delete_saved_filter', filter_id=sf.id) }}" class="inline" onsubmit="return confirm('Delete this filter?')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="text-slate-300 hover:text-red-400 ml-1">×</button>
+      <button type="submit" class="text-slate-300 hover:text-red-400 pr-2 py-1.5">×</button>
     </form>
-  </a>
+  </span>
   {% endfor %}
 </div>
 {% endif %}
 
 <!-- Filters -->
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
-  <form method="GET" class="flex flex-wrap gap-3 items-end">
+  <form id="filter-form" method="GET" class="flex flex-wrap gap-3 items-end">
     <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Search</label>
       <input type="text" name="q" value="{{ filters.q }}" placeholder="Subject or ref…"
@@ -131,27 +131,18 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
       Filter
     </button>
     <a href="{{ url_for('agent.tickets') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
-    <div>
-      <label class="block text-xs font-medium text-slate-500 mb-1">Save view</label>
-      <div class="flex gap-1">
-        <input type="text" name="filter_name" placeholder="View name…" form="save-filter-form"
-               class="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-28">
-        <button type="submit" form="save-filter-form"
-                class="border border-slate-300 bg-white text-slate-600 text-sm px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">Save</button>
-      </div>
-    </div>
   </form>
+  <div class="flex items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+    <span class="text-xs text-slate-400 shrink-0">Save view:</span>
+    <form id="save-filter-form" method="POST" action="{{ url_for('agent.save_filter') }}" class="flex gap-1">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="filter_name" placeholder="View name…"
+             class="border border-slate-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary w-36">
+      <button type="submit"
+              class="border border-slate-300 bg-white text-slate-600 text-sm px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">Save</button>
+    </form>
+  </div>
 </div>
-
-<!-- Save Filter Form (hidden, referenced by the Save button above) -->
-<form id="save-filter-form" method="POST" action="{{ url_for('agent.save_filter') }}">
-  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-  {% for k, v in filter_params.items() %}
-    {%- if k == 'status' -%}
-      {%- for slug in v %}<input type="hidden" name="status" value="{{ slug }}">{%- endfor -%}
-    {%- else -%}<input type="hidden" name="{{ k }}" value="{{ v }}">{%- endif -%}
-  {% endfor %}
-</form>
 
 <!-- Bulk Action Bar -->
 <div id="bulk-bar" class="hidden bg-primary text-white rounded-xl px-5 py-3 mb-4 flex items-center gap-3">
@@ -322,5 +313,24 @@ function clearSelection() {
   document.querySelectorAll('.ticket-checkbox, #select-all').forEach(cb => cb.checked = false);
   document.getElementById('bulk-bar').classList.add('hidden');
 }
+
+document.getElementById('save-filter-form').addEventListener('submit', function() {
+  this.querySelectorAll('[data-dyn]').forEach(function(el) { el.remove(); });
+  var ff = document.getElementById('filter-form');
+  var sf = this;
+  ff.querySelectorAll('input[name="status"]:checked').forEach(function(cb) {
+    var inp = document.createElement('input');
+    inp.type = 'hidden'; inp.name = 'status'; inp.value = cb.value; inp.dataset.dyn = '1';
+    sf.appendChild(inp);
+  });
+  ['priority', 'hospital_id', 'product_id', 'source', 'assigned', 'q'].forEach(function(name) {
+    var el = ff.querySelector('[name="' + name + '"]');
+    if (el && el.value && el.value !== '0') {
+      var inp = document.createElement('input');
+      inp.type = 'hidden'; inp.name = name; inp.value = el.value; inp.dataset.dyn = '1';
+      sf.appendChild(inp);
+    }
+  });
+});
 </script>
 {% endblock %}
