@@ -166,6 +166,8 @@ def tickets():
     status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
+    product_filter = request.args.get("product_id", 0, type=int)
+    source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     search = request.args.get("q", "").strip()
 
@@ -177,6 +179,10 @@ def tickets():
         query = query.filter_by(priority=priority_filter)
     if hospital_filter:
         query = query.filter_by(hospital_id=hospital_filter)
+    if product_filter:
+        query = query.filter_by(product_id=product_filter)
+    if source_filter:
+        query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
         query = query.filter_by(assigned_to=current_user.id)
     elif assigned_filter == "unassigned":
@@ -212,6 +218,7 @@ def tickets():
             last_msg_map[_m.ticket_id] = _m
 
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
+    products = Product.query.filter_by(active=True).order_by(Product.name).all()
 
     from app.models.saved_filter import SavedFilter
     import json as _json
@@ -219,19 +226,40 @@ def tickets():
     for sf in saved_filters:
         sf.params = _json.loads(sf.filter_params)
 
+    # Clean dict for URL generation — only include active (non-empty/non-zero) values
+    filter_params: dict = {}
+    if status_filters:
+        filter_params["status"] = status_filters
+    if priority_filter:
+        filter_params["priority"] = priority_filter
+    if hospital_filter:
+        filter_params["hospital_id"] = hospital_filter
+    if product_filter:
+        filter_params["product_id"] = product_filter
+    if source_filter:
+        filter_params["source"] = source_filter
+    if assigned_filter:
+        filter_params["assigned"] = assigned_filter
+    if search:
+        filter_params["q"] = search
+
     return render_template(
         "agent/tickets.html",
         tickets=tickets_page,
         hospitals=hospitals,
+        products=products,
         statuses=ALL_STATUSES,
         priorities=ALL_PRIORITIES,
         filters={
             "status": status_filters,
             "priority": priority_filter,
             "hospital_id": hospital_filter,
+            "product_id": product_filter,
+            "source": source_filter,
             "assigned": assigned_filter,
             "q": search,
         },
+        filter_params=filter_params,
         saved_filters=saved_filters,
         last_msg_map=last_msg_map,
     )
@@ -1315,6 +1343,8 @@ def tickets_export():
     status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
+    product_filter = request.args.get("product_id", 0, type=int)
+    source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     search = request.args.get("q", "").strip()
 
@@ -1325,6 +1355,10 @@ def tickets_export():
         query = query.filter_by(priority=priority_filter)
     if hospital_filter:
         query = query.filter_by(hospital_id=hospital_filter)
+    if product_filter:
+        query = query.filter_by(product_id=product_filter)
+    if source_filter:
+        query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
         query = query.filter_by(assigned_to=current_user.id)
     elif assigned_filter == "unassigned":

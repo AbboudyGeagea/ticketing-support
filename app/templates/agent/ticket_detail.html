@@ -10,13 +10,22 @@
 
     <!-- Left: back link + ref + subject -->
     <div class="min-w-0">
-      <a href="{{ url_for('agent.tickets') }}"
+      <a href="{{ url_for('agent.tickets') }}" id="back-to-tickets"
          class="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-slate-700 transition-colors mb-2">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
         </svg>
         Back to tickets
       </a>
+      <script>
+      (function () {
+        var ref = document.referrer;
+        if (ref && ref.startsWith(window.location.origin) && ref.indexOf('/tickets') !== -1) {
+          var a = document.getElementById('back-to-tickets');
+          if (a) a.href = ref;
+        }
+      })();
+      </script>
       <div class="flex flex-wrap items-baseline gap-3">
         <h1 class="font-mono text-2xl font-black text-slate-800 tracking-tight">#{{ ticket.ref }}</h1>
         <p class="text-base text-slate-600 truncate max-w-xl">{{ ticket.subject }}</p>
