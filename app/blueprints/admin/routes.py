@@ -340,14 +340,20 @@ def user_edit(hospital_id, user_id):
     if request.method == "GET":
         form.product_ids.data = [p.id for p in edit_user.products]
     if form.validate_on_submit():
-        edit_user.name = form.name.data
-        edit_user.active = form.active.data
-        valid_ids = {p.id for p in hospital.products}
-        selected_ids = set(form.product_ids.data or []) & valid_ids
-        edit_user.products = Product.query.filter(Product.id.in_(selected_ids)).all()
-        db.session.commit()
-        flash("User updated.", "success")
-        return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id))
+        new_email = form.email.data.lower().strip()
+        duplicate = User.query.filter(User.email == new_email, User.id != edit_user.id).first()
+        if duplicate:
+            form.email.errors.append("This email is already registered to another account.")
+        else:
+            edit_user.name = form.name.data
+            edit_user.email = new_email
+            edit_user.active = form.active.data
+            valid_ids = {p.id for p in hospital.products}
+            selected_ids = set(form.product_ids.data or []) & valid_ids
+            edit_user.products = Product.query.filter(Product.id.in_(selected_ids)).all()
+            db.session.commit()
+            flash("User updated.", "success")
+            return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id))
     return render_template("admin/user_form.html", form=form, hospital=hospital,
                            edit_user=edit_user, hospital_products=hospital_products)
 
