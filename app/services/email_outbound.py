@@ -183,8 +183,8 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
     agent_ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
     portal_ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
 
-    # Notify assigned agent (skip if they assigned themselves)
-    if assignee and ticket.assigned_to != assigned_by_id:
+    # Notify assigned agent (skip if they assigned themselves, or if viewer)
+    if assignee and ticket.assigned_to != assigned_by_id and not assignee.is_viewer:
         agent_ctx = dict(ticket=ticket, assignee=assignee, assigned_by=assigner, ticket_url=agent_ticket_url)
         subject, html = _render_db_template("ticket_assigned_agent", **agent_ctx)
         if not html:
@@ -261,7 +261,7 @@ def notify_customer_reply(ticket, message):
 def send_task_reminder(task):
     from app.models.user import User
     assignee = User.query.get(task.assigned_to)
-    if not assignee:
+    if not assignee or assignee.is_viewer:
         return
     subject = f"[Reminder] Task due: {task.title[:60]}"
     html = render_template("emails/task_reminder.html", task=task)
@@ -269,7 +269,7 @@ def send_task_reminder(task):
 
 
 def notify_secondary_assignee(task):
-    if not task.secondary_assignee or not task.secondary_assignee.email:
+    if not task.secondary_assignee or not task.secondary_assignee.email or task.secondary_assignee.is_viewer:
         return
     subject = f"[{task.ref}] You were assigned as a secondary resource"
     html = render_template("emails/task_secondary_assigned.html", task=task)
@@ -310,9 +310,10 @@ def notify_customer_resolved_confirmation(ticket):
 
 def notify_sla_breach(ticket):
     from app.models.user import User
-    if ticket.assignee:
+    if ticket.assignee and not ticket.assignee.is_viewer:
         recipients = [ticket.assignee.email]
     else:
+        # assignee is a viewer (no email) or unassigned — broadcast to all active non-viewer agents
         agents = User.query.filter(User.role.in_(["agent", "admin"]), User.active == True).all()
         recipients = [a.email for a in agents]
     if not recipients:

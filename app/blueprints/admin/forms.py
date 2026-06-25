@@ -36,7 +36,7 @@ class CustomerUserForm(FlaskForm):
 class AgentForm(FlaskForm):
     name = StringField("Full Name", validators=[DataRequired(), Length(max=200)])
     email = StringField("Email", validators=[DataRequired(), Email()])
-    role = SelectField("Role", choices=[("agent", "Agent"), ("admin", "Admin")], default="agent")
+    role = SelectField("Role", choices=[("agent", "Agent"), ("admin", "Admin"), ("viewer", "Viewer")], default="agent")
     submit = SubmitField("Create Agent")
 
     def validate_email(self, field):

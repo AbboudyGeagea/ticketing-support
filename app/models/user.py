@@ -48,11 +48,15 @@ class User(UserMixin, db.Model):
 
     @property
     def is_agent(self):
-        return self.role in ("agent", "admin")
+        return self.role in ("agent", "admin", "viewer")
 
     @property
     def is_admin(self):
         return self.role == "admin"
+
+    @property
+    def is_viewer(self):
+        return self.role == "viewer"
 
     @property
     def is_customer(self):
