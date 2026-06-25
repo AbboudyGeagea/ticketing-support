@@ -451,6 +451,17 @@
                  class="text-primary hover:underline font-medium">{{ ticket.hospital.name }}</a>
             </dd>
           </div>
+          {% if ticket.creator %}
+          <div class="flex justify-between gap-2">
+            <dt class="text-slate-500 flex-shrink-0">Reporter</dt>
+            <dd class="text-right">
+              <span class="font-medium text-slate-800">{{ ticket.creator.name }}</span>
+              <span class="block text-xs text-slate-400 break-all">{{ ticket.creator.email }}</span>
+              <a href="{{ url_for('agent.customer_edit', user_id=ticket.creator.id) }}"
+                 class="text-xs text-primary hover:underline mt-0.5 inline-block">Edit</a>
+            </dd>
+          </div>
+          {% endif %}
           {% if ticket.product %}
           <div class="flex justify-between gap-2">
             <dt class="text-slate-500 flex-shrink-0">Product</dt>

@@ -1365,6 +1365,34 @@ def ticket_remove_collaborator(ref, collab_id):
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
+# ── Customer management ───────────────────────────────────────────────────────
+
+@bp.route("/customers/<int:user_id>/edit", methods=["GET", "POST"])
+@login_required
+@agent_required
+def customer_edit(user_id):
+    customer = User.query.get_or_404(user_id)
+    if customer.role != "customer":
+        abort(404)
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        if not name or not email:
+            flash("Name and email are required.", "danger")
+        else:
+            existing = User.query.filter(User.email == email, User.id != customer.id).first()
+            if existing:
+                flash("That email is already in use by another account.", "danger")
+            else:
+                customer.name = name
+                customer.email = email
+                db.session.commit()
+                flash("Customer updated.", "success")
+                next_url = request.form.get("next") or url_for("agent.tickets")
+                return redirect(next_url)
+    return render_template("agent/customer_edit.html", customer=customer)
+
+
 # ── Availability ──────────────────────────────────────────────────────────────
 
 @bp.route("/availability", methods=["POST"])
