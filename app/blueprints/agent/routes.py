@@ -178,7 +178,7 @@ def tickets():
     if sort_dir not in ("asc", "desc"):
         sort_dir = "desc"
 
-    query = Ticket.query
+    query = Ticket.query.filter(Ticket.phi_flagged == False)
 
     if status_filters:
         query = query.filter(Ticket.status.in_(status_filters))
@@ -266,6 +266,13 @@ def tickets():
     if search:
         filter_params["q"] = search
 
+    phi_tickets = (
+        Ticket.query.filter(Ticket.phi_flagged == True)
+        .options(joinedload(Ticket.hospital), joinedload(Ticket.phi_flagger))
+        .order_by(Ticket.phi_flagged_at.desc())
+        .all()
+    )
+
     return render_template(
         "agent/tickets.html",
         tickets=tickets_page,
@@ -287,6 +294,7 @@ def tickets():
         sort_dir=sort_dir,
         saved_filters=saved_filters,
         last_msg_map=last_msg_map,
+        phi_tickets=phi_tickets,
     )
 
 
@@ -403,6 +411,9 @@ def api_hospital_products(hospital_id):
 @agent_required
 def ticket_detail(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.phi_flagged:
+        flash("This ticket has been flagged as containing PHI and is archived. Its contents are not accessible.", "danger")
+        return redirect(url_for("agent.tickets"))
     messages = ticket.messages.all()
     history = ticket.history.all()
     tasks = ticket.tasks.order_by(Task.created_at.desc()).all()
@@ -1374,6 +1385,32 @@ def ticket_remove_collaborator(ref, collab_id):
     db.session.commit()
     flash("Collaborator removed.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
+
+
+# ── PHI Flag ──────────────────────────────────────────────────────────────────
+
+@bp.route("/tickets/<ref>/phi-flag", methods=["POST"])
+@login_required
+@agent_required
+def ticket_phi_flag(ref):
+    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    if ticket.phi_flagged:
+        flash("This ticket is already flagged as PHI.", "warning")
+        return redirect(url_for("agent.tickets"))
+    ticket.phi_flagged = True
+    ticket.phi_flagged_at = datetime.utcnow()
+    ticket.phi_flagged_by = current_user.id
+    ticket.updated_at = datetime.utcnow()
+    db.session.add(TicketHistory(
+        ticket_id=ticket.id,
+        agent_id=current_user.id,
+        action="phi_flagged",
+        old_value=None,
+        new_value="PHI — Archived",
+    ))
+    db.session.commit()
+    flash(f"Ticket {ticket.ref} has been flagged as PHI and archived. It is no longer accessible.", "success")
+    return redirect(url_for("agent.tickets"))
 
 
 # ── Customer management ───────────────────────────────────────────────────────

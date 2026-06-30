@@ -121,6 +121,18 @@
       </form>
       {% endif %}
 
+      <form method="POST" action="{{ url_for('agent.ticket_phi_flag', ref=ticket.ref) }}"
+            onsubmit="return confirm('⚠️ Flag this ticket as containing PHI?\n\nThis will permanently archive it. The ticket will no longer be accessible to anyone. This action cannot be undone.')">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="inline-flex items-center gap-1.5 text-sm font-medium bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-300 px-3.5 py-2 rounded-lg transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+          </svg>
+          Flag PHI
+        </button>
+      </form>
+
     </div>
   </div>
 

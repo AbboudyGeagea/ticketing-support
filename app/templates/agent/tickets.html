@@ -277,6 +277,41 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
   </div>
 
 </form>
+
+{% if phi_tickets %}
+<div class="mt-6">
+  <details class="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+    <summary class="flex items-center gap-2 px-5 py-3 cursor-pointer select-none text-sm font-medium text-amber-700 hover:bg-amber-50 transition-colors">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+      PHI-Flagged &amp; Archived Tickets ({{ phi_tickets | length }})
+      <span class="ml-auto text-xs font-normal text-amber-500">Contents not accessible — click to see list</span>
+    </summary>
+    <table class="w-full text-sm border-t border-amber-100">
+      <thead class="bg-amber-50">
+        <tr>
+          <th class="text-left px-5 py-2.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">Ref</th>
+          <th class="text-left px-4 py-2.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">Hospital</th>
+          <th class="text-left px-4 py-2.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">Flagged by</th>
+          <th class="text-left px-4 py-2.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">Flagged at</th>
+          <th class="text-left px-4 py-2.5 text-xs font-semibold text-amber-700 uppercase tracking-wider">Subject</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-amber-50">
+        {% for t in phi_tickets %}
+        <tr class="opacity-60">
+          <td class="px-5 py-3 font-mono text-xs text-amber-700">{{ t.ref }}</td>
+          <td class="px-4 py-3 text-xs text-slate-500">{{ t.hospital.name }}</td>
+          <td class="px-4 py-3 text-xs text-slate-500">{{ t.phi_flagger.name if t.phi_flagger else '—' }}</td>
+          <td class="px-4 py-3 text-xs text-slate-400">{{ t.phi_flagged_at.strftime('%b %d, %Y %H:%M') if t.phi_flagged_at else '—' }}</td>
+          <td class="px-4 py-3 text-xs text-slate-400 italic">[PHI — content archived]</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block scripts %}
