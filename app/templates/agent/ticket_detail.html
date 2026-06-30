@@ -508,10 +508,17 @@
             <button type="submit" class="bg-primary text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-primary-dark transition-colors">Set</button>
           </div>
           <div id="escalation-number-field" class="{{ '' if ticket.status == 'escalated' else 'hidden' }}">
-            <input type="text" name="escalation_number" value="{{ ticket.escalation_number or '' }}"
+            {% if ticket.escalation_number %}
+            <div class="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-700 font-mono">
+              {{ ticket.escalation_number }}
+            </div>
+            <input type="hidden" name="escalation_number" value="{{ ticket.escalation_number }}">
+            {% else %}
+            <input type="text" name="escalation_number" value=""
                    placeholder="Escalation number (required)"
                    class="w-full border border-red-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
             <p class="text-xs text-red-500 mt-1">Required when escalating to a vendor.</p>
+            {% endif %}
           </div>
         </form>
         {% endif %}
