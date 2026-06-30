@@ -147,7 +147,7 @@
   window.smoothConfirm = function (opts) { return openModal(opts); };
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-confirm]');
-    if (!el || el.type === 'submit') return;
+    if (!el || el.type === 'submit' || el.tagName === 'FORM') return;
     e.preventDefault();
     openModal({ title: el.dataset.confirmTitle, body: el.dataset.confirm, ok: el.dataset.confirmOk || 'Confirm', variant: el.dataset.confirmVariant || 'info' })
       .then(function (ok) { if (!ok) return; if (el.tagName === 'A') window.location = el.href; else if (el.form) el.form.submit(); });

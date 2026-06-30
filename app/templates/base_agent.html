@@ -373,8 +373,8 @@
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-confirm]');
     if (!el) return;
-    /* If it's inside a form submit-button, let the submit handler deal with it */
-    if (el.type === 'submit') return;
+    /* Let the submit handler deal with forms and submit-buttons that have data-confirm */
+    if (el.type === 'submit' || el.tagName === 'FORM') return;
     e.preventDefault();
     openModal({
       title:   el.dataset.confirmTitle   || 'Are you sure?',
