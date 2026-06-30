@@ -1,13 +1,13 @@
 """add phi flag columns to tickets
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: b8c9d0e1f2a3
 Revises: f5a6b7c8d9e0
 Create Date: 2026-06-25
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'a1b2c3d4e5f6'
+revision = 'b8c9d0e1f2a3'
 down_revision = 'f5a6b7c8d9e0'
 branch_labels = None
 depends_on = None
