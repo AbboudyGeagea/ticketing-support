@@ -536,11 +536,16 @@ def ticket_status(ref):
     new_status = request.form.get("status")
 
     if new_status == "escalated":
-        esc_number = request.form.get("escalation_number", "").strip()
-        if esc_number:
-            ticket.escalation_number = esc_number
-        elif not ticket.escalation_number:
-            flash("An escalation number is required when setting status to Escalated.", "danger")
+        esc_ref = request.form.get("escalation_ref", "").strip()
+        if esc_ref:
+            if esc_ref.startswith(("http://", "https://")):
+                ticket.escalation_url = esc_ref
+                ticket.escalation_number = None
+            else:
+                ticket.escalation_number = esc_ref
+                ticket.escalation_url = None
+        elif not ticket.escalation_number and not ticket.escalation_url:
+            flash("A vendor ticket URL or reference number is required when escalating.", "danger")
             return redirect(url_for("agent.ticket_detail", ref=ref))
 
     if new_status in ALL_STATUSES and new_status != ticket.status:
@@ -1263,12 +1268,16 @@ def ticket_rustdesk_log(ref):
 @agent_required
 def ticket_escalation(ref):
     ticket = Ticket.query.filter_by(ref=ref).first_or_404()
-    url = request.form.get("escalation_url", "").strip() or None
-    if url and not _is_safe_url(url):
-        flash("Invalid escalation URL — only http:// and https:// URLs are allowed.", "danger")
-        return redirect(url_for("agent.ticket_detail", ref=ref))
-    ticket.escalation_url = url
-    ticket.escalation_number = request.form.get("escalation_number", "").strip() or None
+    esc_ref = request.form.get("escalation_ref", "").strip() or None
+    if esc_ref and esc_ref.startswith(("http://", "https://")):
+        if not _is_safe_url(esc_ref):
+            flash("Invalid escalation URL — only http:// and https:// URLs are allowed.", "danger")
+            return redirect(url_for("agent.ticket_detail", ref=ref))
+        ticket.escalation_url = esc_ref
+        ticket.escalation_number = None
+    else:
+        ticket.escalation_number = esc_ref
+        ticket.escalation_url = None
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
     flash("Escalation details updated.", "success")
