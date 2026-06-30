@@ -70,6 +70,32 @@
         <p class="text-xs text-slate-400 mt-1">PDF, DOCX, XLSX, PNG, JPG, up to 10MB</p>
       </div>
 
+      <!-- Patient Privacy Notice -->
+      <div class="mb-5 rounded-lg border border-amber-300 bg-amber-50 overflow-hidden">
+        <div class="flex items-start gap-2.5 px-4 py-3">
+          <span class="text-amber-500 text-base flex-shrink-0 mt-px">⚠️</span>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-amber-800">Patient Privacy Notice — تنبيه بشأن خصوصية المرضى</p>
+            <p class="text-xs text-amber-700 mt-0.5">Do not include any patient PHI/PII. Only <strong>Patient ID</strong> and <strong>Accession Number</strong> are permitted.</p>
+            <p class="text-xs text-amber-700 mt-0.5 leading-relaxed" dir="rtl" lang="ar">لا تُدرج أي بيانات شخصية للمرضى. يُسمح فقط بـ <strong>رقم المريض</strong> و<strong>رقم الطلب الطبي</strong>.</p>
+          </div>
+          <button type="button" onclick="document.getElementById('phi-details').classList.toggle('hidden'); this.textContent = document.getElementById('phi-details').classList.contains('hidden') ? 'More' : 'Less';"
+                  class="flex-shrink-0 text-xs text-amber-600 hover:text-amber-800 font-medium underline mt-px">More</button>
+        </div>
+        <div id="phi-details" class="hidden border-t border-amber-200 px-4 py-3 space-y-3 bg-amber-50">
+          <div class="text-xs text-amber-800 space-y-1.5 leading-relaxed">
+            <p>Sharing patient personal data, Protected Health Information (PHI), or Personally Identifiable Information (PII) through this ticketing system is <strong>strictly prohibited</strong>.</p>
+            <p>Any ticket containing patient names, dates of birth, identification numbers, images, reports, or any other identifying information will be <strong>immediately deleted</strong> and will not be processed or responded to.</p>
+            <p>Please remove or anonymize all patient-identifiable information before submitting.</p>
+          </div>
+          <div class="text-xs text-amber-800 space-y-1.5 leading-relaxed border-t border-amber-200 pt-3" dir="rtl" lang="ar">
+            <p>يُمنع منعًا باتًا مشاركة أي بيانات شخصية للمرضى أو معلومات صحية محمية (PHI) أو معلومات تعريف شخصية (PII) عبر نظام التذاكر هذا.</p>
+            <p>أي تذكرة تحتوي على أسماء المرضى أو تواريخ الميلاد أو أرقام الهوية أو الصور أو التقارير أو أي معلومات تُعرّف بالمريض سيتم <strong>حذفها فورًا</strong> ولن يتم التعامل معها أو الرد عليها.</p>
+            <p>يرجى إزالة أو إخفاء جميع المعلومات التي يمكن أن تُعرّف بالمريض قبل إرسال أي تذكرة.</p>
+          </div>
+        </div>
+      </div>
+
       <div class="flex items-center gap-3">
         <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
           Submit Ticket
