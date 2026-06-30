@@ -1401,13 +1401,7 @@ def ticket_phi_flag(ref):
     ticket.phi_flagged_at = datetime.utcnow()
     ticket.phi_flagged_by = current_user.id
     ticket.updated_at = datetime.utcnow()
-    db.session.add(TicketHistory(
-        ticket_id=ticket.id,
-        agent_id=current_user.id,
-        action="phi_flagged",
-        old_value=None,
-        new_value="PHI — Archived",
-    ))
+    _log_history(ticket, current_user.id, "phi_flagged", None, "PHI — Archived")
     db.session.commit()
     try:
         from app.services.email_outbound import notify_customer_phi_flagged
