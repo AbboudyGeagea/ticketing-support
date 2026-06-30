@@ -103,7 +103,10 @@
       <form method="POST" action="{{ url_for('portal.ticket_request_close', ref=ticket.ref) }}" class="inline">
         {{ reply_form.hidden_tag() }}
         <button type="submit"
-                onclick="return confirm('Request closure of this ticket? The assigned agent will need to approve.')"
+                data-confirm="The assigned agent will need to review and approve the closure."
+                data-confirm-title="Request ticket closure?"
+                data-confirm-ok="Request Close"
+                data-confirm-variant="info"
                 class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium px-5 py-2 rounded-lg text-sm transition-colors border border-slate-300">
           Request Close
         </button>
