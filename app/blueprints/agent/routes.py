@@ -793,13 +793,15 @@ def tasks():
         }[task_sort_by]
         _task_order_expr = _task_sort_col.asc() if task_sort_dir == "asc" else _task_sort_col.desc()
 
+    from sqlalchemy.orm import selectinload
     tasks_page = (
         query
         .options(
-            joinedload(Task.assignee),
-            joinedload(Task.ticket),
-            joinedload(Task.hospital),
-            joinedload(Task.product),
+            selectinload(Task.assignee),
+            selectinload(Task.secondary_assignee),
+            selectinload(Task.ticket),
+            selectinload(Task.hospital),
+            selectinload(Task.product),
         )
         .order_by(_task_order_expr)
         .paginate(page=page, per_page=25)

@@ -126,7 +126,12 @@
              class="text-primary hover:underline">{{ task.ticket.ref }}</a>
           {% else %}—{% endif %}
         </td>
-        <td class="px-4 py-3.5 text-slate-600 text-xs">{{ task.assignee.name }}</td>
+        <td class="px-4 py-3.5 text-slate-600 text-xs">
+          {{ task.assignee.name }}
+          {% if task.secondary_assignee %}
+          <span class="text-slate-400">, {{ task.secondary_assignee.name }}</span>
+          {% endif %}
+        </td>
         <td class="px-4 py-3.5">
           <span class="inline-flex text-xs font-medium px-2.5 py-0.5 rounded-full badge-{{ task.priority }}">
             {{ task.priority.title() }}
