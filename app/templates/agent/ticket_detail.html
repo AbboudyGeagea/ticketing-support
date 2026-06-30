@@ -565,25 +565,24 @@
       <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Escalation</h4>
       {% set esc_saved = ticket.escalation_url or ticket.escalation_number %}
       {% if esc_saved %}
-      <div class="mb-3">
         {% if ticket.escalation_url %}
         <a href="{{ ticket.escalation_url }}" target="_blank" rel="noopener noreferrer"
            class="text-xs text-primary hover:underline break-all block">{{ ticket.escalation_url }}</a>
         {% else %}
         <p class="text-xs font-mono font-medium text-slate-700 break-all">{{ ticket.escalation_number }}</p>
         {% endif %}
-      </div>
-      {% endif %}
+      {% else %}
       <form method="POST" action="{{ url_for('agent.ticket_escalation', ref=ticket.ref) }}">
         {{ reply_form.hidden_tag() }}
         <label for="esc-ref" class="block text-xs font-medium text-slate-600 mb-1">Ticket URL or reference number</label>
-        <input id="esc-ref" type="text" name="escalation_ref" value="{{ ticket.escalation_url or ticket.escalation_number or '' }}"
+        <input id="esc-ref" type="text" name="escalation_ref" value=""
                placeholder="https://… or INC-12345"
                class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <button type="submit" class="w-full mt-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium px-3 py-2 rounded-lg text-xs transition-colors">
-          {{ 'Update' if esc_saved else 'Save' }} Escalation
+          Save Escalation
         </button>
       </form>
+      {% endif %}
     </div>
 
     <!-- Merge -->
