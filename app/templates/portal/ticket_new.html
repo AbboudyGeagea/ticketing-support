@@ -54,8 +54,14 @@
 
       <div class="mb-5">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Priority</label>
-        {{ form.priority(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
-        <p class="text-xs text-slate-400 mt-1">Select "Urgent" only for critical issues affecting patient care.</p>
+        {{ form.priority(id="priority-select", class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        <div id="priority-hint" class="mt-2 px-3 py-2 rounded-lg text-xs border hidden"></div>
+        <div id="urgent-confirm" class="mt-2 hidden">
+          <label class="flex items-start gap-2 cursor-pointer select-none">
+            <input type="checkbox" id="urgent-checkbox" class="mt-0.5 rounded border-slate-300 text-red-500 focus:ring-red-400">
+            <span class="text-xs text-red-600">I confirm that <strong>no users</strong> can access the system and this is a server-level outage.</span>
+          </label>
+        </div>
       </div>
 
       <div class="mb-6">
@@ -73,4 +79,63 @@
     </form>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var hints = {
+    low: {
+      bg: 'bg-green-50', border: 'border-green-200', text: 'text-green-800',
+      msg: '<strong>User / Study Level</strong> — A single user, workstation, or individual study is affected. Other users can continue working.'
+    },
+    medium: {
+      bg: 'bg-yellow-50', border: 'border-yellow-200', text: 'text-yellow-800',
+      msg: '<strong>Modality / Order Level</strong> — A modality device or order workflow is impacted. Some users are blocked but others can still work.'
+    },
+    high: {
+      bg: 'bg-orange-50', border: 'border-orange-200', text: 'text-orange-800',
+      msg: '<strong>Department Level</strong> — Multiple users or a full department cannot complete their work. Significant operational impact.'
+    },
+    urgent: {
+      bg: 'bg-red-50', border: 'border-red-200', text: 'text-red-800',
+      msg: '<strong>Server / Site Down</strong> — All users at the site cannot access the system. No workaround is available. Select only if the entire site is down.'
+    }
+  };
+
+  var sel      = document.getElementById('priority-select');
+  var hint     = document.getElementById('priority-hint');
+  var urgBox   = document.getElementById('urgent-confirm');
+  var checkbox = document.getElementById('urgent-checkbox');
+  var form     = sel.closest('form');
+
+  function update() {
+    var v = sel.value;
+    var h = hints[v];
+    if (h) {
+      hint.className = 'mt-2 px-3 py-2 rounded-lg text-xs border ' + h.bg + ' ' + h.border + ' ' + h.text;
+      hint.innerHTML = h.msg;
+    } else {
+      hint.className = 'mt-2 px-3 py-2 rounded-lg text-xs border hidden';
+    }
+    if (v === 'urgent') {
+      urgBox.classList.remove('hidden');
+    } else {
+      urgBox.classList.add('hidden');
+      checkbox.checked = false;
+    }
+  }
+
+  sel.addEventListener('change', update);
+  update();
+
+  form.addEventListener('submit', function (e) {
+    if (sel.value === 'urgent' && !checkbox.checked) {
+      e.preventDefault();
+      urgBox.querySelector('label').classList.add('ring-1', 'ring-red-400', 'rounded', 'p-1');
+      checkbox.focus();
+    }
+  });
+})();
+</script>
 {% endblock %}
