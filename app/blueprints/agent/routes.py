@@ -73,6 +73,10 @@ def dashboard():
         Ticket.status == "resolved",
         Ticket.updated_at >= now.replace(hour=0, minute=0, second=0),
     ).count()
+    close_requested_count = Ticket.query.filter(
+        Ticket.close_requested == True,
+        Ticket.status.notin_(["closed"]),
+    ).count()
 
     # ECharts: ticket volume last 30 days
     daily_counts = (
@@ -153,6 +157,7 @@ def dashboard():
         recent_tickets=recent_tickets,
         dash_last_msg_map=dash_last_msg_map,
         my_tasks=my_tasks,
+        close_requested_count=close_requested_count,
     )
 
 
