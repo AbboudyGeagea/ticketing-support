@@ -1409,6 +1409,11 @@ def ticket_phi_flag(ref):
         new_value="PHI — Archived",
     ))
     db.session.commit()
+    try:
+        from app.services.email_outbound import notify_customer_phi_flagged
+        notify_customer_phi_flagged(ticket)
+    except Exception:
+        logger.exception("Failed to send PHI violation notice for ticket %s", ticket.ref)
     flash(f"Ticket {ticket.ref} has been flagged as PHI and archived. It is no longer accessible.", "success")
     return redirect(url_for("agent.tickets"))
 

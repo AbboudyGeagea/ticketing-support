@@ -446,6 +446,27 @@ def notify_agent_close_request(ticket):
     _send(recipients, subject, html=html)
 
 
+def notify_customer_phi_flagged(ticket):
+    """Notify the ticket creator that their ticket was removed for containing PHI."""
+    if not ticket.creator or not ticket.creator.email:
+        logger.warning("phi_flagged ticket %s has no creator email — cannot notify", ticket.ref)
+        return
+    recipient = ticket.creator.email
+    recipient_name = ticket.creator.name or "Customer"
+    base_url = current_app.config.get("APP_BASE_URL", "")
+    portal_url = f"{base_url}/portal/tickets/new"
+    support_email = current_app.config.get("SUPPORT_EMAIL", "support@intermedic.com")
+    subject = f"Important Notice — Support Ticket {ticket.ref} Has Been Permanently Removed"
+    html = render_template(
+        "emails/phi_violation_customer.html",
+        ticket=ticket,
+        recipient_name=recipient_name,
+        portal_url=portal_url,
+        support_email=support_email,
+    )
+    _send([recipient], subject, html=html)
+
+
 def notify_all_agents_activity(ticket, event, actor_name=None):
     """Notify all active agents about any ticket activity (reply, status change, close, etc.)."""
     from app.models.user import User

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+
+  <div style="background:#b45309;padding:24px 28px;">
+    <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">Important Notice — Ticket Permanently Removed</h1>
+  </div>
+
+  <div style="padding:28px;">
+    <p style="color:#374151;margin:0 0 16px;">Dear {{ recipient_name }},</p>
+
+    <p style="color:#374151;margin:0 0 16px;">
+      We are writing to inform you that support ticket <strong style="font-family:monospace;">{{ ticket.ref }}</strong>
+      has been permanently removed from our system.
+    </p>
+
+    <p style="color:#374151;margin:0 0 16px;">
+      Our team identified that the ticket contained <strong>patient personal data or Protected Health Information (PHI)</strong>.
+      Sharing patient-identifiable information through this support system is strictly prohibited under our privacy policy
+      and applicable healthcare data regulations.
+    </p>
+
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:16px;margin:0 0 20px;">
+      <p style="margin:0 0 8px;color:#92400e;font-size:13px;font-weight:600;">What this means</p>
+      <p style="margin:0 0 6px;color:#78350f;font-size:13px;">
+        The ticket and all of its contents — including any attached files and messages — have been archived and
+        are no longer accessible. This action cannot be undone.
+      </p>
+      <p style="margin:0;color:#78350f;font-size:13px;">
+        <strong>Ref:</strong> <span style="font-family:monospace;">{{ ticket.ref }}</span>
+      </p>
+    </div>
+
+    <p style="color:#374151;margin:0 0 8px;font-weight:600;">How to get assistance</p>
+    <p style="color:#374151;margin:0 0 16px;">
+      You are welcome to open a new support ticket for the same issue. Please ensure the new ticket contains
+      only the <strong>Patient ID</strong> and/or <strong>Accession Number</strong> when referencing a specific study —
+      no patient names, dates of birth, images, reports, or any other identifying information.
+    </p>
+
+    <a href="{{ portal_url }}" style="display:inline-block;background:#00A651;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Open a New Ticket</a>
+
+    <p style="color:#374151;margin:24px 0 0;font-size:13px;">
+      If you have any questions about this notice, please contact your hospital's IT coordinator or
+      reach out to us at <a href="mailto:{{ support_email }}" style="color:#00A651;">{{ support_email }}</a>.
+    </p>
+  </div>
+
+  <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">Intermedic Support — This is an automated notification. Please do not reply to this message.</p>
+  </div>
+</div>
+</body>
+</html>
