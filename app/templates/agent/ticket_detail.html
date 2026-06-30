@@ -20,7 +20,7 @@
     <a href="{{ url_for('agent.view_attachment', att_id=att.id) }}" target="_blank" rel="noopener"
        class="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 px-2.5 py-1.5 transition-colors">
       <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-      {{ att.original_name }} <span class="text-red-400">({{ (att.size / 1024)|round(1) }}KB)</span>
+      {{ att.original_name }}{% if att.size %} <span class="text-red-400">({{ (att.size / 1024)|round(1) }}KB)</span>{% endif %}
     </a>
     <a href="{{ url_for('agent.download_attachment', att_id=att.id) }}" title="Download"
        class="inline-flex items-center px-2 bg-slate-100 hover:bg-slate-200 text-slate-500 border-l border-slate-200 transition-colors">
@@ -31,7 +31,7 @@
   <a href="{{ url_for('agent.download_attachment', att_id=att.id) }}"
      class="inline-flex items-center gap-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-2.5 py-1.5 rounded border border-slate-200 transition-colors">
     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
-    {{ att.original_name }} <span class="text-slate-400">({{ (att.size / 1024)|round(1) }}KB)</span>
+    {{ att.original_name }}{% if att.size %} <span class="text-slate-400">({{ (att.size / 1024)|round(1) }}KB)</span>{% endif %}
   </a>
   {%- endif -%}
 {% endmacro %}
