@@ -103,14 +103,29 @@ def _send(
     mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
+    # Build RFC 2822 threading headers for ticket-related emails.
+    # The thread root gets a deterministic Message-ID; subsequent emails
+    # add In-Reply-To / References pointing to it so mail clients group them.
+    internet_headers = []
+    if ticket_ref:
+        domain = mailbox.split("@")[-1] if "@" in mailbox else "intermedic.com"
+        thread_msg_id = f"<ticket-{ticket_ref}@{domain}>"
+        if is_thread_root:
+            internet_headers.append({"name": "Message-ID", "value": thread_msg_id})
+        else:
+            internet_headers.append({"name": "In-Reply-To", "value": thread_msg_id})
+            internet_headers.append({"name": "References",  "value": thread_msg_id})
+
+    message_body: dict = {
+        "subject": subject,
+        "body": {"contentType": content_type, "content": content},
+        "toRecipients": [{"emailAddress": {"address": r}} for r in valid_recipients],
+    }
+    if internet_headers:
+        message_body["internetMessageHeaders"] = internet_headers
+
     payload = {
-        "message": {
-            "subject": subject,
-            "body": {"contentType": content_type, "content": content},
-            "toRecipients": [
-                {"emailAddress": {"address": r}} for r in valid_recipients
-            ],
-        },
+        "message": message_body,
         "saveToSentItems": True,
     }
     try:
@@ -166,7 +181,7 @@ def notify_customer_ticket_created(ticket):
     ctx = dict(ticket=ticket, ticket_url=ticket_url)
     subject, html = _render_db_template("ticket_created_customer", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] Your ticket has been received — {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/ticket_created_customer.html", **ctx)
     _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
 
@@ -188,7 +203,7 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         agent_ctx = dict(ticket=ticket, assignee=assignee, assigned_by=assigner, ticket_url=agent_ticket_url)
         subject, html = _render_db_template("ticket_assigned_agent", **agent_ctx)
         if not html:
-            subject = f"[{ticket.ref}] Ticket assigned to you — {ticket.subject}"
+            subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/ticket_assigned_agent.html", **agent_ctx)
         _send([assignee.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -197,7 +212,7 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         cust_ctx = dict(ticket=ticket, assignee=assignee, ticket_url=portal_ticket_url)
         subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
         if not html:
-            subject = f"[{ticket.ref}] An agent has been assigned to your ticket"
+            subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
         _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -220,9 +235,9 @@ def notify_assigned_agent_new_message(ticket, message):
     ctx = dict(ticket=ticket, message=message, ticket_url=ticket_url)
     subject, html = _render_db_template("agent_new_message", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] New message — {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_new_message.html", **ctx)
-    _send(recipients, subject, html=html)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_agents_new_ticket(ticket):
@@ -240,7 +255,7 @@ def notify_agents_new_ticket(ticket):
     ctx = dict(ticket=ticket, ticket_url=ticket_url, first_message=first_message)
     subject, html = _render_db_template("new_ticket", **ctx)
     if not html:
-        subject = f"[New Ticket] {ticket.ref} — {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/new_ticket.html", **ctx)
     _send(recipients, subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
 
@@ -253,7 +268,7 @@ def notify_customer_reply(ticket, message):
     ctx = dict(ticket=ticket, message=message, ticket_url=ticket_url)
     subject, html = _render_db_template("reply_notification", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] Update on your ticket: {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/reply_notification.html", **ctx)
     _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -284,7 +299,7 @@ def notify_customer_status_change(ticket):
     ctx = dict(ticket=ticket, ticket_url=ticket_url)
     subject, html = _render_db_template("status_change", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] Your ticket status changed to: {ticket.status_label}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/status_change.html", **ctx)
     _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -298,7 +313,7 @@ def notify_customer_resolved_confirmation(ticket):
     base_url = current_app.config.get("APP_BASE_URL", "")
     confirm_url = f"{base_url}/portal/tickets/{ticket.ref}/confirm?token={token}&action=close"
     reopen_url = f"{base_url}/portal/tickets/{ticket.ref}/confirm?token={token}&action=reopen"
-    subject = f"[{ticket.ref}] Is your issue resolved?"
+    subject = f"[{ticket.ref}] {ticket.subject}"
     html = render_template(
         "emails/resolved_confirmation.html",
         ticket=ticket,
@@ -320,7 +335,7 @@ def notify_sla_breach(ticket):
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
-    subject = f"[SLA Breach] {ticket.ref} — {ticket.subject}"
+    subject = f"[{ticket.ref}] {ticket.subject}"
     text = (
         f"Ticket {ticket.ref} has breached its SLA.\n\n"
         f"Subject: {ticket.subject}\n"
@@ -328,7 +343,7 @@ def notify_sla_breach(ticket):
         f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
         f"View ticket: {ticket_url}"
     )
-    _send(recipients, subject, text=text, ticket_ref=ticket.ref)
+    _send(recipients, subject, text=text, ticket_ref=ticket.ref, is_thread_root=False)
 
 
 def notify_requirement_assigned(requirement):
@@ -369,7 +384,7 @@ def send_csat_survey(ticket):
     db.session.commit()
     base_url = current_app.config.get("APP_BASE_URL", "")
     feedback_url = f"{base_url}/feedback/{token}"
-    subject = f"[{ticket.ref}] How did we do? Quick feedback"
+    subject = f"[{ticket.ref}] {ticket.subject}"
     html = render_template("emails/csat_survey.html", ticket=ticket, feedback_url=feedback_url)
     _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -380,9 +395,9 @@ def notify_collaborator_added(ticket, collaborator):
     ctx = dict(ticket=ticket, collaborator=collaborator, collab_url=collab_url)
     subject, html = _render_db_template("collaborator_invite", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] You've been added as a collaborator"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/collaborator_invite.html", **ctx)
-    _send([collaborator.email], subject, html=html)
+    _send([collaborator.email], subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_collaborators_new_message(ticket, message):
@@ -401,7 +416,7 @@ def notify_collaborators_new_message(ticket, message):
         ctx = dict(ticket=ticket, collaborator=collab, message=message, collab_url=collab_url)
         subject, html = _render_db_template("collaborator_update", **ctx)
         if not html:
-            subject = f"[{ticket.ref}] New update: {ticket.subject}"
+            subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/collaborator_update.html", **ctx)
         _send([collab.email], subject, html=html, ticket_ref=ticket.ref)
 
@@ -421,9 +436,9 @@ def notify_agent_ticket_reopened(ticket):
     ctx = dict(ticket=ticket, ticket_url=ticket_url)
     subject, html = _render_db_template("agent_ticket_reopened", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] Customer reopened ticket — {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_ticket_reopened.html", **ctx)
-    _send(recipients, subject, html=html)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_agent_close_request(ticket):
@@ -441,9 +456,9 @@ def notify_agent_close_request(ticket):
     ctx = dict(ticket=ticket, ticket_url=ticket_url)
     subject, html = _render_db_template("agent_close_request", **ctx)
     if not html:
-        subject = f"[{ticket.ref}] Customer requested closure — {ticket.subject}"
+        subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_close_request.html", **ctx)
-    _send(recipients, subject, html=html)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_customer_phi_flagged(ticket):
@@ -455,8 +470,8 @@ def notify_customer_phi_flagged(ticket):
     recipient_name = ticket.creator.name or "Customer"
     base_url = current_app.config.get("APP_BASE_URL", "")
     portal_url = f"{base_url}/portal/tickets/new"
-    support_email = current_app.config.get("SUPPORT_EMAIL", "support@intermedic.com")
-    subject = f"Important Notice — Support Ticket {ticket.ref} Has Been Permanently Removed"
+    support_email = current_app.config.get("SUPPORT_EMAIL", "informatics@intermedic.com")
+    subject = f"[{ticket.ref}] {ticket.subject}"
     html = render_template(
         "emails/phi_violation_customer.html",
         ticket=ticket,
@@ -464,7 +479,7 @@ def notify_customer_phi_flagged(ticket):
         portal_url=portal_url,
         support_email=support_email,
     )
-    _send([recipient], subject, html=html)
+    _send([recipient], subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_all_agents_activity(ticket, event, actor_name=None):
@@ -479,8 +494,8 @@ def notify_all_agents_activity(ticket, event, actor_name=None):
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
-    subject = f"[{ticket.ref}] {event}"
+    subject = f"[{ticket.ref}] {ticket.subject}"
     html = render_template("emails/agent_activity.html",
                            ticket=ticket, event=event,
                            actor_name=actor_name, ticket_url=ticket_url)
-    _send(recipients, subject, html=html)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
