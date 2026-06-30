@@ -31,7 +31,9 @@
               class="flex-shrink-0">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit"
-                  onclick="return confirm('Remove this dependency?')"
+                  data-confirm="Remove this dependency?"
+                  data-confirm-ok="Remove"
+                  data-confirm-variant="danger"
                   class="text-slate-400 hover:text-red-500 transition-colors p-1 rounded"
                   title="Remove dependency">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

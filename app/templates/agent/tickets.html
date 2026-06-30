@@ -37,7 +37,10 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
   <span class="inline-flex items-center text-xs bg-white border border-slate-200 rounded-lg transition-colors hover:bg-slate-50">
     <a href="{{ url_for('agent.tickets', **sf.params) }}"
        class="text-slate-600 px-3 py-1.5">{{ sf.name }}</a>
-    <form method="POST" action="{{ url_for('agent.delete_saved_filter', filter_id=sf.id) }}" class="inline" onsubmit="return confirm('Delete this filter?')">
+    <form method="POST" action="{{ url_for('agent.delete_saved_filter', filter_id=sf.id) }}" class="inline"
+          data-confirm="Delete this saved filter?"
+          data-confirm-ok="Delete"
+          data-confirm-variant="danger">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="text-slate-300 hover:text-red-400 pr-2 py-1.5">×</button>
     </form>

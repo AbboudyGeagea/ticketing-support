@@ -73,7 +73,10 @@
         <a href="{{ url_for('agent.sprint_edit', sprint_id=sprint.id) }}"
            class="text-xs text-slate-500 hover:text-slate-800 transition-colors">Edit</a>
         <form method="POST" action="{{ url_for('agent.sprint_delete', sprint_id=sprint.id) }}"
-              onsubmit="return confirm('Delete sprint \'{{ sprint.name }}\'? Tasks will be detached but not deleted.')">
+              data-confirm="Tasks will be detached but not deleted."
+              data-confirm-title="Delete sprint '{{ sprint.name }}'?"
+              data-confirm-ok="Delete"
+              data-confirm-variant="danger">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <button type="submit" class="text-xs text-red-500 hover:text-red-700 transition-colors">Delete</button>
         </form>

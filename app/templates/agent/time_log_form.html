@@ -57,7 +57,9 @@
       </div>
       <form method="POST"
             action="{{ url_for('agent.task_delete_time', task_id=task.id, entry_id=entry.id) }}"
-            onsubmit="return confirm('Delete this time entry?')">
+            data-confirm="Delete this time entry?"
+            data-confirm-ok="Delete"
+            data-confirm-variant="danger">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit"
                 class="text-slate-300 hover:text-red-500 transition-colors flex-shrink-0"

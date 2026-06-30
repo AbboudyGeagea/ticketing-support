@@ -267,8 +267,150 @@
 </main>
 
 {% block scripts %}{% endblock %}
+
+<!-- ── Confirm Modal ──────────────────────────────────────────────────────── -->
+<div id="confirm-modal"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden"
+     role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+  <!-- Backdrop -->
+  <div id="confirm-backdrop"
+       class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-200 opacity-0"></div>
+  <!-- Card -->
+  <div id="confirm-card"
+       class="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 transition-all duration-200 scale-95 opacity-0">
+    <div class="flex items-start gap-4 mb-5">
+      <div id="confirm-icon" class="flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center">
+        <!-- icon injected by JS -->
+      </div>
+      <div class="flex-1 min-w-0 pt-0.5">
+        <p id="confirm-modal-title" class="text-base font-semibold text-slate-800 mb-1"></p>
+        <p id="confirm-modal-body" class="text-sm text-slate-500 leading-relaxed whitespace-pre-line"></p>
+      </div>
+    </div>
+    <div class="flex gap-2 justify-end">
+      <button id="confirm-cancel"
+              class="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+        Cancel
+      </button>
+      <button id="confirm-ok"
+              class="px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors">
+        Confirm
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
+/* ── Smooth confirm modal ───────────────────────────────────────────────── */
+(function () {
+  var modal    = document.getElementById('confirm-modal');
+  var backdrop = document.getElementById('confirm-backdrop');
+  var card     = document.getElementById('confirm-card');
+  var iconEl   = document.getElementById('confirm-icon');
+  var titleEl  = document.getElementById('confirm-modal-title');
+  var bodyEl   = document.getElementById('confirm-modal-body');
+  var okBtn    = document.getElementById('confirm-ok');
+  var cancelBtn = document.getElementById('confirm-cancel');
+  var _resolve = null;
+
+  var VARIANTS = {
+    danger: {
+      iconBg: 'bg-red-100',
+      iconSvg: '<svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>',
+      okClass: 'bg-red-600 hover:bg-red-700',
+    },
+    warning: {
+      iconBg: 'bg-amber-100',
+      iconSvg: '<svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>',
+      okClass: 'bg-amber-600 hover:bg-amber-700',
+    },
+    info: {
+      iconBg: 'bg-blue-100',
+      iconSvg: '<svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+      okClass: 'bg-blue-600 hover:bg-blue-700',
+    },
+  };
+
+  function openModal(opts) {
+    var v = VARIANTS[opts.variant] || VARIANTS.info;
+    titleEl.textContent = opts.title || 'Are you sure?';
+    bodyEl.textContent  = opts.body  || '';
+    okBtn.textContent   = opts.ok    || 'Confirm';
+    iconEl.className    = 'flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ' + v.iconBg;
+    iconEl.innerHTML    = v.iconSvg;
+    okBtn.className     = 'px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors ' + v.okClass;
+
+    modal.classList.remove('hidden');
+    requestAnimationFrame(function () {
+      backdrop.style.opacity = '1';
+      card.style.opacity  = '1';
+      card.style.transform = 'scale(1)';
+    });
+
+    return new Promise(function (resolve) { _resolve = resolve; });
+  }
+
+  function closeModal(result) {
+    backdrop.style.opacity = '0';
+    card.style.opacity  = '0';
+    card.style.transform = 'scale(0.95)';
+    setTimeout(function () { modal.classList.add('hidden'); }, 200);
+    if (_resolve) { _resolve(result); _resolve = null; }
+  }
+
+  okBtn.addEventListener('click',     function () { closeModal(true); });
+  cancelBtn.addEventListener('click', function () { closeModal(false); });
+  backdrop.addEventListener('click',  function () { closeModal(false); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal(false);
+  });
+
+  /* Public API */
+  window.smoothConfirm = function (opts) { return openModal(opts); };
+
+  /* Intercept data-confirm / data-confirm-title / data-confirm-variant on
+     forms (submit) and buttons/links (click) — drop-in for native confirm() */
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest('[data-confirm]');
+    if (!el) return;
+    /* If it's inside a form submit-button, let the submit handler deal with it */
+    if (el.type === 'submit') return;
+    e.preventDefault();
+    openModal({
+      title:   el.dataset.confirmTitle   || 'Are you sure?',
+      body:    el.dataset.confirm,
+      ok:      el.dataset.confirmOk      || 'Confirm',
+      variant: el.dataset.confirmVariant || 'info',
+    }).then(function (ok) {
+      if (!ok) return;
+      if (el.tagName === 'A') { window.location = el.href; }
+      else if (el.form)       { el.form.submit(); }
+    });
+  }, true);
+
+  document.addEventListener('submit', function (e) {
+    var form = e.target;
+    /* Old-style onsubmit="return confirm()" is already handled by the browser.
+       For forms with data-confirm on the form element itself: */
+    if (!form.dataset.confirm) return;
+    e.preventDefault();
+    openModal({
+      title:   form.dataset.confirmTitle   || 'Are you sure?',
+      body:    form.dataset.confirm,
+      ok:      form.dataset.confirmOk      || 'Confirm',
+      variant: form.dataset.confirmVariant || 'info',
+    }).then(function (ok) {
+      if (!ok) return;
+      form.removeAttribute('data-confirm');
+      form.requestSubmit ? form.requestSubmit() : form.submit();
+    });
+  }, true);
+})();
+
 document.addEventListener('submit', function(e) {
+  /* Only auto-disable if the form does NOT use our data-confirm (those are
+     submitted programmatically after the modal resolves) */
+  if (e.target.dataset.confirm) return;
   var btn = e.target.querySelector('[type="submit"]:not([data-no-disable])');
   if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
 });
