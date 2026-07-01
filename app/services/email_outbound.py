@@ -207,6 +207,19 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
             html = render_template("emails/ticket_assigned_agent.html", **agent_ctx)
         _send([assignee.email], subject, html=html, ticket_ref=ticket.ref)
 
+    # Broadcast to all other active agents so the team knows who owns the ticket
+    if assignee:
+        other_agents = User.query.filter(
+            User.role.in_(["agent", "admin"]),
+            User.active == True,
+            User.id != assignee.id,
+        ).all()
+        recipients = [a.email for a in other_agents if not a.is_viewer]
+        if recipients:
+            team_ctx = dict(ticket=ticket, assignee=assignee, assigned_by=assigner, ticket_url=agent_ticket_url)
+            team_html = render_template("emails/ticket_assigned_team.html", **team_ctx)
+            _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html, ticket_ref=ticket.ref)
+
     # Always notify the customer when an agent is assigned — do NOT expose agent name
     if ticket.creator and ticket.creator.email and assignee:
         cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)

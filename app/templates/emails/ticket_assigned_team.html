@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;">
+<div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+  <div style="background:#015e54;padding:24px 28px;">
+    <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">Ticket Assigned — FYI</h1>
+  </div>
+  <div style="padding:28px;">
+    <p style="color:#374151;margin:0 0 16px;">
+      {% if assigned_by and assigned_by.id != assignee.id %}
+        <strong>{{ assigned_by.name }}</strong> assigned the following ticket to <strong>{{ assignee.name }}</strong>.
+      {% else %}
+        The following ticket has been assigned to <strong>{{ assignee.name }}</strong>.
+      {% endif %}
+    </p>
+    <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 20px;">
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
+      <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name }}</p>
+      {% if ticket.product %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.product.name }}</p>
+      {% endif %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Priority</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.priority_label }}</p>
+    </div>
+    <a href="{{ ticket_url }}" style="display:inline-block;background:#015e54;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
+  </div>
+  <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">Intermedic Support — {{ ticket_url }}</p>
+  </div>
+</div>
+</body>
+</html>
