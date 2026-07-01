@@ -207,9 +207,9 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
             html = render_template("emails/ticket_assigned_agent.html", **agent_ctx)
         _send([assignee.email], subject, html=html, ticket_ref=ticket.ref)
 
-    # Always notify the customer when an agent is assigned
+    # Always notify the customer when an agent is assigned — do NOT expose agent name
     if ticket.creator and ticket.creator.email and assignee:
-        cust_ctx = dict(ticket=ticket, assignee=assignee, ticket_url=portal_ticket_url)
+        cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
         subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
         if not html:
             subject = f"[{ticket.ref}] {ticket.subject}"
