@@ -106,6 +106,14 @@ const hospitalSelect = document.getElementById('hospital-select');
 const customerSelect = document.getElementById('customer-select');
 const productSelect = document.getElementById('product-select');
 
+function loadProducts(products) {
+  productSelect.innerHTML = '<option value="0">— Select product —</option>';
+  products.forEach(p => {
+    const opt = new Option(p.name, p.id);
+    productSelect.appendChild(opt);
+  });
+}
+
 function loadHospitalData(hospitalId) {
   if (!hospitalId) return;
 
@@ -121,16 +129,29 @@ function loadHospitalData(hospitalId) {
 
   fetch(`/agent/api/hospitals/${hospitalId}/products`)
     .then(r => r.json())
-    .then(data => {
-      productSelect.innerHTML = '<option value="0">— Select product —</option>';
-      data.forEach(p => {
-        const opt = new Option(p.name, p.id);
-        productSelect.appendChild(opt);
-      });
-    }).catch(() => {});
+    .then(loadProducts)
+    .catch(() => {});
+}
+
+function loadCustomerProducts(customerId, hospitalId) {
+  if (!customerId || customerId === '0') {
+    // No customer selected — fall back to all hospital products
+    if (hospitalId) {
+      fetch(`/agent/api/hospitals/${hospitalId}/products`)
+        .then(r => r.json())
+        .then(loadProducts)
+        .catch(() => {});
+    }
+    return;
+  }
+  fetch(`/agent/api/customers/${customerId}/products`)
+    .then(r => r.json())
+    .then(loadProducts)
+    .catch(() => {});
 }
 
 hospitalSelect.addEventListener('change', e => loadHospitalData(e.target.value));
+customerSelect.addEventListener('change', e => loadCustomerProducts(e.target.value, hospitalSelect.value));
 
 // Pre-load if hospital already selected (form re-render after validation error)
 if (hospitalSelect.value) loadHospitalData(hospitalSelect.value);

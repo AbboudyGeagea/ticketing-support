@@ -409,6 +409,16 @@ def api_hospital_products(hospital_id):
     return jsonify([{"id": p.id, "name": p.name} for p in products])
 
 
+@bp.route("/api/customers/<int:customer_id>/products")
+@login_required
+@agent_required
+def api_customer_products(customer_id):
+    customer = User.query.get_or_404(customer_id)
+    products = [p for p in customer.products if p.active]
+    products.sort(key=lambda p: p.name)
+    return jsonify([{"id": p.id, "name": p.name} for p in products])
+
+
 # ── Ticket Detail ─────────────────────────────────────────────────────────────
 
 @bp.route("/tickets/<ref>")
