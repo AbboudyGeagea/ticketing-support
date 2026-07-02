@@ -518,7 +518,7 @@ def ticket_reply(ref):
                 size=size,
             )
             db.session.add(att)
-        except (ValueError, OSError) as e:
+        except Exception as e:
             logger.exception("Attachment save failed for ticket %s", ticket.ref)
             flash("Attachment could not be saved — reply submitted without it.", "warning")
 
@@ -533,7 +533,13 @@ def ticket_reply(ref):
     if not form.is_internal.data and ticket.first_response_at is None:
         ticket.first_response_at = datetime.utcnow()
 
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        logger.exception("DB commit failed in ticket_reply for %s", ref)
+        flash("Reply could not be saved — please try again.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
 
     if not form.is_internal.data:
         try:
