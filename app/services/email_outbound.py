@@ -94,6 +94,7 @@ def _send(
 ):
     valid_recipients = [r for r in recipients if r and r.strip()]
     if not valid_recipients:
+        logger.warning("_send called with no valid recipients (subject: %s)", subject)
         return
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
@@ -102,7 +103,9 @@ def _send(
         return
     token = _get_token(eff)
     if not token:
+        logger.error("Email send skipped — could not acquire token (subject: %s, recipients: %s)", subject, valid_recipients)
         return
+    logger.info("Sending email '%s' to %s via %s", subject, valid_recipients, eff["mailbox"])
     mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
@@ -309,6 +312,7 @@ def notify_secondary_assignee(task):
 
 def notify_customer_status_change(ticket):
     if not ticket.creator or not ticket.creator.email:
+        logger.info("notify_customer_status_change skipped — ticket %s has no creator email", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
