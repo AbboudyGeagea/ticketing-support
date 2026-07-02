@@ -120,8 +120,19 @@
   </div>
 </div>
 {% else %}
-<div class="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4 text-sm text-slate-500 text-center">
-  This ticket is closed. <a href="{{ url_for('portal.ticket_new', related_ref=ticket.ref) }}" class="text-primary hover:underline">Open a new ticket</a> if you need further assistance.
+<div class="bg-slate-50 border border-slate-200 rounded-xl px-5 py-4">
+  <div class="flex items-start gap-3">
+    <svg class="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+    <div>
+      <p class="text-sm font-medium text-slate-700">This ticket is closed</p>
+      <p class="text-xs text-slate-500 mt-0.5">If you need further assistance, open a new ticket referencing this one.</p>
+      <a href="{{ url_for('portal.ticket_new', related_ref=ticket.ref) }}"
+         class="inline-flex items-center gap-1.5 mt-3 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+        Open New Ticket (re: #{{ ticket.ref }})
+      </a>
+    </div>
+  </div>
 </div>
 {% endif %}
 

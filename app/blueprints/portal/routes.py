@@ -118,18 +118,21 @@ def ticket_new():
             if tmpl.product_id:
                 form.product_id.data = tmpl.product_id
 
-    # Pre-fill subject when opening a new ticket referencing a closed one
+    # Pre-fill subject/body when opening a new ticket referencing a closed one
     related_ref = request.args.get("related_ref", "")
+    related_ticket = None
     if related_ref and request.method == "GET":
         related = Ticket.query.filter_by(ref=related_ref).first()
         if related and related.hospital_id == current_user.hospital_id:
+            related_ticket = related
             form.subject.data = f"Re: {related.subject}"
+            form.body.data = f"Follow-up to ticket #{related.ref}: {related.subject}\n\n"
 
     if form.validate_on_submit():
         valid_product_ids = {p.id for p in current_user.products}
         if form.product_id.data not in valid_product_ids:
             form.product_id.errors = ["Please select a valid product."]
-            return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates)
+            return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates, related_ticket=related_ticket)
         ticket = Ticket(
             ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=current_user.hospital_id,
@@ -202,7 +205,7 @@ def ticket_new():
         flash(f"Ticket {ticket.ref} submitted successfully.", "success")
         return redirect(url_for("portal.ticket_detail", ref=ticket.ref))
 
-    return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates)
+    return render_template("portal/ticket_new.html", form=form, ticket_templates=ticket_templates, related_ticket=related_ticket)
 
 
 @bp.route("/tickets/<ref>")
