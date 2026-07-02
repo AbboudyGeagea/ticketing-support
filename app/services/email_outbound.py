@@ -97,6 +97,9 @@ def _send(
         return
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
+    if not eff.get("mailbox"):
+        logger.error("Email send skipped — O365_MAILBOX not configured (recipients: %s)", valid_recipients)
+        return
     token = _get_token(eff)
     if not token:
         return
