@@ -178,9 +178,24 @@ def send_invite_email(user):
     _send([user.email], subject, html=html)
 
 
+def _hospital_product_recipients(ticket) -> list[str]:
+    """All active customers in the ticket's hospital who have access to the ticket's product."""
+    from app.models.user import User
+    users = User.query.filter(
+        User.hospital_id == ticket.hospital_id,
+        User.role == "customer",
+        User.active == True,
+    ).all()
+    if ticket.product_id:
+        users = [u for u in users if any(p.id == ticket.product_id for p in u.products)]
+    return [u.email for u in users if u.email]
+
+
 def notify_customer_ticket_created(ticket):
-    """Confirmation email to the customer (creator) when a ticket is opened via the portal."""
-    if not ticket.creator or not ticket.creator.email:
+    """Notify all hospital users with the same product when a ticket is opened."""
+    recipients = _hospital_product_recipients(ticket)
+    if not recipients:
+        logger.info("notify_customer_ticket_created skipped — no matching recipients for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
@@ -189,7 +204,7 @@ def notify_customer_ticket_created(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/ticket_created_customer.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
 
 
 def notify_agent_ticket_assigned(ticket, assigned_by_id):
@@ -226,14 +241,16 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
             team_html = render_template("emails/ticket_assigned_team.html", **team_ctx)
             _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html, ticket_ref=ticket.ref)
 
-    # Always notify the customer when an agent is assigned — do NOT expose agent name
-    if ticket.creator and ticket.creator.email and assignee:
-        cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
-        subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
-        if not html:
-            subject = f"[{ticket.ref}] {ticket.subject}"
-            html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
-        _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    # Always notify all hospital/product customers when an agent is assigned — do NOT expose agent name
+    if assignee:
+        cust_recipients = _hospital_product_recipients(ticket)
+        if cust_recipients:
+            cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
+            subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
+            if not html:
+                subject = f"[{ticket.ref}] {ticket.subject}"
+                html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
+            _send(cust_recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_assigned_agent_new_message(ticket, message):
@@ -280,7 +297,8 @@ def notify_agents_new_ticket(ticket):
 
 
 def notify_customer_reply(ticket, message):
-    if not ticket.creator or not ticket.creator.email:
+    recipients = _hospital_product_recipients(ticket)
+    if not recipients:
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
@@ -289,7 +307,7 @@ def notify_customer_reply(ticket, message):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/reply_notification.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def send_task_reminder(task):
@@ -311,8 +329,9 @@ def notify_secondary_assignee(task):
 
 
 def notify_customer_status_change(ticket):
-    if not ticket.creator or not ticket.creator.email:
-        logger.info("notify_customer_status_change skipped — ticket %s has no creator email", ticket.ref)
+    recipients = _hospital_product_recipients(ticket)
+    if not recipients:
+        logger.info("notify_customer_status_change skipped — no matching recipients for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
@@ -321,7 +340,7 @@ def notify_customer_status_change(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/status_change.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_customer_resolved_confirmation(ticket):
