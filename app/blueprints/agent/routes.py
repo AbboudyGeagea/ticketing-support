@@ -491,12 +491,24 @@ def ticket_reply(ref):
         flash(all_errors[0] if all_errors else "Reply could not be sent — please try again.", "danger")
         return redirect(url_for("agent.ticket_detail", ref=ref))
 
+    body = (form.body.data or "").strip()
+    uploaded_file = request.files.get("attachment")
+    has_attachment = bool(uploaded_file and uploaded_file.filename)
+
+    if not body and not has_attachment:
+        flash("Please enter a message or attach a file.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
+
+    if not body and has_attachment:
+        from werkzeug.utils import secure_filename as _sf
+        body = _sf(uploaded_file.filename) or "Attachment"
+
     msg = TicketMessage(
         ticket_id=ticket.id,
         sender_id=current_user.id,
         sender_name=current_user.name,
         sender_email=current_user.email,
-        body=form.body.data,
+        body=body,
         is_internal=form.is_internal.data,
     )
     db.session.add(msg)
