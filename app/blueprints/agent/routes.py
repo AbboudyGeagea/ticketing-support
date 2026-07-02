@@ -110,6 +110,15 @@ def dashboard():
     hosp_names = [r[0] for r in hosp_counts]
     hosp_values = [r[1] for r in hosp_counts]
 
+    # Tickets awaiting closure approval
+    closure_tickets = (
+        Ticket.query
+        .filter(Ticket.close_requested == True, Ticket.status.notin_(["closed"]))
+        .options(joinedload(Ticket.hospital))
+        .order_by(Ticket.updated_at.desc())
+        .all()
+    )
+
     # Recent tickets
     recent_tickets = (
         Ticket.query
@@ -155,6 +164,7 @@ def dashboard():
         hosp_names=hosp_names,
         hosp_values=hosp_values,
         recent_tickets=recent_tickets,
+        closure_tickets=closure_tickets,
         dash_last_msg_map=dash_last_msg_map,
         my_tasks=my_tasks,
         close_requested_count=close_requested_count,
