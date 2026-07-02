@@ -77,7 +77,7 @@ class Ticket(db.Model):
     messages = db.relationship("TicketMessage", back_populates="ticket", order_by="TicketMessage.created_at", lazy="dynamic")
     history = db.relationship("TicketHistory", back_populates="ticket", order_by="TicketHistory.created_at", lazy="dynamic")
     tasks = db.relationship("Task", back_populates="ticket", lazy="dynamic")
-    attachments = db.relationship("TicketAttachment", back_populates="ticket", lazy="dynamic")
+    attachments = db.relationship("TicketAttachment", back_populates="ticket")
     csat = db.relationship("CSATFeedback", foreign_keys="CSATFeedback.ticket_id", uselist=False)
     collaborators = db.relationship("TicketCollaborator", back_populates="ticket",
                                     cascade="all, delete-orphan", lazy="dynamic")
@@ -127,7 +127,7 @@ class TicketMessage(db.Model):
 
     ticket = db.relationship("Ticket", back_populates="messages")
     sender = db.relationship("User", foreign_keys=[sender_id])
-    attachments = db.relationship("TicketAttachment", back_populates="message", lazy="dynamic")
+    attachments = db.relationship("TicketAttachment", back_populates="message")
 
 
 class TicketCollaborator(db.Model):
