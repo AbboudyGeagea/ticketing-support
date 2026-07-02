@@ -76,16 +76,24 @@ done
 log "Seed scripts complete."
 
 # ---------------------------------------------------------------------------
-# Step 5: Restart web service
+# Step 5: Fix upload folder ownership (script runs as root, gunicorn runs as support)
 # ---------------------------------------------------------------------------
-log "--- Step 5: Restarting web service (${WEB_SERVICE}) ---"
+log "--- Step 5: Fixing uploads folder ownership ---"
+mkdir -p "${APP_DIR}/uploads"
+chown -R support:support "${APP_DIR}/uploads"
+log "Uploads folder ownership set."
+
+# ---------------------------------------------------------------------------
+# Step 7: Restart web service
+# ---------------------------------------------------------------------------
+log "--- Step 7: Restarting web service (${WEB_SERVICE}) ---"
 systemctl restart "${WEB_SERVICE}"
 log "${WEB_SERVICE} restarted."
 
 # ---------------------------------------------------------------------------
-# Step 6: Restart background worker services (if they exist)
+# Step 8: Restart background worker services (if they exist)
 # ---------------------------------------------------------------------------
-log "--- Step 6: Restarting worker services ---"
+log "--- Step 8: Restarting worker services ---"
 for svc in ${WORKER_SERVICES}; do
     if systemctl is-enabled --quiet "${svc}" 2>/dev/null; then
         systemctl restart "${svc}"
@@ -96,9 +104,9 @@ for svc in ${WORKER_SERVICES}; do
 done
 
 # ---------------------------------------------------------------------------
-# Step 7: Health check
+# Step 9: Health check
 # ---------------------------------------------------------------------------
-log "--- Step 7: Health check ---"
+log "--- Step 9: Health check ---"
 MAX_WAIT=60
 ELAPSED=0
 until curl -sf http://127.0.0.1:5000/health &>/dev/null; do
@@ -112,9 +120,9 @@ done
 log "Health check passed."
 
 # ---------------------------------------------------------------------------
-# Step 8: Reload nginx if config changed
+# Step 10: Reload nginx if config changed
 # ---------------------------------------------------------------------------
-log "--- Step 8: Reloading nginx ---"
+log "--- Step 10: Reloading nginx ---"
 NGINX_SOURCE="${APP_DIR}/nginx/sites-available/support.intermedic.com"
 NGINX_DEST="/etc/nginx/sites-available/support.intermedic.com"
 if [[ -f "${NGINX_SOURCE}" ]]; then
