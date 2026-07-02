@@ -486,68 +486,72 @@ def ticket_reply(ref):
         flash("Cannot reply to a closed ticket. Please open a new ticket.", "warning")
         return redirect(url_for("agent.ticket_detail", ref=ref))
     form = ReplyForm()
-    if form.validate_on_submit():
-        msg = TicketMessage(
-            ticket_id=ticket.id,
-            sender_id=current_user.id,
-            sender_name=current_user.name,
-            sender_email=current_user.email,
-            body=form.body.data,
-            is_internal=form.is_internal.data,
-        )
-        db.session.add(msg)
-        db.session.flush()  # get msg.id
+    if not form.validate_on_submit():
+        all_errors = [e for errs in form.errors.values() for e in errs]
+        flash(all_errors[0] if all_errors else "Reply could not be sent — please try again.", "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
 
-        file = request.files.get("attachment")
-        if file and file.filename:
-            from app.services.file_service import save_attachment
-            from app.models.attachment import TicketAttachment
-            try:
-                stored_name, original_name, mimetype, size = save_attachment(file, ticket.id)
-                att = TicketAttachment(
-                    ticket_id=ticket.id,
-                    message_id=msg.id,
-                    uploaded_by=current_user.id,
-                    filename=stored_name,
-                    original_name=original_name,
-                    mimetype=mimetype,
-                    size=size,
-                )
-                db.session.add(att)
-            except (ValueError, OSError) as e:
-                logger.exception("Attachment save failed for ticket %s", ticket.ref)
-                flash("Attachment could not be saved — reply submitted without it.", "warning")
+    msg = TicketMessage(
+        ticket_id=ticket.id,
+        sender_id=current_user.id,
+        sender_name=current_user.name,
+        sender_email=current_user.email,
+        body=form.body.data,
+        is_internal=form.is_internal.data,
+    )
+    db.session.add(msg)
+    db.session.flush()  # get msg.id
 
-        _log_history(ticket, current_user.id, "reply", None,
-                     "internal note" if form.is_internal.data else "public reply")
+    file = request.files.get("attachment")
+    if file and file.filename:
+        from app.services.file_service import save_attachment
+        from app.models.attachment import TicketAttachment
+        try:
+            stored_name, original_name, mimetype, size = save_attachment(file, ticket.id)
+            att = TicketAttachment(
+                ticket_id=ticket.id,
+                message_id=msg.id,
+                uploaded_by=current_user.id,
+                filename=stored_name,
+                original_name=original_name,
+                mimetype=mimetype,
+                size=size,
+            )
+            db.session.add(att)
+        except (ValueError, OSError) as e:
+            logger.exception("Attachment save failed for ticket %s", ticket.ref)
+            flash("Attachment could not be saved — reply submitted without it.", "warning")
 
-        ticket.updated_at = datetime.utcnow()
-        if ticket.status == "resolved" and not form.is_internal.data:
-            ticket.status = "in_progress"
+    _log_history(ticket, current_user.id, "reply", None,
+                 "internal note" if form.is_internal.data else "public reply")
 
-        # Record first agent response for SLA tracking
-        if not form.is_internal.data and ticket.first_response_at is None:
-            ticket.first_response_at = datetime.utcnow()
+    ticket.updated_at = datetime.utcnow()
+    if ticket.status == "resolved" and not form.is_internal.data:
+        ticket.status = "in_progress"
 
-        db.session.commit()
+    # Record first agent response for SLA tracking
+    if not form.is_internal.data and ticket.first_response_at is None:
+        ticket.first_response_at = datetime.utcnow()
 
-        if not form.is_internal.data:
-            try:
-                notify_customer_reply(ticket, msg)
-            except Exception:
-                pass
-            try:
-                from app.services.email_outbound import notify_collaborators_new_message
-                notify_collaborators_new_message(ticket, msg)
-            except Exception:
-                pass
-            try:
-                from app.services.email_outbound import notify_all_agents_activity
-                notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name)
-            except Exception:
-                current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
+    db.session.commit()
 
-        flash("Reply sent.", "success")
+    if not form.is_internal.data:
+        try:
+            notify_customer_reply(ticket, msg)
+        except Exception:
+            pass
+        try:
+            from app.services.email_outbound import notify_collaborators_new_message
+            notify_collaborators_new_message(ticket, msg)
+        except Exception:
+            pass
+        try:
+            from app.services.email_outbound import notify_all_agents_activity
+            notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name)
+        except Exception:
+            current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
+
+    flash("Reply sent.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
