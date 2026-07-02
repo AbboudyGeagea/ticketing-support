@@ -15,7 +15,7 @@ class NewTicketForm(FlaskForm):
         ("urgent", "Urgent"),
     ], default="medium")
     attachment = FileField("Attach file", validators=[
-        FileAllowed(["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
+        FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     rustdesk_peer_id = StringField("RustDesk Device ID (optional — for remote support)", validators=[Optional(), Length(max=100)])
     submit = SubmitField("Submit Ticket")
@@ -24,6 +24,6 @@ class NewTicketForm(FlaskForm):
 class ReplyForm(FlaskForm):
     body = TextAreaField("Your Reply", validators=[DataRequired()])
     attachment = FileField("Attach file", validators=[
-        FileAllowed(["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
+        FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     submit = SubmitField("Send")

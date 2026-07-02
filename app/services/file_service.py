@@ -3,7 +3,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from flask import current_app
 
-ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"}
+ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"}
 
 
 def allowed_file(filename):

@@ -20,7 +20,7 @@ class ReplyForm(FlaskForm):
     body = TextAreaField("Message", validators=[DataRequired()])
     is_internal = BooleanField("Internal note (not visible to customer)")
     attachment = FileField("Attach file", validators=[
-        FileAllowed(["pdf", "docx", "xlsx", "xls", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
+        FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     submit = SubmitField("Send Reply")
 
