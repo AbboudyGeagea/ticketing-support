@@ -394,6 +394,13 @@ def ticket_new():
         except Exception:
             current_app.logger.exception("notify_agents_new_ticket failed for %s", ticket.ref)
 
+        if ticket.creator:
+            try:
+                from app.services.email_outbound import notify_customer_ticket_created
+                notify_customer_ticket_created(ticket)
+            except Exception:
+                current_app.logger.exception("notify_customer_ticket_created failed for %s", ticket.ref)
+
         flash(f"Ticket {ticket.ref} created.", "success")
         return redirect(url_for("agent.ticket_detail", ref=ticket.ref))
 
