@@ -520,7 +520,7 @@ def ticket_reply(ref):
             db.session.add(att)
         except Exception as e:
             current_app.logger.exception("Attachment save failed for ticket %s", ticket.ref)
-            flash("Attachment could not be saved — reply submitted without it.", "warning")
+            flash(f"Attachment error [{type(e).__name__}]: {e}", "warning")
 
     _log_history(ticket, current_user.id, "reply", None,
                  "internal note" if form.is_internal.data else "public reply")
