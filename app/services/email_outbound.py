@@ -11,7 +11,7 @@ Rebuilt from scratch 2026-07-03. Design rules:
 import logging
 import requests
 import msal
-from flask import current_app, render_template
+from flask import current_app, render_template, flash, has_request_context
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +61,33 @@ def _log_email(recipients, subject, status, error=None, mailbox=None):
         logger.exception("email_log write failed")
 
 
+def _flash_result(status: str, subject: str, recipients: list[str], error: str = None):
+    """Surface every send outcome as a flash banner, when we're inside a request.
+
+    Skipped when called from a background/CLI context (reminders, CSAT cron)
+    since flash() requires an active request + session.
+    """
+    if not has_request_context():
+        return
+    label = subject if len(subject) <= 70 else subject[:67] + "..."
+    to = ", ".join(recipients) if recipients else "(no recipients)"
+    try:
+        if status == "sent":
+            flash(f"✉️ Email sent: “{label}” → {to}", "success")
+        elif status == "skipped":
+            flash(f"⚠️ Email skipped: “{label}” — {error}", "warning")
+        else:
+            flash(f"✖️ Email FAILED: “{label}” → {to} — {error}", "danger")
+    except Exception:
+        logger.exception("flash() failed while reporting email result")
+
+
+def _report(status: str, recipients: list[str], subject: str, error: str = None, mailbox: str = None):
+    """Single choke point: every send outcome is logged to DB AND flashed to the UI."""
+    _log_email(recipients, subject, status, error=error, mailbox=mailbox)
+    _flash_result(status, subject, recipients, error=error)
+
+
 def _clean_subject(subject: str) -> str:
     """Collapse whitespace/newlines (Graph rejects control chars in subjects)."""
     return " ".join((subject or "(no subject)").split())[:250]
@@ -78,24 +105,24 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
     subject = _clean_subject(subject)
     if not valid:
         logger.warning("email skipped — no valid recipients for '%s'", subject)
-        _log_email(["(none)"], subject, "skipped", error="No valid recipients")
+        _report("skipped", ["(none)"], subject, error="No valid recipients")
         return
 
     try:
         from app.services.email_settings import get_effective_config
         eff = get_effective_config()
     except Exception as exc:
-        _log_email(valid, subject, "failed", error=f"Config lookup failed: {exc}")
+        _report("failed", valid, subject, error=f"Config lookup failed: {exc}")
         return
 
     mailbox = eff.get("mailbox")
     if not mailbox:
-        _log_email(valid, subject, "skipped", error="O365_MAILBOX not configured")
+        _report("skipped", valid, subject, error="O365_MAILBOX not configured")
         return
 
     token, token_err = _get_token(eff)
     if not token:
-        _log_email(valid, subject, "skipped", error=token_err, mailbox=mailbox)
+        _report("skipped", valid, subject, error=token_err, mailbox=mailbox)
         logger.error("email skipped — %s", token_err)
         return
 
@@ -118,16 +145,16 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
             timeout=15,
         )
     except Exception as exc:
-        _log_email(valid, subject, "failed", error=f"HTTP request failed: {exc}", mailbox=mailbox)
+        _report("failed", valid, subject, error=f"HTTP request failed: {exc}", mailbox=mailbox)
         logger.error("email send failed to %s: %s", valid, exc)
         return
 
     if resp.status_code in (200, 202):
-        _log_email(valid, subject, "sent", mailbox=mailbox)
+        _report("sent", valid, subject, mailbox=mailbox)
         logger.info("email sent to %s: %s", valid, subject)
     else:
         err = f"Graph HTTP {resp.status_code}: {(resp.text or '')[:600]}"
-        _log_email(valid, subject, "failed", error=err, mailbox=mailbox)
+        _report("failed", valid, subject, error=err, mailbox=mailbox)
         logger.error("email send failed to %s: %s", valid, err)
 
 
@@ -135,10 +162,9 @@ def _render(template_name: str, **ctx) -> str | None:
     """Render a file template; on failure log + return None (send is skipped)."""
     try:
         return render_template(f"emails/{template_name}", **ctx)
-    except Exception:
+    except Exception as exc:
         logger.exception("email template render failed: %s", template_name)
-        _log_email(["(render error)"], template_name, "failed",
-                   error=f"Template {template_name} failed to render")
+        _report("failed", ["(render error)"], template_name, error=f"Template {template_name} failed to render: {exc}")
         return None
 
 
