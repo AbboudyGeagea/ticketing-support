@@ -207,42 +207,23 @@ def send_invite_email(user):
     _send([user.email], subject, html=html)
 
 
-def _get_hospital_product_users(ticket):
-    """All active customers in the ticket's hospital who have access to the ticket's product."""
-    from app.models.user import User
-    users = User.query.filter(
-        User.hospital_id == ticket.hospital_id,
-        User.role == "customer",
-        User.active == True,
-    ).all()
-    if ticket.product_id:
-        users = [u for u in users if any(p.id == ticket.product_id for p in u.products)]
-    return [u for u in users if u.email]
-
-
 def notify_customer_ticket_created(ticket):
-    """Notify all hospital/product users when a ticket is opened.
-    Creator gets 'your ticket was submitted'; others get 'your colleague opened a ticket'.
-    """
-    users = _get_hospital_product_users(ticket)
-    if not users:
-        logger.info("notify_customer_ticket_created skipped — no matching recipients for ticket %s", ticket.ref)
+    """Notify the ticket creator that their ticket was received."""
+    if not ticket.creator or not ticket.creator.email:
+        logger.info("notify_customer_ticket_created skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
-    subject = f"[{ticket.ref}] {ticket.subject}"
-    for user in users:
-        if user.id == ticket.created_by:
-            # Creator: "your ticket has been submitted"
-            ctx = dict(ticket=ticket, ticket_url=ticket_url, recipient=user)
-            _, html = _render_db_template("ticket_created_customer", **ctx)
-            if not html:
-                html = render_template("emails/ticket_created_customer.html", **ctx)
-        else:
-            # Colleague: "User A has opened a ticket"
-            ctx = dict(ticket=ticket, ticket_url=ticket_url, recipient=user)
-            html = render_template("emails/ticket_created_colleague.html", **ctx)
-        _send([user.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
+    ctx = dict(ticket=ticket, ticket_url=ticket_url, recipient=ticket.creator)
+    subject, html = _render_db_template("ticket_created_customer", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] {ticket.subject}"
+        html = render_template("emails/ticket_created_customer.html", **ctx)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
+
+# TODO: re-enable hospital-wide notifications (all users sharing the product get notified)
+# def _get_hospital_product_users(ticket): ...
+# def notify_customer_ticket_created with per-user loop (creator vs colleague emails)
 
 
 def notify_agent_ticket_assigned(ticket, assigned_by_id):
@@ -279,16 +260,15 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
             team_html = render_template("emails/ticket_assigned_team.html", **team_ctx)
             _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html, ticket_ref=ticket.ref)
 
-    # Always notify all hospital/product customers when an agent is assigned — do NOT expose agent name
-    if assignee:
-        cust_recipients = [u.email for u in _get_hospital_product_users(ticket)]
-        if cust_recipients:
-            cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
-            subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
-            if not html:
-                subject = f"[{ticket.ref}] {ticket.subject}"
-                html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
-            _send(cust_recipients, subject, html=html, ticket_ref=ticket.ref)
+    # Notify ticket creator when agent is assigned
+    if assignee and ticket.creator and ticket.creator.email:
+        cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
+        subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
+        if not html:
+            subject = f"[{ticket.ref}] {ticket.subject}"
+            html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
+        _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    # TODO: re-enable hospital-wide assignment notifications
 
 
 def notify_assigned_agent_new_message(ticket, message):
@@ -335,8 +315,8 @@ def notify_agents_new_ticket(ticket):
 
 
 def notify_customer_reply(ticket, message):
-    recipients = [u.email for u in _get_hospital_product_users(ticket)]
-    if not recipients:
+    if not ticket.creator or not ticket.creator.email:
+        logger.info("notify_customer_reply skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
@@ -345,7 +325,8 @@ def notify_customer_reply(ticket, message):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/reply_notification.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    # TODO: re-enable hospital-wide reply notifications
 
 
 def send_task_reminder(task):
@@ -367,9 +348,8 @@ def notify_secondary_assignee(task):
 
 
 def notify_customer_status_change(ticket):
-    recipients = [u.email for u in _get_hospital_product_users(ticket)]
-    if not recipients:
-        logger.info("notify_customer_status_change skipped — no matching recipients for ticket %s", ticket.ref)
+    if not ticket.creator or not ticket.creator.email:
+        logger.info("notify_customer_status_change skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
     ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
@@ -378,7 +358,8 @@ def notify_customer_status_change(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/status_change.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    # TODO: re-enable hospital-wide status change notifications
 
 
 def notify_customer_resolved_confirmation(ticket):
