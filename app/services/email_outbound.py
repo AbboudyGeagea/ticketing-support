@@ -11,7 +11,7 @@ Rebuilt from scratch 2026-07-03. Design rules:
 import logging
 import requests
 import msal
-from flask import current_app, render_template, flash, has_request_context
+from flask import current_app, render_template
 
 logger = logging.getLogger(__name__)
 
@@ -61,31 +61,9 @@ def _log_email(recipients, subject, status, error=None, mailbox=None):
         logger.exception("email_log write failed")
 
 
-def _flash_result(status: str, subject: str, recipients: list[str], error: str = None):
-    """Surface every send outcome as a flash banner, when we're inside a request.
-
-    Skipped when called from a background/CLI context (reminders, CSAT cron)
-    since flash() requires an active request + session.
-    """
-    if not has_request_context():
-        return
-    label = subject if len(subject) <= 70 else subject[:67] + "..."
-    to = ", ".join(recipients) if recipients else "(no recipients)"
-    try:
-        if status == "sent":
-            flash(f"✉️ Email sent: “{label}” → {to}", "success")
-        elif status == "skipped":
-            flash(f"⚠️ Email skipped: “{label}” — {error}", "warning")
-        else:
-            flash(f"✖️ Email FAILED: “{label}” → {to} — {error}", "danger")
-    except Exception:
-        logger.exception("flash() failed while reporting email result")
-
-
 def _report(status: str, recipients: list[str], subject: str, error: str = None, mailbox: str = None):
-    """Single choke point: every send outcome is logged to DB AND flashed to the UI."""
+    """Single choke point: every send outcome is logged to email_log for /admin/email/test."""
     _log_email(recipients, subject, status, error=error, mailbox=mailbox)
-    _flash_result(status, subject, recipients, error=error)
 
 
 def _clean_subject(subject: str) -> str:
