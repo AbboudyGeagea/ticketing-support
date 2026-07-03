@@ -210,6 +210,19 @@ def _all_agent_emails(exclude_id=None):
             if u.email and not u.is_viewer and u.id != exclude_id]
 
 
+def _get_hospital_product_users(ticket):
+    """All active customers in the ticket's hospital who have access to the ticket's product."""
+    from app.models.user import User
+    users = User.query.filter(
+        User.hospital_id == ticket.hospital_id,
+        User.role == "customer",
+        User.active == True,  # noqa: E712
+    ).all()
+    if ticket.product_id:
+        users = [u for u in users if any(p.id == ticket.product_id for p in u.products)]
+    return [u for u in users if u.email]
+
+
 def _base_url() -> str:
     return current_app.config.get("APP_BASE_URL", "")
 
@@ -234,32 +247,49 @@ def send_invite_email(user):
 # ---------------------------------------------------------------------------
 
 def notify_customer_ticket_created(ticket):
-    """Confirmation to the ticket creator when a ticket is opened."""
-    if not ticket.creator or not ticket.creator.email:
+    """Notify all hospital/product users when a ticket is opened.
+
+    Creator gets "your ticket was submitted"; everyone else who shares
+    hospital + product gets "your colleague opened a ticket".
+    """
+    users = _get_hospital_product_users(ticket)
+    if not users:
+        logger.info("notify_customer_ticket_created skipped — no matching recipients for ticket %s", ticket.ref)
         return
     ticket_url = f"{_base_url()}/portal/tickets/{ticket.ref}"
-    html = _render("ticket_created_customer.html", ticket=ticket, ticket_url=ticket_url)
-    if html:
-        _send([ticket.creator.email], f"[{ticket.ref}] {ticket.subject}", html=html)
+    subject = f"[{ticket.ref}] {ticket.subject}"
+    for user in users:
+        if user.id == ticket.created_by:
+            html = _render("ticket_created_customer.html", ticket=ticket, ticket_url=ticket_url, recipient=user)
+        else:
+            html = _render("ticket_created_colleague.html", ticket=ticket, ticket_url=ticket_url, recipient=user)
+        if html:
+            _send([user.email], subject, html=html)
 
 
 def notify_customer_reply(ticket, message):
-    """Notify the creator that an agent replied."""
-    if not ticket.creator or not ticket.creator.email:
+    """Notify all hospital/product users that an agent replied."""
+    recipients = [u.email for u in _get_hospital_product_users(ticket)]
+    if not recipients:
         return
     ticket_url = f"{_base_url()}/portal/tickets/{ticket.ref}"
     html = _render("reply_notification.html", ticket=ticket, message=message, ticket_url=ticket_url)
     if html:
-        _send([ticket.creator.email], f"[{ticket.ref}] {ticket.subject}", html=html)
+        _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=html)
 
 
 def notify_customer_status_change(ticket):
-    if not ticket.creator or not ticket.creator.email:
+    """Notify all hospital/product users of a status change, each addressed by name."""
+    users = _get_hospital_product_users(ticket)
+    if not users:
+        logger.info("notify_customer_status_change skipped — no matching recipients for ticket %s", ticket.ref)
         return
     ticket_url = f"{_base_url()}/portal/tickets/{ticket.ref}"
-    html = _render("status_change.html", ticket=ticket, ticket_url=ticket_url)
-    if html:
-        _send([ticket.creator.email], f"[{ticket.ref}] {ticket.subject}", html=html)
+    subject = f"[{ticket.ref}] {ticket.subject}"
+    for user in users:
+        html = _render("status_change.html", ticket=ticket, ticket_url=ticket_url, recipient=user)
+        if html:
+            _send([user.email], subject, html=html)
 
 
 def notify_customer_resolved_confirmation(ticket):
@@ -399,11 +429,11 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         if html:
             _send(team, subject, html=html)
 
-    # The customer (never expose the agent's name)
-    if ticket.creator and ticket.creator.email:
-        html = _render("ticket_assigned_customer.html", ticket=ticket, ticket_url=portal_url)
+    # All hospital/product customers (never expose the agent's name), each addressed by name
+    for user in _get_hospital_product_users(ticket):
+        html = _render("ticket_assigned_customer.html", ticket=ticket, ticket_url=portal_url, recipient=user)
         if html:
-            _send([ticket.creator.email], subject, html=html)
+            _send([user.email], subject, html=html)
 
 
 def notify_sla_breach(ticket):

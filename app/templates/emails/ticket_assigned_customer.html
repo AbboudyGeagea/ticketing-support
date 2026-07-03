@@ -7,7 +7,7 @@
     <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">Your Ticket Has Been Assigned</h1>
   </div>
   <div style="padding:28px;">
-    <p style="color:#374151;margin:0 0 16px;">Hello {{ ticket.creator.name if ticket.creator else 'there' }},</p>
+    <p style="color:#374151;margin:0 0 16px;">Hello {{ recipient.name if recipient and recipient.name else (ticket.creator.name if ticket.creator else 'there') }},</p>
     <p style="color:#374151;margin:0 0 16px;">
       Your support ticket has been assigned and our team will be in touch with you shortly.
     </p>

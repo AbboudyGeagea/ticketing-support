@@ -7,7 +7,7 @@
     <h1 style="color:#fff; margin:0; font-size:18px; font-weight:600;">Ticket Status Updated</h1>
   </div>
   <div style="padding:28px;">
-    <p style="color:#374151; margin:0 0 16px;">Hello{% if ticket.creator and ticket.creator.name %} {{ ticket.creator.name }}{% endif %},</p>
+    <p style="color:#374151; margin:0 0 16px;">Hello{% if recipient and recipient.name %} {{ recipient.name }}{% elif ticket.creator and ticket.creator.name %} {{ ticket.creator.name }}{% endif %},</p>
     <p style="color:#374151; margin:0 0 16px;">The status of your support ticket has been updated:</p>
     <div style="background:#f1f5f9; border-radius:6px; padding:16px; margin:0 0 20px;">
       <p style="margin:0 0 6px; color:#64748b; font-size:13px;">Ticket Reference</p>
