@@ -128,26 +128,12 @@ def _send(
     mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
-    # Build RFC 2822 threading headers for ticket-related emails.
-    # The thread root gets a deterministic Message-ID; subsequent emails
-    # add In-Reply-To / References pointing to it so mail clients group them.
-    internet_headers = []
-    if ticket_ref:
-        domain = mailbox.split("@")[-1] if "@" in mailbox else "intermedic.com"
-        thread_msg_id = f"<ticket-{ticket_ref}@{domain}>"
-        if is_thread_root:
-            internet_headers.append({"name": "Message-ID", "value": thread_msg_id})
-        else:
-            internet_headers.append({"name": "In-Reply-To", "value": thread_msg_id})
-            internet_headers.append({"name": "References",  "value": thread_msg_id})
 
     message_body: dict = {
         "subject": subject,
         "body": {"contentType": content_type, "content": content},
         "toRecipients": [{"emailAddress": {"address": r}} for r in valid_recipients],
     }
-    if internet_headers:
-        message_body["internetMessageHeaders"] = internet_headers
 
     payload = {
         "message": message_body,
