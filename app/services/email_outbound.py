@@ -100,7 +100,7 @@ def _log_email(recipients, subject, status, error=None, mailbox=None, ticket_ref
         db.session.add(entry)
         db.session.commit()
     except Exception:
-        pass  # never let logging break the app
+        pass
 
 
 def _send(
@@ -113,23 +113,19 @@ def _send(
 ):
     valid_recipients = [r for r in recipients if r and r.strip()]
     if not valid_recipients:
-        logger.warning("_send called with no valid recipients (subject: %s)", subject)
+        logger.warning("_send: no valid recipients for '%s'", subject)
         return
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
-    mailbox = eff.get("mailbox") or ""
-    if not mailbox:
-        msg = "O365_MAILBOX not configured"
-        logger.error("Email send skipped — %s (recipients: %s)", msg, valid_recipients)
-        _log_email(valid_recipients, subject, "skipped", error=msg, ticket_ref=ticket_ref)
+    if not eff.get("mailbox"):
+        _log_email(valid_recipients, subject, "skipped", error="O365_MAILBOX not configured", ticket_ref=ticket_ref)
+        logger.error("Email skipped — mailbox not configured")
         return
     token = _get_token(eff)
     if not token:
-        msg = "Could not acquire Graph API token — check Azure credentials in Admin › Email"
-        logger.error("Email send skipped — %s (subject: %s, recipients: %s)", msg, subject, valid_recipients)
-        _log_email(valid_recipients, subject, "skipped", error=msg, mailbox=mailbox, ticket_ref=ticket_ref)
+        _log_email(valid_recipients, subject, "skipped", error="Token acquisition failed", mailbox=eff["mailbox"], ticket_ref=ticket_ref)
         return
-    logger.info("Sending email '%s' to %s via %s", subject, valid_recipients, mailbox)
+    mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
     # Build RFC 2822 threading headers for ticket-related emails.
@@ -208,13 +204,17 @@ def send_invite_email(user):
 
 
 def notify_customer_ticket_created(ticket):
+    """Confirmation email to the customer (creator) when a ticket is opened via the portal."""
     if not ticket.creator or not ticket.creator.email:
-        logger.info("notify_customer_ticket_created skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
-    subject = f"[{ticket.ref}] Ticket received: {ticket.subject}"
-    text = f"Your support ticket has been received.\n\nRef: {ticket.ref}\nSubject: {ticket.subject}\n\n{base_url}/portal/tickets/{ticket.ref}"
-    _send([ticket.creator.email], subject, text=text)
+    ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("ticket_created_customer", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] {ticket.subject}"
+        html = render_template("emails/ticket_created_customer.html", **ctx)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
 
 
 def notify_agent_ticket_assigned(ticket, assigned_by_id):
@@ -251,12 +251,14 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
             team_html = render_template("emails/ticket_assigned_team.html", **team_ctx)
             _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html, ticket_ref=ticket.ref)
 
-    # Notify ticket creator when agent is assigned
-    if assignee and ticket.creator and ticket.creator.email:
-        base_url = current_app.config.get("APP_BASE_URL", "")
-        subject = f"[{ticket.ref}] Your ticket has been assigned: {ticket.subject}"
-        text = f"Your support ticket is being handled by our team.\n\nRef: {ticket.ref}\n\n{base_url}/portal/tickets/{ticket.ref}"
-        _send([ticket.creator.email], subject, text=text)
+    # Always notify the customer when an agent is assigned — do NOT expose agent name
+    if ticket.creator and ticket.creator.email and assignee:
+        cust_ctx = dict(ticket=ticket, ticket_url=portal_ticket_url)
+        subject, html = _render_db_template("ticket_assigned_customer", **cust_ctx)
+        if not html:
+            subject = f"[{ticket.ref}] {ticket.subject}"
+            html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
+        _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_assigned_agent_new_message(ticket, message):
@@ -288,24 +290,31 @@ def notify_agents_new_ticket(ticket):
         User.role.in_(["agent", "admin"]),
         User.active == True,
     ).all()
-    recipients = [a.email for a in agents if a.email]
-    if not recipients:
-        logger.info("notify_agents_new_ticket skipped — no agent recipients for ticket %s", ticket.ref)
+    if not agents:
         return
+    recipients = [a.email for a in agents]
     base_url = current_app.config.get("APP_BASE_URL", "")
-    subject = f"[{ticket.ref}] New ticket: {ticket.subject}"
-    text = f"A new support ticket has been submitted.\n\nRef: {ticket.ref}\nSubject: {ticket.subject}\n\n{base_url}/agent/tickets/{ticket.ref}"
-    _send(recipients, subject, text=text)
+    ticket_url = f"{base_url}/agent/tickets/{ticket.ref}"
+    first_message = ticket.messages.first()
+    ctx = dict(ticket=ticket, ticket_url=ticket_url, first_message=first_message)
+    subject, html = _render_db_template("new_ticket", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] {ticket.subject}"
+        html = render_template("emails/new_ticket.html", **ctx)
+    _send(recipients, subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
 
 
 def notify_customer_reply(ticket, message):
     if not ticket.creator or not ticket.creator.email:
-        logger.info("notify_customer_reply skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
-    subject = f"[{ticket.ref}] New reply: {ticket.subject}"
-    text = f"There is a new reply on your support ticket.\n\nRef: {ticket.ref}\n\n{base_url}/portal/tickets/{ticket.ref}"
-    _send([ticket.creator.email], subject, text=text)
+    ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
+    ctx = dict(ticket=ticket, message=message, ticket_url=ticket_url)
+    subject, html = _render_db_template("reply_notification", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] {ticket.subject}"
+        html = render_template("emails/reply_notification.html", **ctx)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
 
 def send_task_reminder(task):
@@ -328,12 +337,15 @@ def notify_secondary_assignee(task):
 
 def notify_customer_status_change(ticket):
     if not ticket.creator or not ticket.creator.email:
-        logger.info("notify_customer_status_change skipped — no creator email for ticket %s", ticket.ref)
         return
     base_url = current_app.config.get("APP_BASE_URL", "")
-    subject = f"[{ticket.ref}] Status update: {ticket.subject}"
-    text = f"Your ticket status has been updated to: {ticket.status}\n\nRef: {ticket.ref}\n\n{base_url}/portal/tickets/{ticket.ref}"
-    _send([ticket.creator.email], subject, text=text)
+    ticket_url = f"{base_url}/portal/tickets/{ticket.ref}"
+    ctx = dict(ticket=ticket, ticket_url=ticket_url)
+    subject, html = _render_db_template("status_change", **ctx)
+    if not html:
+        subject = f"[{ticket.ref}] {ticket.subject}"
+        html = render_template("emails/status_change.html", **ctx)
+    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
 
 
 def notify_customer_resolved_confirmation(ticket):
