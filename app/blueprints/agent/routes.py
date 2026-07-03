@@ -574,12 +574,12 @@ def ticket_reply(ref):
         try:
             notify_customer_reply(ticket, msg)
         except Exception:
-            pass
+            current_app.logger.exception("notify_customer_reply failed for %s", ref)
         try:
             from app.services.email_outbound import notify_collaborators_new_message
             notify_collaborators_new_message(ticket, msg)
         except Exception:
-            pass
+            current_app.logger.exception("notify_collaborators_new_message failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
             notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name)
@@ -624,14 +624,13 @@ def ticket_status(ref):
             ticket.closed_at = None
         _log_history(ticket, current_user.id, "status_change", old, new_status)
         db.session.commit()
-        if ticket.creator:
-            try:
-                from app.services.email_outbound import notify_customer_status_change, notify_customer_resolved_confirmation
-                notify_customer_status_change(ticket)
-                if new_status == "resolved":
-                    notify_customer_resolved_confirmation(ticket)
-            except Exception:
-                pass
+        try:
+            from app.services.email_outbound import notify_customer_status_change, notify_customer_resolved_confirmation
+            notify_customer_status_change(ticket)
+            if new_status == "resolved":
+                notify_customer_resolved_confirmation(ticket)
+        except Exception:
+            current_app.logger.exception("notify_customer_status_change failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
             notify_all_agents_activity(ticket, f"Status → {new_status.replace('_', ' ').title()}", actor_name=current_user.name)
@@ -736,12 +735,11 @@ def ticket_reopen(ref):
     ticket.updated_at = datetime.utcnow()
     _log_history(ticket, current_user.id, "status_change", old, "in_progress")
     db.session.commit()
-    if ticket.creator:
-        try:
-            from app.services.email_outbound import notify_customer_status_change
-            notify_customer_status_change(ticket)
-        except Exception:
-            pass
+    try:
+        from app.services.email_outbound import notify_customer_status_change
+        notify_customer_status_change(ticket)
+    except Exception:
+        current_app.logger.exception("notify_customer_status_change failed for %s", ref)
     try:
         from app.services.email_outbound import notify_all_agents_activity
         notify_all_agents_activity(ticket, "Ticket Reopened", actor_name=current_user.name)
@@ -1364,12 +1362,11 @@ def ticket_approve_close(ref):
         ticket.updated_at = datetime.utcnow()
         _log_history(ticket, current_user.id, "status_change", old, "closed")
         db.session.commit()
-        if ticket.creator:
-            try:
-                from app.services.email_outbound import notify_customer_status_change
-                notify_customer_status_change(ticket)
-            except Exception:
-                pass
+        try:
+            from app.services.email_outbound import notify_customer_status_change
+            notify_customer_status_change(ticket)
+        except Exception:
+            current_app.logger.exception("notify_customer_status_change failed for %s", ref)
         flash("Customer close request approved — ticket closed.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 

@@ -338,12 +338,11 @@ def ticket_confirm(ref):
         db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=None,
                                      action="status_change", old_value=old, new_value="in_progress"))
         db.session.commit()
-        # Notify assigned agent that the customer reopened the ticket
         try:
             from app.services.email_outbound import notify_agent_ticket_reopened
             notify_agent_ticket_reopened(ticket)
         except Exception:
-            pass
+            logger.exception("notify_agent_ticket_reopened failed for %s", ticket.ref)
         flash("Your ticket has been reopened. Our team will follow up shortly.", "info")
     else:
         flash("Nothing to do — ticket is already in this state.", "info")
