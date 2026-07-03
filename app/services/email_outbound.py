@@ -103,14 +103,7 @@ def _log_email(recipients, subject, status, error=None, mailbox=None, ticket_ref
         pass
 
 
-def _send(
-    recipients: list[str],
-    subject: str,
-    html: str = None,
-    text: str = None,
-    ticket_ref: str = None,
-    is_thread_root: bool = False,
-):
+def _send(recipients: list[str], subject: str, html: str = None, text: str = None):
     valid_recipients = [r for r in recipients if r and r.strip()]
     if not valid_recipients:
         logger.warning("_send: no valid recipients for '%s'", subject)
@@ -118,25 +111,22 @@ def _send(
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
     if not eff.get("mailbox"):
-        _log_email(valid_recipients, subject, "skipped", error="O365_MAILBOX not configured", ticket_ref=ticket_ref)
+        _log_email(valid_recipients, subject, "skipped", error="O365_MAILBOX not configured")
         logger.error("Email skipped — mailbox not configured")
         return
     token = _get_token(eff)
     if not token:
-        _log_email(valid_recipients, subject, "skipped", error="Token acquisition failed", mailbox=eff["mailbox"], ticket_ref=ticket_ref)
+        _log_email(valid_recipients, subject, "skipped", error="Token acquisition failed", mailbox=eff["mailbox"])
         return
     mailbox = eff["mailbox"]
     content_type = "HTML" if html else "Text"
     content = html or text or ""
-
-    message_body: dict = {
-        "subject": subject,
-        "body": {"contentType": content_type, "content": content},
-        "toRecipients": [{"emailAddress": {"address": r}} for r in valid_recipients],
-    }
-
     payload = {
-        "message": message_body,
+        "message": {
+            "subject": subject,
+            "body": {"contentType": content_type, "content": content},
+            "toRecipients": [{"emailAddress": {"address": r}} for r in valid_recipients],
+        },
         "saveToSentItems": True,
     }
     try:
@@ -147,15 +137,15 @@ def _send(
             timeout=15,
         )
         if resp.status_code in (200, 202):
-            _log_email(valid_recipients, subject, "sent", mailbox=mailbox, ticket_ref=ticket_ref)
+            _log_email(valid_recipients, subject, "sent", mailbox=mailbox)
         else:
             err = f"HTTP {resp.status_code}: {resp.text[:400]}"
             logger.error("Graph sendMail failed — %s", err)
-            _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox, ticket_ref=ticket_ref)
+            _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox)
     except Exception as exc:
         err = str(exc)
         logger.error("Failed to send email to %s: %s", valid_recipients, err)
-        _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox, ticket_ref=ticket_ref)
+        _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox)
 
 
 def _render_db_template(slug, **context):
@@ -200,7 +190,7 @@ def notify_customer_ticket_created(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/ticket_created_customer.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
+    _send([ticket.creator.email], subject, html=html)
 
 
 def notify_agent_ticket_assigned(ticket, assigned_by_id):
@@ -222,7 +212,7 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         if not html:
             subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/ticket_assigned_agent.html", **agent_ctx)
-        _send([assignee.email], subject, html=html, ticket_ref=ticket.ref)
+        _send([assignee.email], subject, html=html)
 
     # Broadcast to all other active agents so the team knows who owns the ticket
     if assignee:
@@ -235,7 +225,7 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         if recipients:
             team_ctx = dict(ticket=ticket, assignee=assignee, assigned_by=assigner, ticket_url=agent_ticket_url)
             team_html = render_template("emails/ticket_assigned_team.html", **team_ctx)
-            _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html, ticket_ref=ticket.ref)
+            _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=team_html)
 
     # Always notify the customer when an agent is assigned — do NOT expose agent name
     if ticket.creator and ticket.creator.email and assignee:
@@ -244,7 +234,7 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         if not html:
             subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/ticket_assigned_customer.html", **cust_ctx)
-        _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+        _send([ticket.creator.email], subject, html=html)
 
 
 def notify_assigned_agent_new_message(ticket, message):
@@ -267,7 +257,7 @@ def notify_assigned_agent_new_message(ticket, message):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_new_message.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
 
 
 def notify_agents_new_ticket(ticket):
@@ -287,7 +277,7 @@ def notify_agents_new_ticket(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/new_ticket.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref, is_thread_root=True)
+    _send(recipients, subject, html=html)
 
 
 def notify_customer_reply(ticket, message):
@@ -300,7 +290,7 @@ def notify_customer_reply(ticket, message):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/reply_notification.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html)
 
 
 def send_task_reminder(task):
@@ -331,7 +321,7 @@ def notify_customer_status_change(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/status_change.html", **ctx)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html)
 
 
 def notify_customer_resolved_confirmation(ticket):
@@ -350,7 +340,7 @@ def notify_customer_resolved_confirmation(ticket):
         confirm_url=confirm_url,
         reopen_url=reopen_url,
     )
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html)
 
 
 def notify_sla_breach(ticket):
@@ -373,7 +363,7 @@ def notify_sla_breach(ticket):
         f"Hospital: {ticket.hospital.name if ticket.hospital else 'N/A'}\n\n"
         f"View ticket: {ticket_url}"
     )
-    _send(recipients, subject, text=text, ticket_ref=ticket.ref, is_thread_root=False)
+    _send(recipients, subject, text=text)
 
 
 def notify_requirement_assigned(requirement):
@@ -416,7 +406,7 @@ def send_csat_survey(ticket):
     feedback_url = f"{base_url}/feedback/{token}"
     subject = f"[{ticket.ref}] {ticket.subject}"
     html = render_template("emails/csat_survey.html", ticket=ticket, feedback_url=feedback_url)
-    _send([ticket.creator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send([ticket.creator.email], subject, html=html)
 
 
 def notify_collaborator_added(ticket, collaborator):
@@ -427,7 +417,7 @@ def notify_collaborator_added(ticket, collaborator):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/collaborator_invite.html", **ctx)
-    _send([collaborator.email], subject, html=html, ticket_ref=ticket.ref)
+    _send([collaborator.email], subject, html=html)
 
 
 def notify_collaborators_new_message(ticket, message):
@@ -448,7 +438,7 @@ def notify_collaborators_new_message(ticket, message):
         if not html:
             subject = f"[{ticket.ref}] {ticket.subject}"
             html = render_template("emails/collaborator_update.html", **ctx)
-        _send([collab.email], subject, html=html, ticket_ref=ticket.ref)
+        _send([collab.email], subject, html=html)
 
 
 def notify_agent_ticket_reopened(ticket):
@@ -468,7 +458,7 @@ def notify_agent_ticket_reopened(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_ticket_reopened.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
 
 
 def notify_agent_close_request(ticket):
@@ -488,7 +478,7 @@ def notify_agent_close_request(ticket):
     if not html:
         subject = f"[{ticket.ref}] {ticket.subject}"
         html = render_template("emails/agent_close_request.html", **ctx)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
 
 
 def notify_customer_phi_flagged(ticket):
@@ -509,7 +499,7 @@ def notify_customer_phi_flagged(ticket):
         portal_url=portal_url,
         support_email=support_email,
     )
-    _send([recipient], subject, html=html, ticket_ref=ticket.ref)
+    _send([recipient], subject, html=html)
 
 
 def notify_all_agents_activity(ticket, event, actor_name=None):
@@ -528,4 +518,4 @@ def notify_all_agents_activity(ticket, event, actor_name=None):
     html = render_template("emails/agent_activity.html",
                            ticket=ticket, event=event,
                            actor_name=actor_name, ticket_url=ticket_url)
-    _send(recipients, subject, html=html, ticket_ref=ticket.ref)
+    _send(recipients, subject, html=html)
