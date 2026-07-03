@@ -1,14 +1,14 @@
 """add email_log table for outbound send tracking
 
-Revision ID: a1b2c3d4e5f6
-Revises: f5a6b7c8d9e0
+Revision ID: aa11bb22cc33
+Revises: b8c9d0e1f2a3
 Create Date: 2026-07-03
 """
 from alembic import op
 import sqlalchemy as sa
 
-revision = 'a1b2c3d4e5f6'
-down_revision = 'f5a6b7c8d9e0'
+revision = 'aa11bb22cc33'
+down_revision = 'b8c9d0e1f2a3'
 branch_labels = None
 depends_on = None
 
