@@ -29,6 +29,7 @@ def create_app(config_class=Config):
     from app.models import email_config  # noqa: F401
     from app.models import email_template  # noqa: F401
     from app.models import rustdesk_log  # noqa: F401
+    from app.models import email_log  # noqa: F401
 
     from app.blueprints.auth import bp as auth_bp
     from app.blueprints.portal import bp as portal_bp

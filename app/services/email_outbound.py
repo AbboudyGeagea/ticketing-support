@@ -84,6 +84,25 @@ def _get_token(eff: dict | None = None) -> str | None:
     return result["access_token"]
 
 
+def _log_email(recipients, subject, status, error=None, mailbox=None, ticket_ref=None):
+    """Write one row to email_log. Never raises — diagnostic only."""
+    try:
+        from app.models.email_log import EmailLog
+        from app.extensions import db
+        entry = EmailLog(
+            ticket_ref=ticket_ref,
+            recipients=", ".join(recipients),
+            subject=subject,
+            status=status,
+            error=error,
+            mailbox=mailbox,
+        )
+        db.session.add(entry)
+        db.session.commit()
+    except Exception:
+        pass  # never let logging break the app
+
+
 def _send(
     recipients: list[str],
     subject: str,
@@ -98,15 +117,19 @@ def _send(
         return
     from app.services.email_settings import get_effective_config
     eff = get_effective_config()
-    if not eff.get("mailbox"):
-        logger.error("Email send skipped — O365_MAILBOX not configured (recipients: %s)", valid_recipients)
+    mailbox = eff.get("mailbox") or ""
+    if not mailbox:
+        msg = "O365_MAILBOX not configured"
+        logger.error("Email send skipped — %s (recipients: %s)", msg, valid_recipients)
+        _log_email(valid_recipients, subject, "skipped", error=msg, ticket_ref=ticket_ref)
         return
     token = _get_token(eff)
     if not token:
-        logger.error("Email send skipped — could not acquire token (subject: %s, recipients: %s)", subject, valid_recipients)
+        msg = "Could not acquire Graph API token — check Azure credentials in Admin › Email"
+        logger.error("Email send skipped — %s (subject: %s, recipients: %s)", msg, subject, valid_recipients)
+        _log_email(valid_recipients, subject, "skipped", error=msg, mailbox=mailbox, ticket_ref=ticket_ref)
         return
-    logger.info("Sending email '%s' to %s via %s", subject, valid_recipients, eff["mailbox"])
-    mailbox = eff["mailbox"]
+    logger.info("Sending email '%s' to %s via %s", subject, valid_recipients, mailbox)
     content_type = "HTML" if html else "Text"
     content = html or text or ""
     # Build RFC 2822 threading headers for ticket-related emails.
@@ -141,10 +164,16 @@ def _send(
             json=payload,
             timeout=15,
         )
-        if resp.status_code not in (200, 202):
-            logger.error("Graph sendMail failed %s: %s", resp.status_code, resp.text[:500])
+        if resp.status_code in (200, 202):
+            _log_email(valid_recipients, subject, "sent", mailbox=mailbox, ticket_ref=ticket_ref)
+        else:
+            err = f"HTTP {resp.status_code}: {resp.text[:400]}"
+            logger.error("Graph sendMail failed — %s", err)
+            _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox, ticket_ref=ticket_ref)
     except Exception as exc:
-        logger.error("Failed to send email to %s: %s", valid_recipients, exc)
+        err = str(exc)
+        logger.error("Failed to send email to %s: %s", valid_recipients, err)
+        _log_email(valid_recipients, subject, "failed", error=err, mailbox=mailbox, ticket_ref=ticket_ref)
 
 
 def _render_db_template(slug, **context):

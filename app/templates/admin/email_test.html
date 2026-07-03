@@ -179,6 +179,52 @@
 
   </div>
 
+  <!-- Email send log -->
+  <div class="bg-white border border-slate-200 rounded-xl shadow-sm mt-6 overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+      <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Recent Send Attempts (last 50)</h3>
+      <span class="text-xs text-slate-400">Most recent first</span>
+    </div>
+    {% if email_log %}
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead>
+          <tr class="bg-slate-50 text-left text-slate-500">
+            <th class="px-4 py-2 font-medium">Time (UTC)</th>
+            <th class="px-4 py-2 font-medium">Status</th>
+            <th class="px-4 py-2 font-medium">Ticket</th>
+            <th class="px-4 py-2 font-medium">Recipients</th>
+            <th class="px-4 py-2 font-medium">Subject</th>
+            <th class="px-4 py-2 font-medium">Error</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for entry in email_log %}
+          <tr class="hover:bg-slate-50 {% if entry.status == 'failed' %}bg-red-50{% elif entry.status == 'skipped' %}bg-yellow-50{% endif %}">
+            <td class="px-4 py-2 font-mono whitespace-nowrap text-slate-600">{{ entry.created_at.strftime("%m-%d %H:%M:%S") }}</td>
+            <td class="px-4 py-2">
+              {% if entry.status == 'sent' %}
+                <span class="inline-flex items-center gap-1 text-green-700 font-semibold">✓ sent</span>
+              {% elif entry.status == 'failed' %}
+                <span class="inline-flex items-center gap-1 text-red-600 font-semibold">✗ failed</span>
+              {% else %}
+                <span class="inline-flex items-center gap-1 text-amber-600 font-semibold">⚠ skipped</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-2 font-mono text-slate-600">{{ entry.ticket_ref or '—' }}</td>
+            <td class="px-4 py-2 text-slate-700 max-w-xs truncate" title="{{ entry.recipients }}">{{ entry.recipients }}</td>
+            <td class="px-4 py-2 text-slate-700 max-w-xs truncate" title="{{ entry.subject }}">{{ entry.subject }}</td>
+            <td class="px-4 py-2 text-red-600 max-w-sm" style="word-break:break-word;">{{ entry.error or '' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="px-5 py-4 text-sm text-slate-400">No send attempts recorded yet — the email_log table may need a DB migration (<code>flask db upgrade</code>), or no emails have been triggered since the table was created.</p>
+    {% endif %}
+  </div>
+
   <!-- Azure setup guide -->
   <div class="bg-blue-50 border border-blue-200 rounded-xl p-5 mt-6 text-sm text-blue-900">
     <h3 class="font-semibold mb-2">Azure App Registration — Required Permissions</h3>

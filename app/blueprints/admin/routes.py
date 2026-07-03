@@ -1334,9 +1334,14 @@ def email_test():
         "has_secret": bool(row and row.client_secret_enc),
         "updated_at": row.updated_at if row else None,
     }
+    try:
+        from app.models.email_log import EmailLog
+        email_log = EmailLog.query.order_by(EmailLog.created_at.desc()).limit(50).all()
+    except Exception:
+        email_log = []
     return render_template("admin/email_test.html", status=status,
                            token_ok=token_ok, token_error=token_error,
-                           form_values=form_values)
+                           form_values=form_values, email_log=email_log)
 
 
 # ── Excel bulk import ──────────────────────────────────────────────────────────
