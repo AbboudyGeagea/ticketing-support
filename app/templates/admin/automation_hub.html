@@ -57,7 +57,7 @@
           {% if r.hospital %}{{ r.hospital.name }}{% else %}Any hospital{% endif %} ·
           {% if r.product %}{{ r.product.name }}{% else %}Any product{% endif %} ·
           {% if r.priority %}{{ r.priority.title() }}{% else %}Any priority{% endif %}
-          → <span class="font-medium">{{ r.agent.name }}</span>
+          → <span class="font-medium">{{ r.assignee.name }}</span>
         </div>
         <div class="flex items-center gap-3">
           <span class="text-xs font-mono text-slate-400">#{{ r.rule_order }}</span>
