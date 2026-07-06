@@ -93,8 +93,8 @@
           <p class="text-xs text-slate-400 mt-0.5 truncate max-w-md">{{ c.body[:100] }}{% if c.body|length > 100 %}…{% endif %}</p>
         </div>
         <div class="flex items-center gap-3">
-          <a href="{{ url_for('admin.canned_response_edit', response_id=c.id) }}" class="text-primary hover:underline text-xs">Edit</a>
-          <form method="POST" action="{{ url_for('admin.canned_response_delete', response_id=c.id) }}" class="inline"
+          <a href="{{ url_for('admin.canned_response_edit', cr_id=c.id) }}" class="text-primary hover:underline text-xs">Edit</a>
+          <form method="POST" action="{{ url_for('admin.canned_response_delete', cr_id=c.id) }}" class="inline"
                 onsubmit="return confirm('Delete this response?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="text-red-400 hover:text-red-600 text-xs">Delete</button>
