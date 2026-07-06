@@ -555,8 +555,12 @@ def ticket_reply(ref):
                  "internal note" if form.is_internal.data else "public reply")
 
     ticket.updated_at = datetime.utcnow()
-    if ticket.status == "resolved" and not form.is_internal.data:
-        ticket.status = "in_progress"
+    status_auto_changed = False
+    if not form.is_internal.data and ticket.status != "awaiting_info":
+        old_status = ticket.status
+        ticket.status = "awaiting_info"
+        _log_history(ticket, current_user.id, "status_change", old_status, "awaiting_info")
+        status_auto_changed = True
 
     # Record first agent response for SLA tracking
     if not form.is_internal.data and ticket.first_response_at is None:
@@ -586,7 +590,10 @@ def ticket_reply(ref):
         except Exception:
             current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
 
-    flash("Reply sent.", "success")
+    if status_auto_changed:
+        flash("Reply sent — status set to Awaiting Info.", "success")
+    else:
+        flash("Reply sent.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 

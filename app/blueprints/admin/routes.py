@@ -913,7 +913,13 @@ def ticket_template_delete(tmpl_id):
 @admin_required
 def sla_policies():
     policies = SLAPolicy.query.order_by(
-        db.case({"urgent": 0, "high": 1, "medium": 2, "low": 3}, value=SLAPolicy.priority)
+        db.case(
+            (SLAPolicy.priority == "urgent", 0),
+            (SLAPolicy.priority == "high", 1),
+            (SLAPolicy.priority == "medium", 2),
+            (SLAPolicy.priority == "low", 3),
+            else_=4,
+        )
     ).all()
     return render_template("admin/sla_policies.html", policies=policies)
 
@@ -1070,7 +1076,13 @@ def automation_hub():
     from app.models.assignment_rule import AssignmentRule
     from app.models.canned_response import CannedResponse
     sla_policies = SLAPolicy.query.order_by(
-        db.case({"urgent": 1, "high": 2, "medium": 3, "low": 4}, value=SLAPolicy.priority)
+        db.case(
+            (SLAPolicy.priority == "urgent", 1),
+            (SLAPolicy.priority == "high", 2),
+            (SLAPolicy.priority == "medium", 3),
+            (SLAPolicy.priority == "low", 4),
+            else_=5,
+        )
     ).all()
     rules = AssignmentRule.query.order_by(AssignmentRule.rule_order).all()
     canned = CannedResponse.query.order_by(CannedResponse.title).all()
