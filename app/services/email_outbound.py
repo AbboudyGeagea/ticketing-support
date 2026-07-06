@@ -369,14 +369,14 @@ def notify_agent_close_request(ticket):
         _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=html)
 
 
-def notify_all_agents_activity(ticket, event, actor_name=None):
+def notify_all_agents_activity(ticket, event, actor_name=None, message=None):
     """Broadcast any ticket activity (reply, status change, close, …) to all agents."""
     recipients = _all_agent_emails()
     if not recipients:
         return
     ticket_url = f"{_base_url()}/agent/tickets/{ticket.ref}"
     html = _render("agent_activity.html", ticket=ticket, event=event,
-                   actor_name=actor_name, ticket_url=ticket_url)
+                   actor_name=actor_name, message=message, ticket_url=ticket_url)
     if html:
         _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=html)
 

@@ -20,6 +20,12 @@
       <p style="margin:0;color:#1e293b;">{{ actor_name }}</p>
       {% endif %}
     </div>
+    {% if message and message.body %}
+    <div style="margin:0 0 20px;">
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Message</p>
+      <p style="white-space:pre-wrap;color:#334155;line-height:1.6;margin:0;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;">{{ message.body }}</p>
+    </div>
+    {% endif %}
     <a href="{{ ticket_url }}" style="display:inline-block;background:#00A651;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
   </div>
   <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">

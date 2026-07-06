@@ -582,7 +582,7 @@ def ticket_reply(ref):
             current_app.logger.exception("notify_collaborators_new_message failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
-            notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name)
+            notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name, message=msg)
         except Exception:
             current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
 
