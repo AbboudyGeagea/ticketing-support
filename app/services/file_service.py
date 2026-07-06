@@ -33,3 +33,27 @@ def delete_attachment(ticket_id, stored_filename):
     path = os.path.join(current_app.config["UPLOAD_FOLDER"], str(ticket_id), stored_filename)
     if os.path.exists(path):
         os.remove(path)
+
+
+def save_kb_attachment(file, article_id):
+    """Save a KB article attachment. PDF only. Returns (stored_filename, original_name, mimetype, size) or raises ValueError."""
+    if not file or not file.filename:
+        raise ValueError("No file provided")
+    original_name = secure_filename(file.filename)
+    if not original_name.lower().endswith(".pdf"):
+        raise ValueError("Only PDF files are allowed")
+    stored_name = f"{uuid.uuid4()}.pdf"
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(article_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    file_path = os.path.join(upload_dir, stored_name)
+    file.save(file_path)
+    size = os.path.getsize(file_path)
+    mimetype = file.mimetype or "application/pdf"
+    return stored_name, original_name, mimetype, size
+
+
+def delete_kb_attachment(article_id, stored_filename):
+    """Delete a KB attachment file from disk. Silently ignores if not found."""
+    path = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(article_id), stored_filename)
+    if os.path.exists(path):
+        os.remove(path)

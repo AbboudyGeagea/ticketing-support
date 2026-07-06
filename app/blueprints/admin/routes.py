@@ -726,6 +726,28 @@ def kb_articles():
     return render_template("admin/kb_articles.html", articles=articles)
 
 
+def _save_kb_attachments(article, files):
+    """Save uploaded PDF attachments for a KB article. Skips (with a flash) any invalid file."""
+    from app.services.file_service import save_kb_attachment
+    from app.models.kb_article_attachment import KBArticleAttachment
+    for file in files:
+        if not file or not file.filename:
+            continue
+        try:
+            stored_name, original_name, mimetype, size = save_kb_attachment(file, article.id)
+        except ValueError as e:
+            flash(f"Attachment '{file.filename}' skipped: {e}", "warning")
+            continue
+        db.session.add(KBArticleAttachment(
+            kb_article_id=article.id,
+            filename=stored_name,
+            original_name=original_name,
+            mimetype=mimetype,
+            size=size,
+            uploaded_by=current_user.id,
+        ))
+
+
 @bp.route("/kb/new", methods=["GET", "POST"])
 @login_required
 @admin_required
@@ -738,10 +760,13 @@ def kb_article_new():
             slug=slug,
             body=form.body.data,
             category=form.category.data.strip() if form.category.data else None,
-            is_published=form.is_published.data,
+            is_published_agent=form.is_published_agent.data,
+            is_published_customer=form.is_published_customer.data,
             created_by=current_user.id,
         )
         db.session.add(article)
+        db.session.flush()
+        _save_kb_attachments(article, request.files.getlist("attachments"))
         db.session.commit()
         flash("Article saved.", "success")
         return redirect(url_for("admin.kb_articles"))
@@ -758,10 +783,12 @@ def kb_article_edit(article_id):
         article.title = form.title.data
         article.body = form.body.data
         article.category = form.category.data.strip() if form.category.data else None
-        article.is_published = form.is_published.data
+        article.is_published_agent = form.is_published_agent.data
+        article.is_published_customer = form.is_published_customer.data
+        _save_kb_attachments(article, request.files.getlist("attachments"))
         db.session.commit()
         flash("Article updated.", "success")
-        return redirect(url_for("admin.kb_articles"))
+        return redirect(url_for("admin.kb_article_edit", article_id=article.id))
     return render_template("admin/kb_article_form.html", form=form, article=article)
 
 
@@ -769,11 +796,28 @@ def kb_article_edit(article_id):
 @login_required
 @admin_required
 def kb_article_delete(article_id):
+    from app.services.file_service import delete_kb_attachment
     article = KBArticle.query.get_or_404(article_id)
+    for att in article.attachments:
+        delete_kb_attachment(article.id, att.filename)
     db.session.delete(article)
     db.session.commit()
     flash("Article deleted.", "success")
     return redirect(url_for("admin.kb_articles"))
+
+
+@bp.route("/kb/<int:article_id>/attachments/<int:att_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def kb_attachment_delete(article_id, att_id):
+    from app.models.kb_article_attachment import KBArticleAttachment
+    from app.services.file_service import delete_kb_attachment
+    att = KBArticleAttachment.query.filter_by(id=att_id, kb_article_id=article_id).first_or_404()
+    delete_kb_attachment(article_id, att.filename)
+    db.session.delete(att)
+    db.session.commit()
+    flash("Attachment removed.", "success")
+    return redirect(url_for("admin.kb_article_edit", article_id=article_id))
 
 
 def _make_slug(title):

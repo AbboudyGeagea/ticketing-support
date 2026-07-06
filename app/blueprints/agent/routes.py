@@ -1513,7 +1513,7 @@ def kb_list():
     from app.models.kb_article import KBArticle
     q = request.args.get("q", "").strip()
     category = request.args.get("category", "")
-    query = KBArticle.query.filter_by(is_published=True)
+    query = KBArticle.query.filter_by(is_published_agent=True)
     if q:
         query = query.filter(
             db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
@@ -1522,7 +1522,7 @@ def kb_list():
         query = query.filter_by(category=category)
     articles = query.order_by(KBArticle.category, KBArticle.title).all()
     categories = db.session.query(KBArticle.category).filter(
-        KBArticle.is_published == True, KBArticle.category.isnot(None)
+        KBArticle.is_published_agent == True, KBArticle.category.isnot(None)
     ).distinct().order_by(KBArticle.category).all()
     categories = [c[0] for c in categories]
     return render_template("agent/kb.html", articles=articles, q=q,
@@ -1535,7 +1535,7 @@ def kb_list():
 def kb_article(article_id):
     from app.models.kb_article import KBArticle
     article = KBArticle.query.get_or_404(article_id)
-    if not article.is_published and not current_user.is_admin:
+    if not article.is_published_agent and not current_user.is_admin:
         abort(404)
     article.views += 1
     from app.extensions import db as _db
@@ -1550,10 +1550,24 @@ def kb_search_json():
     """JSON endpoint for inserting KB articles into ticket replies."""
     from app.models.kb_article import KBArticle
     q = request.args.get("q", "").strip()
-    results = KBArticle.query.filter_by(is_published=True).filter(
+    results = KBArticle.query.filter_by(is_published_agent=True).filter(
         db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
     ).order_by(KBArticle.title).limit(10).all()
     return jsonify([{"id": a.id, "title": a.title, "url": url_for("agent.kb_article", article_id=a.id)} for a in results])
+
+
+@bp.route("/kb/<int:article_id>/attachments/<int:att_id>/download")
+@login_required
+@agent_required
+def kb_attachment_download(article_id, att_id):
+    from app.models.kb_article import KBArticle
+    from app.models.kb_article_attachment import KBArticleAttachment
+    article = KBArticle.query.get_or_404(article_id)
+    if not article.is_published_agent and not current_user.is_admin:
+        abort(404)
+    att = KBArticleAttachment.query.filter_by(id=att_id, kb_article_id=article_id).first_or_404()
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(article_id))
+    return send_from_directory(upload_dir, att.filename, as_attachment=True, download_name=att.original_name)
 
 
 # ── CSV Export ────────────────────────────────────────────────────────────────

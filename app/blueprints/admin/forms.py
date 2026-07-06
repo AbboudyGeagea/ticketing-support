@@ -94,8 +94,9 @@ class ProjectTemplateForm(FlaskForm):
 class KBArticleForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=500)])
     category = StringField("Category", validators=[Optional(), Length(max=100)])
-    body = TextAreaField("Content (Markdown supported)", validators=[DataRequired()])
-    is_published = BooleanField("Published (visible to customers)", default=False)
+    body = TextAreaField("Content", validators=[DataRequired()])
+    is_published_agent = BooleanField("Published to agents", default=False)
+    is_published_customer = BooleanField("Published to customers", default=False)
     submit = SubmitField("Save Article")
 
 

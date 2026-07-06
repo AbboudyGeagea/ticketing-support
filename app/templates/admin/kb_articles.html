@@ -16,7 +16,8 @@
       <tr>
         <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agents</th>
+        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customers</th>
         <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Views</th>
         <th class="px-4 py-3 w-28"></th>
       </tr>
@@ -27,7 +28,14 @@
         <td class="px-5 py-3.5 font-medium text-slate-800">{{ a.title }}</td>
         <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.category or '—' }}</td>
         <td class="px-4 py-3.5">
-          {% if a.is_published %}
+          {% if a.is_published_agent %}
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Published</span>
+          {% else %}
+          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Draft</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3.5">
+          {% if a.is_published_customer %}
           <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Published</span>
           {% else %}
           <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Draft</span>
@@ -46,7 +54,7 @@
       </tr>
       {% else %}
       <tr>
-        <td colspan="5" class="px-5 py-10 text-center text-slate-400 text-sm">
+        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">
           No articles yet.
           <a href="{{ url_for('admin.kb_article_new') }}" class="text-primary hover:underline ml-1">Write the first one →</a>
         </td>

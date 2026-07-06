@@ -2,6 +2,17 @@
 {% block title %}{% if article %}Edit Article{% else %}New Article{% endif %}{% endblock %}
 {% block page_title %}{% if article %}Edit Article{% else %}New KB Article{% endif %}{% endblock %}
 
+{% block head_extra %}
+<link href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css" rel="stylesheet">
+<style>
+  #quill-editor .ql-editor { min-height: 320px; font-size: 14px; }
+  #quill-editor .ql-toolbar { border-radius: 6px 6px 0 0; border-color: #cbd5e1; background: #f8fafc; }
+  #quill-editor .ql-container { border-radius: 0 0 6px 6px; border-color: #cbd5e1; }
+  .mode-btn { padding: 5px 14px; font-size: 12px; font-weight: 600; border-radius: 5px; border: 1px solid #e2e8f0; cursor: pointer; transition: all 0.15s; background: #fff; color: #64748b; }
+  .mode-btn.active { background: #1B4F8A; color: #fff; border-color: #1B4F8A; }
+</style>
+{% endblock %}
+
 {% block header_actions %}
 <a href="{{ url_for('admin.kb_articles') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back to KB</a>
 {% endblock %}
@@ -9,7 +20,7 @@
 {% block content %}
 <div class="max-w-3xl">
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-    <form method="POST" novalidate>
+    <form method="POST" enctype="multipart/form-data" novalidate>
       {{ form.hidden_tag() }}
       <div class="mb-4">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Title *</label>
@@ -20,16 +31,64 @@
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
         {{ form.category(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. Hardware, Software, Network") }}
       </div>
+
       <div class="mb-5">
-        <label class="block text-sm font-medium text-slate-700 mb-1.5">Content *</label>
-        <p class="text-xs text-slate-400 mb-1.5">Plain text or Markdown. Customers will see this as-is.</p>
-        {{ form.body(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-y font-mono", rows=16) }}
+        <div class="flex items-center justify-between mb-1.5">
+          <label class="block text-sm font-medium text-slate-700">Content *</label>
+          <div class="flex gap-1">
+            <button id="btn-visual" type="button" class="mode-btn active">Visual Editor</button>
+            <button id="btn-source" type="button" class="mode-btn">HTML Source</button>
+          </div>
+        </div>
+
+        {# Hidden field WTForms binds to — kept in sync with the editor right before submit #}
+        {{ form.body(id="body", style="display:none") }}
+
+        <div id="quill-wrapper">
+          <div id="quill-editor"></div>
+        </div>
+        <textarea id="body-source" rows="18"
+                  style="display:none;width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;font-family:'Cascadia Code','Fira Code','Consolas',monospace;color:#1e293b;resize:vertical;outline:none;"></textarea>
+
         {% if form.body.errors %}<p class="text-red-500 text-xs mt-1">{{ form.body.errors[0] }}</p>{% endif %}
+        <p class="text-xs text-slate-400 mt-1.5">Raw HTML is rendered as-is on the article page — only trusted staff can edit KB content.</p>
       </div>
-      <div class="mb-6 flex items-center gap-2">
-        {{ form.is_published(class="rounded border-slate-300 text-primary") }}
-        <label class="text-sm text-slate-700">Published (visible to customers and agents)</label>
+
+      <div class="mb-5">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Attachments (PDF only)</label>
+        {% if article and article.attachments %}
+        <div class="space-y-1.5 mb-2">
+          {% for att in article.attachments %}
+          <div class="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+            <span class="text-slate-700 truncate">{{ att.original_name }}</span>
+            <div class="flex items-center gap-3 flex-shrink-0 ml-3">
+              <span class="text-xs text-slate-400">{{ (att.size / 1024) | round(1) }} KB</span>
+              <button type="submit" form="delete-att-{{ att.id }}" class="text-red-500 hover:underline text-xs font-medium">Remove</button>
+            </div>
+          </div>
+          <form id="delete-att-{{ att.id }}" method="POST"
+                action="{{ url_for('admin.kb_attachment_delete', article_id=article.id, att_id=att.id) }}"
+                onsubmit="return confirm('Remove this attachment?')" style="display:none;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          </form>
+          {% endfor %}
+        </div>
+        {% endif %}
+        <input type="file" name="attachments" accept="application/pdf" multiple
+               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:bg-slate-100 file:text-slate-700 file:text-xs file:font-medium">
       </div>
+
+      <div class="mb-6 space-y-2">
+        <div class="flex items-center gap-2">
+          {{ form.is_published_agent(class="rounded border-slate-300 text-primary") }}
+          <label class="text-sm text-slate-700">Published to agents</label>
+        </div>
+        <div class="flex items-center gap-2">
+          {{ form.is_published_customer(class="rounded border-slate-300 text-primary") }}
+          <label class="text-sm text-slate-700">Published to customers</label>
+        </div>
+      </div>
+
       <div class="flex gap-3">
         <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">Save Article</button>
         <a href="{{ url_for('admin.kb_articles') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
@@ -37,4 +96,55 @@
     </form>
   </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+<script>
+const sourceEl = document.getElementById('body-source');
+const bodyHidden = document.getElementById('body');
+const quillWrapper = document.getElementById('quill-wrapper');
+let mode = 'visual';
+
+const quill = new Quill('#quill-editor', {
+  theme: 'snow',
+  placeholder: 'Write the article…',
+  modules: {
+    toolbar: [
+      [{ header: [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline'],
+      [{ color: [] }],
+      [{ list: 'ordered' }, { list: 'bullet' }],
+      ['link', 'image'],
+      ['clean'],
+    ]
+  }
+});
+
+const initialHtml = bodyHidden.value;
+if (initialHtml) quill.clipboard.dangerouslyPasteHTML(initialHtml);
+sourceEl.value = initialHtml;
+
+document.getElementById('btn-visual').addEventListener('click', () => {
+  if (mode === 'visual') return;
+  quill.clipboard.dangerouslyPasteHTML(sourceEl.value);
+  sourceEl.style.display = 'none';
+  quillWrapper.style.display = '';
+  document.getElementById('btn-visual').classList.add('active');
+  document.getElementById('btn-source').classList.remove('active');
+  mode = 'visual';
+});
+
+document.getElementById('btn-source').addEventListener('click', () => {
+  if (mode === 'source') return;
+  sourceEl.value = quill.root.innerHTML;
+  quillWrapper.style.display = 'none';
+  sourceEl.style.display = 'block';
+  document.getElementById('btn-source').classList.add('active');
+  document.getElementById('btn-visual').classList.remove('active');
+  mode = 'source';
+});
+
+document.querySelector('form').addEventListener('submit', () => {
+  bodyHidden.value = (mode === 'visual') ? quill.root.innerHTML : sourceEl.value;
+});
+</script>
 {% endblock %}
