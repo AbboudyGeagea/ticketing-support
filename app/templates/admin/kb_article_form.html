@@ -66,11 +66,6 @@
               <button type="submit" form="delete-att-{{ att.id }}" class="text-red-500 hover:underline text-xs font-medium">Remove</button>
             </div>
           </div>
-          <form id="delete-att-{{ att.id }}" method="POST"
-                action="{{ url_for('admin.kb_attachment_delete', article_id=article.id, att_id=att.id) }}"
-                onsubmit="return confirm('Remove this attachment?')" style="display:none;">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-          </form>
           {% endfor %}
         </div>
         {% endif %}
@@ -94,6 +89,18 @@
         <a href="{{ url_for('admin.kb_articles') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2.5 transition-colors">Cancel</a>
       </div>
     </form>
+
+    {# Standalone delete forms — must NOT be nested inside the form above (invalid HTML,
+       browsers silently drop nested forms). Referenced via the button's form="" attribute. #}
+    {% if article and article.attachments %}
+    {% for att in article.attachments %}
+    <form id="delete-att-{{ att.id }}" method="POST"
+          action="{{ url_for('admin.kb_attachment_delete', article_id=article.id, att_id=att.id) }}"
+          onsubmit="return confirm('Remove this attachment?')" style="display:none;">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    </form>
+    {% endfor %}
+    {% endif %}
   </div>
 </div>
 
