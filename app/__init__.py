@@ -126,15 +126,7 @@ def create_app(config_class=Config):
     @app.errorhandler(500)
     def server_error(e):
         from flask import render_template
-        from flask_login import current_user
-        import traceback
-        debug_detail = None
-        try:
-            if current_user.is_authenticated and current_user.is_agent:
-                debug_detail = traceback.format_exc()
-        except Exception:
-            pass
-        return render_template("errors/500.html", debug_detail=debug_detail), 500
+        return render_template("errors/500.html"), 500
 
     _register_cli(app)
 

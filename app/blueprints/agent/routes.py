@@ -331,14 +331,9 @@ def ticket_new():
     if request.method == "GET":
         related_ref = request.args.get("related_ref", "")
         if related_ref:
-            try:
-                related = Ticket.query.filter_by(ref=related_ref).first()
-                if related:
-                    form.subject.data = f"Re: {related.subject}"
-            except Exception as exc:
-                current_app.logger.exception("related_ref lookup failed for '%s'", related_ref)
-                flash(f"DEBUG — related_ref lookup failed: {exc}", "danger")
-                related_ref = ""
+            related = Ticket.query.filter_by(ref=related_ref).first()
+            if related:
+                form.subject.data = f"Re: {related.subject}"
 
     if form.validate_on_submit():
         hospital = Hospital.query.get_or_404(form.hospital_id.data)
@@ -353,7 +348,6 @@ def ticket_new():
             form.product_id.errors = ["Please select a product."]
             return render_template("agent/ticket_new.html", form=form, hospitals=hospitals, related_ref=related_ref)
 
-        from app.models.ticket import Ticket, TicketMessage
         ticket = Ticket(
             ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=hospital.id,
