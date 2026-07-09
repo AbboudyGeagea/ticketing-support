@@ -189,7 +189,7 @@
           </p>
           {% if task.deadline %}
           <p class="text-xs mt-0.5 {% if task.is_overdue %}text-red-500 font-medium{% else %}text-slate-400{% endif %}">
-            {% if task.is_overdue %}Overdue · {% endif %}Due {{ task.deadline.strftime('%b %d, %Y') }}
+            {% if task.is_overdue %}Overdue · {% endif %}Due {{ task.deadline | localtime('%b %d, %Y') }}
           </p>
           {% else %}
           <p class="text-xs mt-0.5 text-slate-300">No deadline set</p>

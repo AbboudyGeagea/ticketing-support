@@ -46,7 +46,7 @@
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="text-xs font-semibold text-slate-700">{{ entry.user.name }}</span>
-          <span class="text-xs text-slate-400">{{ entry.logged_at.strftime('%b %d, %Y') }}</span>
+          <span class="text-xs text-slate-400">{{ entry.logged_at | localtime('%b %d, %Y') }}</span>
           <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">
             {{ fmt_minutes(entry.minutes) }}
           </span>

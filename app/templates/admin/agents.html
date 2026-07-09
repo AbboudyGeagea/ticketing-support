@@ -49,7 +49,7 @@
           </span>
         </td>
         <td class="px-4 py-3.5 text-slate-400 text-xs">
-          {{ a.last_login.strftime('%b %d, %Y %H:%M') if a.last_login else 'Never' }}
+          {{ a.last_login | localtime('%b %d, %Y %H:%M') if a.last_login else 'Never' }}
         </td>
         <td class="px-4 py-3.5 text-right">
           <form method="POST" action="{{ url_for('admin.resend_invite', user_id=a.id) }}" style="margin:0;">

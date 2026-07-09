@@ -75,6 +75,26 @@ def create_app(config_class=Config):
     def inject_now():
         return {"now": datetime.utcnow()}
 
+    @app.template_filter("localtime")
+    def localtime_filter(dt, fmt="%b %d, %Y %H:%M"):
+        """Format a naive-UTC datetime in the configured local timezone.
+
+        All timestamps are stored in UTC (datetime.utcnow()); this filter is
+        the single place that converts to a human-facing local time — Python
+        arithmetic elsewhere (SLA calculations, token expiry, etc.) is left
+        untouched and stays UTC-vs-UTC correct.
+        """
+        if dt is None:
+            return ""
+        from zoneinfo import ZoneInfo
+        tz_name = app.config.get("LOCAL_TZ_NAME", "UTC")
+        try:
+            tz = ZoneInfo(tz_name)
+        except Exception:
+            tz = ZoneInfo("UTC")
+        local_dt = dt.replace(tzinfo=ZoneInfo("UTC")).astimezone(tz)
+        return local_dt.strftime(fmt)
+
     @app.context_processor
     def inject_portal_projects():
         from flask_login import current_user

@@ -75,7 +75,7 @@
       <div class="flex items-center justify-between mt-4">
         <p class="text-xs text-slate-400">
           {% if form_values.updated_at %}
-            Last saved: {{ form_values.updated_at.strftime("%Y-%m-%d %H:%M UTC") }}
+            Last saved: {{ form_values.updated_at | localtime("%Y-%m-%d %H:%M") }}
           {% else %}
             Not yet saved — currently using .env values.
           {% endif %}
@@ -201,7 +201,7 @@
         <tbody class="divide-y divide-slate-100">
           {% for entry in email_log %}
           <tr class="hover:bg-slate-50 {% if entry.status == 'failed' %}bg-red-50{% elif entry.status == 'skipped' %}bg-yellow-50{% endif %}">
-            <td class="px-4 py-2 font-mono whitespace-nowrap text-slate-600">{{ entry.created_at.strftime("%m-%d %H:%M:%S") }}</td>
+            <td class="px-4 py-2 font-mono whitespace-nowrap text-slate-600">{{ entry.created_at | localtime("%m-%d %H:%M:%S") }}</td>
             <td class="px-4 py-2">
               {% if entry.status == 'sent' %}
                 <span class="inline-flex items-center gap-1 text-green-700 font-semibold">✓ sent</span>

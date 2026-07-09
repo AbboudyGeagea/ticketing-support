@@ -31,7 +31,7 @@
   &nbsp;·&nbsp; Hospital: {{ ticket.hospital.name }}
   {% if ticket.product %}&nbsp;·&nbsp; Product: {{ ticket.product.name }}{% endif %}
   &nbsp;·&nbsp; Source: {{ ticket.source.upper() }}
-  &nbsp;·&nbsp; Created: {{ ticket.created_at.strftime('%Y-%m-%d %H:%M') }}
+  &nbsp;·&nbsp; Created: {{ ticket.created_at | localtime('%Y-%m-%d %H:%M') }}
   {% if ticket.assignee %}&nbsp;·&nbsp; Assigned: {{ ticket.assignee.name }}{% endif %}
 </div>
 
@@ -43,7 +43,7 @@
   <div class="msg-header">
     <strong>{{ msg.sender_name or msg.sender_email or 'Unknown' }}</strong>
     {% if msg.is_internal %}<em>(Internal Note)</em>{% endif %}
-    &nbsp;·&nbsp; {{ msg.created_at.strftime('%Y-%m-%d %H:%M') }}
+    &nbsp;·&nbsp; {{ msg.created_at | localtime('%Y-%m-%d %H:%M') }}
   </div>
   <div class="msg-body">{{ msg.body }}</div>
 </div>
@@ -51,7 +51,7 @@
 
 <hr>
 <div class="meta" style="font-size:11px;">
-  Printed from Intermedic Support — {{ now.strftime('%Y-%m-%d %H:%M') }} UTC
+  Printed from Intermedic Support — {{ now | localtime('%Y-%m-%d %H:%M') }}
 </div>
 </body>
 </html>

@@ -43,7 +43,7 @@
           <span class="inline-flex text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded mr-1">{{ h.name }}</span>
           {% endfor %}
         </td>
-        <td class="px-4 py-3.5 text-slate-400 text-xs">{{ inst.created_at.strftime('%b %d, %Y') }}</td>
+        <td class="px-4 py-3.5 text-slate-400 text-xs">{{ inst.created_at | localtime('%b %d, %Y') }}</td>
         <td class="px-4 py-3.5 text-right">
           <a href="{{ url_for('admin.shared_installation_edit', inst_id=inst.id) }}"
              class="text-primary hover:underline text-xs mr-3">Edit</a>

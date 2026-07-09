@@ -32,7 +32,7 @@
     </div>
     <div class="flex flex-wrap gap-3 mt-2 text-xs text-slate-400">
       {% if ticket.product %}<span>{{ ticket.product.name }}</span> ·{% endif %}
-      <span>Opened {{ ticket.created_at.strftime('%B %d, %Y') }}</span>
+      <span>Opened {{ ticket.created_at | localtime('%B %d, %Y') }}</span>
       {% if ticket.hospital %} · <span>{{ ticket.hospital.name }}</span>{% endif %}
     </div>
   </div>
@@ -66,7 +66,7 @@
             {% else %}{{ msg.sender_name or msg.sender_email }}{% endif %}
           </span>
         </div>
-        <span class="text-xs text-slate-400">{{ msg.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+        <span class="text-xs text-slate-400">{{ msg.created_at | localtime('%b %d, %Y %H:%M') }}</span>
       </div>
       <div class="px-5 py-4 text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">{{ msg.body }}</div>
       {% set msg_atts = msg_attachments.get(msg.id, []) %}

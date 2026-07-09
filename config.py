@@ -32,6 +32,9 @@ class Config:
 
     EMAIL_POLL_INTERVAL_SECONDS = int(os.environ.get("EMAIL_POLL_INTERVAL_SECONDS", 60))
 
+    # All timestamps are stored in UTC; this is the timezone used to display them.
+    LOCAL_TZ_NAME = os.environ.get("LOCAL_TZ_NAME", "Asia/Beirut")
+
     # Hospital credentials vault
     CREDENTIAL_ENCRYPTION_KEY = os.environ.get("CREDENTIAL_ENCRYPTION_KEY", "")
     CREDENTIAL_MASTER_KEY = os.environ.get("CREDENTIAL_MASTER_KEY", "")

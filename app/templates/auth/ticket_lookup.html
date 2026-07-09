@@ -47,8 +47,8 @@
           <dd><span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">{{ result.status_label }}</span></dd>
         </div>
         <div class="flex justify-between"><dt class="text-slate-500">Priority</dt><dd class="text-slate-800">{{ result.priority_label }}</dd></div>
-        <div class="flex justify-between"><dt class="text-slate-500">Opened</dt><dd class="text-slate-600 text-xs">{{ result.created_at.strftime('%b %d, %Y') }}</dd></div>
-        {% if result.updated_at %}<div class="flex justify-between"><dt class="text-slate-500">Last Updated</dt><dd class="text-slate-600 text-xs">{{ result.updated_at.strftime('%b %d, %Y %H:%M') }}</dd></div>{% endif %}
+        <div class="flex justify-between"><dt class="text-slate-500">Opened</dt><dd class="text-slate-600 text-xs">{{ result.created_at | localtime('%b %d, %Y') }}</dd></div>
+        {% if result.updated_at %}<div class="flex justify-between"><dt class="text-slate-500">Last Updated</dt><dd class="text-slate-600 text-xs">{{ result.updated_at | localtime('%b %d, %Y %H:%M') }}</dd></div>{% endif %}
       </dl>
     </div>
     {% endif %}

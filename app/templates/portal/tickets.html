@@ -34,7 +34,7 @@
         <p class="text-xs text-slate-400 mt-0.5">
           {{ t.ref }}
           {% if t.product %} · {{ t.product.name }}{% endif %}
-          · {{ t.created_at.strftime('%b %d, %Y') }}
+          · {{ t.created_at | localtime('%b %d, %Y') }}
         </p>
       </div>
       <div class="flex items-center gap-3 flex-shrink-0">

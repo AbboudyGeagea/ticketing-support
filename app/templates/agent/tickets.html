@@ -242,13 +242,13 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
                 <span class="w-1.5 h-1.5 rounded-full bg-orange-500 flex-shrink-0"></span>Customer replied
               </span>
               {% endif %}
-              <p class="text-xs text-slate-400 mt-0.5 whitespace-nowrap">{{ lm.created_at.strftime('%b %d, %H:%M') }}</p>
+              <p class="text-xs text-slate-400 mt-0.5 whitespace-nowrap">{{ lm.created_at | localtime('%b %d, %H:%M') }}</p>
             {% else %}
               <span class="text-xs text-slate-300">No replies</span>
             {% endif %}
           </td>
           <td class="px-4 py-3.5 text-slate-400 text-xs whitespace-nowrap">
-            {{ t.updated_at.strftime('%b %d, %H:%M') if t.updated_at else t.created_at.strftime('%b %d, %H:%M') }}
+            {{ t.updated_at | localtime('%b %d, %H:%M') if t.updated_at else t.created_at | localtime('%b %d, %H:%M') }}
           </td>
         </tr>
         {% else %}
@@ -305,7 +305,7 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
           <td class="px-5 py-3 font-mono text-xs text-amber-700">{{ t.ref }}</td>
           <td class="px-4 py-3 text-xs text-slate-500">{{ t.hospital.name }}</td>
           <td class="px-4 py-3 text-xs text-slate-500">{{ t.phi_flagger.name if t.phi_flagger else '—' }}</td>
-          <td class="px-4 py-3 text-xs text-slate-400">{{ t.phi_flagged_at.strftime('%b %d, %Y %H:%M') if t.phi_flagged_at else '—' }}</td>
+          <td class="px-4 py-3 text-xs text-slate-400">{{ t.phi_flagged_at | localtime('%b %d, %Y %H:%M') if t.phi_flagged_at else '—' }}</td>
           <td class="px-4 py-3 text-xs text-slate-400 italic">[PHI — content archived]</td>
         </tr>
         {% endfor %}

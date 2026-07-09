@@ -107,7 +107,7 @@
               </span>
               {% if task.deadline %}
               <span class="text-xs {% if task.is_overdue %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}">
-                {{ task.deadline.strftime('%b %-d') }}
+                {{ task.deadline | localtime('%b %-d') }}
               </span>
               {% endif %}
             </div>

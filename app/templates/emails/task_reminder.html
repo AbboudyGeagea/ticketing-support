@@ -13,7 +13,7 @@
     {% endif %}
     {% if task.deadline %}
     <p style="color:{% if task.is_overdue %}#dc2626{% else %}#64748b{% endif %};margin:0 0 16px;">
-      <strong>Deadline:</strong> {{ task.deadline.strftime('%B %d, %Y %H:%M') }}
+      <strong>Deadline:</strong> {{ task.deadline | localtime('%B %d, %Y %H:%M') }}
       {% if task.is_overdue %} — <strong>OVERDUE</strong>{% endif %}
     </p>
     {% endif %}

@@ -149,7 +149,7 @@
           {% if task.is_overdue %}text-red-600 font-semibold{% else %}text-slate-400{% endif %}">
           {% if task.deadline %}
             {% if task.is_overdue %}Overdue · {% endif %}
-            {{ task.deadline.strftime('%b %d, %Y') }}
+            {{ task.deadline | localtime('%b %d, %Y') }}
           {% else %}—{% endif %}
         </td>
       </tr>

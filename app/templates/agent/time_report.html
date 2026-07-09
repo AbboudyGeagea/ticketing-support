@@ -88,7 +88,7 @@
       {% for entry in agent_entries %}
       <tr class="hover:bg-slate-50 transition-colors">
         <td class="px-5 py-3 text-xs text-slate-500 whitespace-nowrap">
-          {{ entry.logged_at.strftime('%b %d, %Y') }}
+          {{ entry.logged_at | localtime('%b %d, %Y') }}
         </td>
         <td class="px-4 py-3">
           <a href="{{ url_for('agent.task_detail', task_id=entry.task.id) }}"

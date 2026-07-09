@@ -257,7 +257,7 @@
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-sm font-medium text-slate-800">{{ c.author.name }}</span>
-            <span class="text-xs text-slate-400">{{ c.created_at.strftime('%b %d, %Y %H:%M') }}</span>
+            <span class="text-xs text-slate-400">{{ c.created_at | localtime('%b %d, %Y %H:%M') }}</span>
           </div>
           <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ c.body }}</p>
         </div>

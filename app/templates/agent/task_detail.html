@@ -202,7 +202,7 @@
             {% endif %}
           </div>
           <div class="flex items-center gap-3">
-            <span class="text-xs text-slate-400">{{ entry.user.name }} · {{ entry.logged_at.strftime('%b %d') }}</span>
+            <span class="text-xs text-slate-400">{{ entry.user.name }} · {{ entry.logged_at | localtime('%b %d') }}</span>
             <form method="POST"
                   action="{{ url_for('agent.task_delete_time', task_id=task.id, entry_id=entry.id) }}"
                   class="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -311,7 +311,7 @@
       <!-- Created at -->
       <div class="flex items-center justify-between text-sm">
         <span class="text-slate-500 text-xs">Created</span>
-        <span class="text-slate-600 text-xs">{{ task.created_at.strftime('%b %d, %Y') }}</span>
+        <span class="text-slate-600 text-xs">{{ task.created_at | localtime('%b %d, %Y') }}</span>
       </div>
 
     </div>
@@ -374,7 +374,7 @@
 
         <div class="mb-3">
           <label class="block text-xs font-medium text-slate-600 mb-1">Deadline</label>
-          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary", min=now.strftime('%Y-%m-%d')) }}
+          {{ form.deadline(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary", min=(now | localtime('%Y-%m-%d'))) }}
         </div>
 
         <div class="mb-4">

@@ -342,7 +342,7 @@
             <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Internal</span>
             {% endif %}
           </td>
-          <td class="px-4 py-3.5 text-xs text-slate-500">{{ p.created_at.strftime('%b %d, %Y') }}</td>
+          <td class="px-4 py-3.5 text-xs text-slate-500">{{ p.created_at | localtime('%b %d, %Y') }}</td>
           <td class="px-4 py-3.5 text-right">
             <a href="{{ url_for('projects.project_detail', project_id=p.id) }}"
                class="text-primary hover:underline text-xs font-medium">Open →</a>
