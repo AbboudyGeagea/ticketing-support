@@ -331,9 +331,14 @@ def ticket_new():
     if request.method == "GET":
         related_ref = request.args.get("related_ref", "")
         if related_ref:
-            related = Ticket.query.filter_by(ref=related_ref).first()
-            if related:
-                form.subject.data = f"Re: {related.subject}"
+            try:
+                related = Ticket.query.filter_by(ref=related_ref).first()
+                if related:
+                    form.subject.data = f"Re: {related.subject}"
+            except Exception as exc:
+                current_app.logger.exception("related_ref lookup failed for '%s'", related_ref)
+                flash(f"DEBUG — related_ref lookup failed: {exc}", "danger")
+                related_ref = ""
 
     if form.validate_on_submit():
         hospital = Hospital.query.get_or_404(form.hospital_id.data)
