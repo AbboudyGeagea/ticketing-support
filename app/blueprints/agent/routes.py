@@ -211,7 +211,12 @@ def tickets():
         query = query.filter(Ticket.assigned_to.is_(None))
     if search:
         query = query.filter(
-            or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
+            or_(
+                Ticket.subject.ilike(f"%{search}%"),
+                Ticket.ref.ilike(f"%{search}%"),
+                Ticket.escalation_number.ilike(f"%{search}%"),
+                Ticket.escalation_url.ilike(f"%{search}%"),
+            )
         )
 
     _priority_order = db.case(
@@ -1611,7 +1616,12 @@ def tickets_export():
         query = query.filter(Ticket.assigned_to.is_(None))
     if search:
         query = query.filter(
-            db.or_(Ticket.subject.ilike(f"%{search}%"), Ticket.ref.ilike(f"%{search}%"))
+            db.or_(
+                Ticket.subject.ilike(f"%{search}%"),
+                Ticket.ref.ilike(f"%{search}%"),
+                Ticket.escalation_number.ilike(f"%{search}%"),
+                Ticket.escalation_url.ilike(f"%{search}%"),
+            )
         )
     query = query.order_by(Ticket.updated_at.desc())
 
