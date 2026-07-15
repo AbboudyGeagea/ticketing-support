@@ -7,21 +7,33 @@
     <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">Ticket Created Successfully</h1>
   </div>
   <div style="padding:28px;">
-    <p style="color:#374151;margin:0 0 16px;">Hello{% if recipient and recipient.name %} {{ recipient.name }}{% endif %},</p>
-    <p style="color:#374151;margin:0 0 16px;">Your support ticket has been received and our team will get back to you shortly.</p>
+    <p style="color:#374151;margin:0 0 16px;">Dear {% if recipient and recipient.name %}{{ recipient.name }}{% else %}Valued Customer{% endif %},</p>
+    <p style="color:#374151;margin:0 0 16px;">We are writing to confirm that your case, [{{ ticket.ref }}] - [{{ ticket.subject }}], has been assigned to a member of our technical support team for review and resolution.</p>
+
+    <p style="margin:0 0 8px;color:#374151;font-weight:600;font-size:14px;">About the case</p>
     <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 20px;">
-      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
-      <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
-      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Short description</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
-      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Priority</p>
-      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.priority_label }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Account</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Assigned to</p>
+      <p style="margin:0 0 12px;color:#1e293b;">Intermedic Support Team</p>
       {% if ticket.product %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Product</p>
-      <p style="margin:0;color:#1e293b;">{{ ticket.product.name }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.product.name }}</p>
       {% endif %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Priority</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ {"urgent": "1 - Critical", "high": "2 - High", "medium": "3 - Moderate", "low": "4 - Low"}.get(ticket.priority, ticket.priority_label) }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Opened</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.created_at | localtime('%d-%m-%Y %H:%M:%S') }}</p>
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">State</p>
+      <p style="margin:0;color:#1e293b;">{{ ticket.status_label }}</p>
     </div>
-    <a href="{{ ticket_url }}" style="display:inline-block;background:#00A651;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Ticket</a>
+
+    <a href="{{ ticket_url }}" style="display:inline-block;background:#00A651;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">View Case</a>
+
+    <p style="color:#374151;margin:20px 0 16px;">Our consultant will be reviewing the details you provided and will reach out if further information is required, or when an update on the resolution is available.</p>
+    <p style="color:#374151;margin:0;">Have a nice day!<br>Intermedic Informatics Support</p>
   </div>
   <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
     <p style="margin:0;color:#94a3b8;font-size:12px;">Intermedic Support — {{ ticket_url }}</p>
