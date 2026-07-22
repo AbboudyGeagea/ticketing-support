@@ -334,7 +334,8 @@ def notify_agents_new_ticket(ticket):
     html = _render("new_ticket.html", ticket=ticket, ticket_url=ticket_url,
                    first_message=first_message)
     if html:
-        _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=html)
+        tag = {"urgent": "[URGENT] ", "high": "[HIGH] "}.get(ticket.priority, "")
+        _send(recipients, f"{tag}[{ticket.ref}] {ticket.subject}", html=html)
 
 
 def notify_assigned_agent_new_message(ticket, message):
