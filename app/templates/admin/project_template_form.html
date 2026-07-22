@@ -7,7 +7,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="max-w-2xl space-y-5">
+<div class="max-w-6xl space-y-5">
 
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
     <form method="POST" id="tmpl-form" novalidate>
@@ -15,24 +15,26 @@
 
       <div class="mb-4">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Template Name *</label>
-        {{ form.name(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. PACS Implementation") }}
+        {{ form.name(class="w-full max-w-lg border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. PACS Implementation") }}
         {% if form.name.errors %}<p class="text-red-500 text-xs mt-1">{{ form.name.errors[0] }}</p>{% endif %}
       </div>
 
-      <div class="mb-5">
+      <div class="mb-6">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
-        {{ form.description(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none", rows=2) }}
+        {{ form.description(class="w-full max-w-lg border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none", rows=2) }}
       </div>
 
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:divide-x lg:divide-slate-200 mb-6">
+
       <!-- Tasks -->
-      <div class="mb-5">
+      <div>
         <div class="flex items-center justify-between mb-3">
           <h4 class="text-sm font-semibold text-slate-700">Tasks</h4>
           <button type="button" onclick="addTaskRow()"
                   class="text-xs text-primary hover:underline font-medium">+ Add Task</button>
         </div>
 
-        <div id="task-rows" class="space-y-3">
+        <div id="task-rows" class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
           {% if tmpl and tmpl.tasks %}
             {% for tt in tmpl.tasks %}
             <div class="task-row grid grid-cols-[1fr_auto_auto] gap-2 items-start">
@@ -60,7 +62,7 @@
       </div>
 
       <!-- Requirements -->
-      <div class="mb-5">
+      <div class="lg:pl-8">
         <div class="flex items-center justify-between mb-3">
           <h4 class="text-sm font-semibold text-slate-700">Requirements</h4>
           <div class="flex items-center gap-3">
@@ -72,7 +74,7 @@
         </div>
         <p class="text-xs text-slate-400 mb-3">Customer-side items (provide info, approve a design, answer a question) — copied onto every project created from this template.</p>
 
-        <div id="req-rows" class="space-y-3">
+        <div id="req-rows" class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
           {% if tmpl and tmpl.requirements %}
             {% for tr in tmpl.requirements %}
             <div class="req-row grid grid-cols-[1fr_auto_auto_auto] gap-2 items-start">
@@ -103,6 +105,8 @@
         {% if not tmpl or not tmpl.requirements %}
         <p id="no-reqs-hint" class="text-xs text-slate-400 italic mt-2">No requirements yet — click "+ Add Requirement" to start.</p>
         {% endif %}
+      </div>
+
       </div>
 
       <div class="flex gap-3">
