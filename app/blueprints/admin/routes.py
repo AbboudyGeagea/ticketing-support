@@ -17,7 +17,7 @@ from app.models.task import Task
 from app.models.canned_response import CannedResponse
 from app.models.assignment_rule import AssignmentRule
 from app.models.webhook_config import WebhookConfig, WEBHOOK_EVENTS
-from app.models.project import ProjectTemplate, ProjectTemplateTask
+from app.models.project import ProjectTemplate, ProjectTemplateTask, ProjectTemplateRequirement
 from app.models.kb_article import KBArticle
 from app.models.ticket_template import TicketTemplate
 from app.models.sla_policy import SLAPolicy
@@ -661,6 +661,7 @@ def project_template_new():
         db.session.add(tmpl)
         db.session.flush()
         _save_template_tasks(tmpl)
+        _save_template_requirements(tmpl)
         db.session.commit()
         flash(f'Template "{tmpl.name}" created.', "success")
         return redirect(url_for("admin.project_template_edit", tmpl_id=tmpl.id))
@@ -681,6 +682,11 @@ def project_template_edit(tmpl_id):
             db.session.delete(t)
         db.session.flush()
         _save_template_tasks(tmpl)
+        # Replace requirements
+        for r in list(tmpl.requirements):
+            db.session.delete(r)
+        db.session.flush()
+        _save_template_requirements(tmpl)
         db.session.commit()
         flash("Template updated.", "success")
         return redirect(url_for("admin.project_template_edit", tmpl_id=tmpl.id))
@@ -714,6 +720,24 @@ def _save_template_tasks(tmpl):
             order=i,
         )
         db.session.add(t)
+
+
+def _save_template_requirements(tmpl):
+    titles = request.form.getlist("req_title[]")
+    descs = request.form.getlist("req_desc[]")
+    types = request.form.getlist("req_type[]")
+    for i, title in enumerate(titles):
+        title = title.strip()
+        if not title:
+            continue
+        r = ProjectTemplateRequirement(
+            template_id=tmpl.id,
+            title=title,
+            description=descs[i] if i < len(descs) else None,
+            req_type=types[i] if i < len(types) else "provide",
+            order=i,
+        )
+        db.session.add(r)
 
 
 # ── Knowledge Base ────────────────────────────────────────────────────────────

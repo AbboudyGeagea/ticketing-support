@@ -59,6 +59,52 @@
         {% endif %}
       </div>
 
+      <!-- Requirements -->
+      <div class="mb-5">
+        <div class="flex items-center justify-between mb-3">
+          <h4 class="text-sm font-semibold text-slate-700">Requirements</h4>
+          <div class="flex items-center gap-3">
+            <button type="button" onclick="clearAllRequirements()"
+                    class="text-xs text-red-500 hover:underline font-medium">Clear All</button>
+            <button type="button" onclick="addRequirementRow()"
+                    class="text-xs text-primary hover:underline font-medium">+ Add Requirement</button>
+          </div>
+        </div>
+        <p class="text-xs text-slate-400 mb-3">Customer-side items (provide info, approve a design, answer a question) — copied onto every project created from this template.</p>
+
+        <div id="req-rows" class="space-y-3">
+          {% if tmpl and tmpl.requirements %}
+            {% for tr in tmpl.requirements %}
+            <div class="req-row grid grid-cols-[1fr_auto_auto_auto] gap-2 items-start">
+              <input type="text" name="req_title[]" value="{{ tr.title }}" placeholder="Requirement title" required
+                     class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+              <select name="req_type[]" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                {% for rt, rt_label in [('provide', 'Provide'), ('approve', 'Approve'), ('question', 'Question')] %}
+                <option value="{{ rt }}" {% if tr.req_type == rt %}selected{% endif %}>{{ rt_label }}</option>
+                {% endfor %}
+              </select>
+              <div class="flex flex-col">
+                <button type="button" onclick="moveReqRow(this, -1)" title="Move up"
+                        class="text-slate-400 hover:text-slate-700 text-xs leading-none px-1.5 py-0.5">▲</button>
+                <button type="button" onclick="moveReqRow(this, 1)" title="Move down"
+                        class="text-slate-400 hover:text-slate-700 text-xs leading-none px-1.5 py-0.5">▼</button>
+              </div>
+              <button type="button" onclick="removeReqRow(this)"
+                      class="text-red-400 hover:text-red-600 text-sm px-2 py-2">✕</button>
+            </div>
+            <div class="pl-0">
+              <input type="text" name="req_desc[]" value="{{ tr.description or '' }}" placeholder="Description (optional)"
+                     class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary">
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        {% if not tmpl or not tmpl.requirements %}
+        <p id="no-reqs-hint" class="text-xs text-slate-400 italic mt-2">No requirements yet — click "+ Add Requirement" to start.</p>
+        {% endif %}
+      </div>
+
       <div class="flex gap-3">
         <button type="submit" class="bg-primary hover:bg-primary-dark text-white font-semibold px-6 py-2.5 rounded-lg text-sm transition-colors">
           Save Template
@@ -105,6 +151,76 @@ function removeRow(btn) {
     descRow.remove();
   }
   titleRow.remove();
+}
+
+function addRequirementRow() {
+  document.getElementById('no-reqs-hint')?.remove();
+  const container = document.getElementById('req-rows');
+  const titleRow = document.createElement('div');
+  titleRow.className = 'req-row grid grid-cols-[1fr_auto_auto_auto] gap-2 items-start';
+  titleRow.innerHTML = `
+    <input type="text" name="req_title[]" placeholder="Requirement title" required
+           class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+    <select name="req_type[]" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+      <option value="provide" selected>Provide</option>
+      <option value="approve">Approve</option>
+      <option value="question">Question</option>
+    </select>
+    <div class="flex flex-col">
+      <button type="button" onclick="moveReqRow(this, -1)" title="Move up" class="text-slate-400 hover:text-slate-700 text-xs leading-none px-1.5 py-0.5">▲</button>
+      <button type="button" onclick="moveReqRow(this, 1)" title="Move down" class="text-slate-400 hover:text-slate-700 text-xs leading-none px-1.5 py-0.5">▼</button>
+    </div>
+    <button type="button" onclick="removeReqRow(this)" class="text-red-400 hover:text-red-600 text-sm px-2 py-2">✕</button>
+  `;
+  const descRow = document.createElement('div');
+  descRow.innerHTML = `
+    <input type="text" name="req_desc[]" placeholder="Description (optional)"
+           class="w-full border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-600 focus:outline-none focus:ring-1 focus:ring-primary">
+  `;
+  container.appendChild(titleRow);
+  container.appendChild(descRow);
+  titleRow.querySelector('input').focus();
+}
+
+function removeReqRow(btn) {
+  const titleRow = btn.closest('.req-row');
+  const descRow = titleRow.nextElementSibling;
+  if (descRow && !descRow.classList.contains('req-row')) {
+    descRow.remove();
+  }
+  titleRow.remove();
+}
+
+function moveReqRow(btn, direction) {
+  const row = btn.closest('.req-row');
+  const container = document.getElementById('req-rows');
+  const children = Array.from(container.children);
+  const pairs = [];
+  for (let i = 0; i < children.length; i += 2) {
+    pairs.push([children[i], children[i + 1]]);
+  }
+  const idx = pairs.findIndex(p => p[0] === row);
+  const newIdx = idx + direction;
+  if (idx === -1 || newIdx < 0 || newIdx >= pairs.length) return;
+  const tmp = pairs[idx];
+  pairs[idx] = pairs[newIdx];
+  pairs[newIdx] = tmp;
+  pairs.forEach(([r, d]) => {
+    container.appendChild(r);
+    if (d) container.appendChild(d);
+  });
+}
+
+function clearAllRequirements() {
+  const container = document.getElementById('req-rows');
+  if (!container.children.length) return;
+  if (!confirm('Remove all requirements from this template? This takes effect once you click "Save Template".')) return;
+  container.innerHTML = '';
+  const hint = document.createElement('p');
+  hint.id = 'no-reqs-hint';
+  hint.className = 'text-xs text-slate-400 italic mt-2';
+  hint.textContent = 'No requirements yet — click "+ Add Requirement" to start.';
+  container.insertAdjacentElement('afterend', hint);
 }
 </script>
 {% endblock %}
