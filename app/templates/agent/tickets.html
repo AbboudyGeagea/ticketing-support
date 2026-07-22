@@ -98,6 +98,15 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
       </select>
     </div>
     <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Type</label>
+      <select name="type" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">All</option>
+        {% for tp in types %}
+        <option value="{{ tp }}" {% if filters.type == tp %}selected{% endif %}>{{ type_labels[tp] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Hospital</label>
       <select name="hospital_id" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <option value="0" {% if not filters.hospital_id %}selected{% endif %}>All hospitals</option>
@@ -208,7 +217,7 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
           <td class="px-4 py-3.5">
             <p class="font-medium text-slate-800 truncate max-w-xs">{{ t.subject }}</p>
             <p class="text-xs text-slate-400 mt-0.5">
-              {{ t.source.upper() }}
+              {{ t.type_label }} · {{ t.source.upper() }}
               {% if t.creator %} · {{ t.creator.name }}{% endif %}
             </p>
           </td>
@@ -372,7 +381,7 @@ document.getElementById('save-filter-form').addEventListener('submit', function(
     inp.type = 'hidden'; inp.name = 'status'; inp.value = cb.value; inp.dataset.dyn = '1';
     sf.appendChild(inp);
   });
-  ['priority', 'hospital_id', 'product_id', 'source', 'assigned', 'q'].forEach(function(name) {
+  ['priority', 'type', 'hospital_id', 'product_id', 'source', 'assigned', 'q'].forEach(function(name) {
     var el = ff.querySelector('[name="' + name + '"]');
     if (el && el.value && el.value !== '0') {
       var inp = document.createElement('input');

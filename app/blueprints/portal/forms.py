@@ -8,6 +8,11 @@ class NewTicketForm(FlaskForm):
     subject = StringField("Subject", validators=[DataRequired(), Length(max=500)])
     product_id = SelectField("Product / Module", coerce=int, validators=[DataRequired(message="Please select a product.")])
     body = TextAreaField("Description", validators=[DataRequired()])
+    type = SelectField("Type", choices=[
+        ("problem", "Report a Problem"),
+        ("question", "Ask a Question"),
+        ("change_request", "Request a Change"),
+    ], default="problem")
     priority = SelectField("Priority", choices=[
         ("low", "Low"),
         ("medium", "Medium"),

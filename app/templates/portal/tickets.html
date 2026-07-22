@@ -32,7 +32,7 @@
       <div class="flex-1 min-w-0">
         <p class="text-sm font-medium text-slate-800 truncate">{{ t.subject }}</p>
         <p class="text-xs text-slate-400 mt-0.5">
-          {{ t.ref }}
+          {{ t.ref }} · {{ t.type_label }}
           {% if t.product %} · {{ t.product.name }}{% endif %}
           · {{ t.created_at | localtime('%b %d, %Y') }}
         </p>

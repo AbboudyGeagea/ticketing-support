@@ -16,11 +16,16 @@ PRIORITY_MEDIUM = "medium"
 PRIORITY_HIGH = "high"
 PRIORITY_URGENT = "urgent"
 
+TYPE_PROBLEM = "problem"
+TYPE_QUESTION = "question"
+TYPE_CHANGE = "change_request"
+
 ALL_STATUSES = [
     STATUS_NEW, STATUS_ASSIGNED, STATUS_AWAITING_INFO,
     STATUS_IN_PROGRESS, STATUS_ESCALATED, STATUS_RESOLVED, STATUS_CLOSED,
 ]
 ALL_PRIORITIES = [PRIORITY_LOW, PRIORITY_MEDIUM, PRIORITY_HIGH, PRIORITY_URGENT]
+ALL_TYPES = [TYPE_PROBLEM, TYPE_QUESTION, TYPE_CHANGE]
 
 STATUS_LABELS = {
     STATUS_NEW: "New",
@@ -37,6 +42,11 @@ PRIORITY_LABELS = {
     PRIORITY_HIGH: "High",
     PRIORITY_URGENT: "Urgent",
 }
+TYPE_LABELS = {
+    TYPE_PROBLEM: "Report a Problem",
+    TYPE_QUESTION: "Ask a Question",
+    TYPE_CHANGE: "Request a Change",
+}
 
 
 class Ticket(db.Model):
@@ -51,6 +61,7 @@ class Ticket(db.Model):
     subject = db.Column(db.String(500), nullable=False)
     status = db.Column(db.String(20), nullable=False, default=STATUS_NEW)
     priority = db.Column(db.String(20), nullable=False, default=PRIORITY_MEDIUM)
+    type = db.Column(db.String(20), nullable=False, default=TYPE_PROBLEM)
     source = db.Column(db.String(20), default="portal")  # portal | email
     email_thread_id = db.Column(db.String(500))  # Graph API conversationId
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
@@ -89,6 +100,10 @@ class Ticket(db.Model):
     @property
     def priority_label(self):
         return PRIORITY_LABELS.get(self.priority, self.priority)
+
+    @property
+    def type_label(self):
+        return TYPE_LABELS.get(self.type, self.type)
 
     @property
     def sla_status(self):

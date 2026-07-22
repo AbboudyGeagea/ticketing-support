@@ -9,7 +9,7 @@ from sqlalchemy import or_, and_, func, nulls_last
 from sqlalchemy.orm import joinedload
 from app.blueprints.agent import bp
 from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
-from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES
+from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES, ALL_TYPES, TYPE_LABELS
 from app.models.task import Task, TaskChecklist, TaskDependency, TimeEntry, Sprint, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE, ALL_TASK_STATUSES
 from app.models.product import Product
 from app.models.user import User
@@ -180,6 +180,7 @@ def tickets():
     page = request.args.get("page", 1, type=int)
     status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
+    type_filter = request.args.get("type", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     product_filter = request.args.get("product_id", 0, type=int)
     source_filter = request.args.get("source", "")
@@ -199,6 +200,8 @@ def tickets():
         query = query.filter(Ticket.status.in_(status_filters))
     if priority_filter:
         query = query.filter_by(priority=priority_filter)
+    if type_filter:
+        query = query.filter_by(type=type_filter)
     if hospital_filter:
         query = query.filter_by(hospital_id=hospital_filter)
     if product_filter:
@@ -275,6 +278,8 @@ def tickets():
         filter_params["status"] = status_filters
     if priority_filter:
         filter_params["priority"] = priority_filter
+    if type_filter:
+        filter_params["type"] = type_filter
     if hospital_filter:
         filter_params["hospital_id"] = hospital_filter
     if product_filter:
@@ -300,9 +305,12 @@ def tickets():
         products=products,
         statuses=ALL_STATUSES,
         priorities=ALL_PRIORITIES,
+        types=ALL_TYPES,
+        type_labels=TYPE_LABELS,
         filters={
             "status": status_filters,
             "priority": priority_filter,
+            "type": type_filter,
             "hospital_id": hospital_filter,
             "product_id": product_filter,
             "source": source_filter,
@@ -360,6 +368,7 @@ def ticket_new():
             created_by=customer_id,
             assigned_to=current_user.id,
             subject=form.subject.data,
+            type=form.type.data,
             priority=form.priority.data,
             status="assigned",
             source="agent",
@@ -1593,6 +1602,7 @@ def tickets_export():
 
     status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
+    type_filter = request.args.get("type", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     product_filter = request.args.get("product_id", 0, type=int)
     source_filter = request.args.get("source", "")
@@ -1604,6 +1614,8 @@ def tickets_export():
         query = query.filter(Ticket.status.in_(status_filters))
     if priority_filter:
         query = query.filter_by(priority=priority_filter)
+    if type_filter:
+        query = query.filter_by(type=type_filter)
     if hospital_filter:
         query = query.filter_by(hospital_id=hospital_filter)
     if product_filter:

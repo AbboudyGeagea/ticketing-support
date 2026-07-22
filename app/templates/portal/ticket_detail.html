@@ -28,6 +28,7 @@
     {% if ticket.product %}
     <span>{{ ticket.product.name }}</span> ·
     {% endif %}
+    <span>{{ ticket.type_label }}</span> ·
     <span>Opened {{ ticket.created_at | localtime('%B %d, %Y') }}</span>
     {% if ticket.assignee %}
     · <span>Handled by {{ ticket.assignee.name }}</span>

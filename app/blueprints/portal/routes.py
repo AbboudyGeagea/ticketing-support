@@ -139,6 +139,7 @@ def ticket_new():
             product_id=form.product_id.data,
             created_by=current_user.id,
             subject=form.subject.data,
+            type=form.type.data,
             priority=form.priority.data,
             status="new",
             source="portal",
