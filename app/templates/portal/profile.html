@@ -19,6 +19,17 @@
                class="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm bg-slate-50 text-slate-400">
         <p class="text-xs text-slate-400 mt-1">Contact an administrator to change your email.</p>
       </div>
+      <div class="border-t border-slate-100 pt-4 mt-4 mb-4">
+        <label class="flex items-start gap-2.5 cursor-pointer select-none">
+          <input type="checkbox" name="email_notifications_enabled" {% if current_user.email_notifications_enabled %}checked{% endif %}
+                 class="mt-0.5 rounded border-slate-300 text-primary focus:ring-primary">
+          <span>
+            <span class="block text-sm font-medium text-slate-700">Email notifications</span>
+            <span class="block text-xs text-slate-400 mt-0.5">Receive emails about your tickets (created, replies, status changes, surveys). Turn this off to stop all ticket-related emails.</span>
+          </span>
+        </label>
+      </div>
+
       <div class="border-t border-slate-100 pt-4 mt-4">
         <p class="text-sm font-medium text-slate-700 mb-3">Change Password (optional)</p>
         <div class="mb-3">

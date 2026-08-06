@@ -348,6 +348,7 @@ def user_edit(hospital_id, user_id):
             edit_user.name = form.name.data
             edit_user.email = new_email
             edit_user.active = form.active.data
+            edit_user.email_notifications_enabled = form.email_notifications_enabled.data
             valid_ids = {p.id for p in hospital.products}
             selected_ids = set(form.product_ids.data or []) & valid_ids
             edit_user.products = Product.query.filter(Product.id.in_(selected_ids)).all()

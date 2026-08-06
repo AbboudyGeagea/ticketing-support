@@ -48,6 +48,7 @@ class EditUserForm(FlaskForm):
     name = StringField("Full Name", validators=[DataRequired(), Length(max=200)])
     email = StringField("Email", validators=[DataRequired(), Email()])
     active = BooleanField("Active")
+    email_notifications_enabled = BooleanField("Email Notifications", default=True)
     product_ids = SelectMultipleField("Product Access", coerce=int, validators=[], validate_choice=False)
     submit = SubmitField("Save Changes")
 

@@ -189,12 +189,13 @@ def _all_agent_emails(exclude_id=None):
 
 
 def _get_hospital_product_users(ticket):
-    """All active customers in the ticket's hospital who have access to the ticket's product."""
+    """All active, notification-subscribed customers in the ticket's hospital with access to its product."""
     from app.models.user import User
     users = User.query.filter(
         User.hospital_id == ticket.hospital_id,
         User.role == "customer",
         User.active == True,  # noqa: E712
+        User.email_notifications_enabled == True,  # noqa: E712
     ).all()
     if ticket.product_id:
         users = [u for u in users if any(p.id == ticket.product_id for p in u.products)]
@@ -271,7 +272,7 @@ def notify_customer_status_change(ticket):
 
 
 def notify_customer_resolved_confirmation(ticket):
-    if not ticket.creator or not ticket.creator.email:
+    if not ticket.creator or not ticket.creator.email or not ticket.creator.email_notifications_enabled:
         return
     from itsdangerous import URLSafeTimedSerializer
     s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
@@ -289,6 +290,8 @@ def notify_customer_phi_flagged(ticket):
     if not ticket.creator or not ticket.creator.email:
         logger.warning("phi_flagged ticket %s has no creator email", ticket.ref)
         return
+    if not ticket.creator.email_notifications_enabled:
+        return
     html = _render(
         "phi_violation_customer.html",
         ticket=ticket,
@@ -301,7 +304,7 @@ def notify_customer_phi_flagged(ticket):
 
 
 def send_csat_survey(ticket):
-    if not ticket.creator or not ticket.creator.email:
+    if not ticket.creator or not ticket.creator.email or not ticket.creator.email_notifications_enabled:
         return
     import uuid
     from app.models.csat_feedback import CSATFeedback

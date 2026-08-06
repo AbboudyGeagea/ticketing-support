@@ -18,6 +18,7 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     last_login = db.Column(db.DateTime)
     is_available = db.Column(db.Boolean, default=True)   # agent availability toggle
+    email_notifications_enabled = db.Column(db.Boolean, default=True, nullable=False)  # customer opt-out
 
     hospital = db.relationship("Hospital", back_populates="users")
     products = db.relationship("Product", secondary=user_products, lazy="subquery")

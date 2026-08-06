@@ -388,6 +388,7 @@ def profile():
         new_password_confirm = request.form.get("new_password_confirm", "")
         if name:
             current_user.name = name
+        current_user.email_notifications_enabled = "email_notifications_enabled" in request.form
         if current_password and new_password:
             if new_password != new_password_confirm:
                 flash("New passwords do not match.", "danger")
