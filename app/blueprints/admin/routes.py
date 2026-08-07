@@ -409,11 +409,17 @@ def agent_edit(agent_id):
     edit_agent = User.query.get_or_404(agent_id)
     form = EditUserForm(obj=edit_agent)
     if form.validate_on_submit():
-        edit_agent.name = form.name.data
-        edit_agent.active = form.active.data
-        db.session.commit()
-        flash("Agent updated.", "success")
-        return redirect(url_for("admin.agents"))
+        new_email = form.email.data.lower().strip()
+        duplicate = User.query.filter(User.email == new_email, User.id != edit_agent.id).first()
+        if duplicate:
+            form.email.errors.append("This email is already registered to another account.")
+        else:
+            edit_agent.name = form.name.data
+            edit_agent.email = new_email
+            edit_agent.active = form.active.data
+            db.session.commit()
+            flash("Agent updated.", "success")
+            return redirect(url_for("admin.agents"))
     return render_template("admin/agent_form.html", form=form, edit_agent=edit_agent)
 
 

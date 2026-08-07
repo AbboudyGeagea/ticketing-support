@@ -28,6 +28,12 @@
         {{ form.role(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
       </div>
       {% else %}
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5">Email *</label>
+        {{ form.email(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+        {% if form.email.errors %}<p class="text-red-500 text-xs mt-1">{{ form.email.errors[0] }}</p>{% endif %}
+        <p class="text-xs text-slate-400 mt-1">The agent logs in with this address going forward.</p>
+      </div>
       <div class="mb-5 flex items-center gap-2">
         {{ form.active(class="rounded border-slate-300 text-primary") }}
         <label class="text-sm text-slate-700">Active</label>
