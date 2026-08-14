@@ -46,6 +46,7 @@ class HospitalCredential(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)  # None = general, not product-specific
     category = db.Column(db.String(30), nullable=False, default="other")
     label = db.Column(db.String(200), nullable=False)
     username = db.Column(db.String(200))
@@ -54,11 +55,13 @@ class HospitalCredential(db.Model):
     role_enc = db.Column(db.Text)
     url = db.Column(db.String(500))
     notes = db.Column(db.Text)
+    rustdesk_id = db.Column(db.String(50), nullable=True)  # for category='remote_desktop': auto-fills new tickets for this product
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     hospital = db.relationship("Hospital", back_populates="credentials")
+    product = db.relationship("Product")
     creator = db.relationship("User", foreign_keys=[created_by])
 
     @property

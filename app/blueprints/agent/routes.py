@@ -378,6 +378,13 @@ def ticket_new():
         db.session.flush()
         ticket.ref = f"{ticket.id:04d}"
 
+        from app.models.hospital import HospitalCredential
+        default_cred = HospitalCredential.query.filter_by(
+            hospital_id=ticket.hospital_id, product_id=ticket.product_id, category="remote_desktop",
+        ).filter(HospitalCredential.rustdesk_id.isnot(None)).first()
+        if default_cred:
+            ticket.rustdesk_peer_id = default_cred.rustdesk_id
+
         msg = TicketMessage(
             ticket_id=ticket.id,
             sender_id=current_user.id,

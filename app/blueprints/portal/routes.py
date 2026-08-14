@@ -150,6 +150,13 @@ def ticket_new():
         db.session.flush()  # get ID before commit
         ticket.ref = _make_ref(ticket.id)
         ticket.rustdesk_peer_id = form.rustdesk_peer_id.data.strip() if form.rustdesk_peer_id.data else None
+        if not ticket.rustdesk_peer_id:
+            from app.models.hospital import HospitalCredential
+            default_cred = HospitalCredential.query.filter_by(
+                hospital_id=ticket.hospital_id, product_id=ticket.product_id, category="remote_desktop",
+            ).filter(HospitalCredential.rustdesk_id.isnot(None)).first()
+            if default_cred:
+                ticket.rustdesk_peer_id = default_cred.rustdesk_id
 
         msg = TicketMessage(
             ticket_id=ticket.id,

@@ -240,12 +240,16 @@
       {% for cred in cat_creds %}
       <div class="px-5 py-3 flex items-center justify-between gap-4">
         <div class="flex-1 min-w-0">
-          <p class="text-sm font-medium text-slate-800">{{ cred.label }}</p>
+          <p class="text-sm font-medium text-slate-800">
+            {{ cred.label }}
+            {% if cred.product %}<span class="ml-1.5 inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{{ cred.product.name }}</span>{% endif %}
+          </p>
           <div class="flex flex-wrap gap-x-4 gap-y-0.5 mt-1">
             {% if cred.username %}<span class="text-xs text-slate-500">👤 {{ cred.username }}</span>{% endif %}
             {% if cred.password_enc %}<span class="text-xs text-slate-400">🔑 ••••••••</span>{% endif %}
             {% if cred.host_enc %}<span class="text-xs text-slate-400">🖥 ••••••••</span>{% endif %}
             {% if cred.url %}<a href="{{ cred.url }}" target="_blank" class="text-xs text-primary hover:underline">🔗 URL</a>{% endif %}
+            {% if cred.rustdesk_id %}<span class="text-xs text-slate-400">🖱 RustDesk: {{ cred.rustdesk_id }}</span>{% endif %}
           </div>
           {% if cred.notes %}<p class="text-xs text-slate-400 mt-1 truncate">{{ cred.notes }}</p>{% endif %}
         </div>

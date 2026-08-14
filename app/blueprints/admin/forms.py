@@ -148,12 +148,14 @@ class CredentialForm(FlaskForm):
         ("app_access", "Application Access"),
         ("other", "Other"),
     ])
+    product_id = SelectField("Product (optional)", coerce=int, validators=[Optional()])
     label = StringField("Label", validators=[DataRequired(), Length(max=200)])
     username = StringField("Username / Login", validators=[Optional(), Length(max=200)])
     password = PasswordField("Password", validators=[Optional()])
     host = StringField("Host / IP Address", validators=[Optional(), Length(max=200)])
     role = StringField("Role / Function", validators=[Optional(), Length(max=200)])
     url = StringField("URL", validators=[Optional(), Length(max=500)])
+    rustdesk_id = StringField("RustDesk Device ID", validators=[Optional(), Length(max=50)])
     notes = TextAreaField("Notes (non-sensitive)", validators=[Optional()])
     submit = SubmitField("Save Credential")
 

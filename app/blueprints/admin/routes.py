@@ -1209,12 +1209,19 @@ def _agent_or_admin_required(f):
 @bp.route("/hospitals/<int:hospital_id>/credentials/add", methods=["GET", "POST"])
 @login_required
 @_agent_or_admin_required
+def _credential_product_choices(hospital):
+    products = sorted([p for p in hospital.products if p.active], key=lambda p: p.name)
+    return [(0, "— General / Not product-specific —")] + [(p.id, p.name) for p in products]
+
+
 def credential_add(hospital_id):
     hospital = Hospital.query.get_or_404(hospital_id)
     form = CredentialForm()
+    form.product_id.choices = _credential_product_choices(hospital)
     if form.validate_on_submit():
         cred = HospitalCredential(
             hospital_id=hospital_id,
+            product_id=form.product_id.data or None,
             category=form.category.data,
             label=form.label.data,
             username=form.username.data or None,
@@ -1222,6 +1229,7 @@ def credential_add(hospital_id):
             host_enc=encrypt(form.host.data) if form.host.data else None,
             role_enc=encrypt(form.role.data) if form.role.data else None,
             url=form.url.data or None,
+            rustdesk_id=form.rustdesk_id.data or None,
             notes=form.notes.data or None,
             created_by=current_user.id,
         )
@@ -1241,7 +1249,11 @@ def credential_edit(hospital_id, cred_id):
     cred._role = decrypt(cred.role_enc) if cred.role_enc else ""
     cred._host = decrypt(cred.host_enc) if cred.host_enc else ""
     form = CredentialForm(obj=cred)
+    form.product_id.choices = _credential_product_choices(hospital)
+    if request.method == "GET":
+        form.product_id.data = cred.product_id or 0
     if form.validate_on_submit():
+        cred.product_id = form.product_id.data or None
         cred.category = form.category.data
         cred.label = form.label.data
         cred.username = form.username.data or None
@@ -1252,6 +1264,7 @@ def credential_edit(hospital_id, cred_id):
         if form.role.data:
             cred.role_enc = encrypt(form.role.data)
         cred.url = form.url.data or None
+        cred.rustdesk_id = form.rustdesk_id.data or None
         cred.notes = form.notes.data or None
         db.session.commit()
         flash("Credential updated.", "success")
