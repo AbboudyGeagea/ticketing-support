@@ -119,14 +119,15 @@ def ticket_new():
                 form.product_id.data = tmpl.product_id
 
     # Pre-fill subject/body when opening a new ticket referencing a closed one
-    related_ref = request.args.get("related_ref", "")
+    related_ref = request.args.get("related_ref", "") or request.form.get("related_ref", "")
     related_ticket = None
-    if related_ref and request.method == "GET":
+    if related_ref:
         related = Ticket.query.filter_by(ref=related_ref).first()
         if related and related.hospital_id == current_user.hospital_id:
             related_ticket = related
-            form.subject.data = f"Re: {related.subject}"
-            form.body.data = f"Follow-up to ticket #{related.ref}: {related.subject}\n\n"
+            if request.method == "GET":
+                form.subject.data = f"Re: {related.subject}"
+                form.body.data = f"Follow-up to ticket #{related.ref}: {related.subject}\n\n"
 
     if form.validate_on_submit():
         valid_product_ids = {p.id for p in current_user.products}
@@ -143,6 +144,7 @@ def ticket_new():
             priority=form.priority.data,
             status="new",
             source="portal",
+            related_ticket_id=related_ticket.id if related_ticket else None,
         )
         db.session.add(ticket)
         db.session.flush()  # get ID before commit

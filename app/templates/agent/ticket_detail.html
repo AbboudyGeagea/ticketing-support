@@ -64,6 +64,13 @@
         <h1 class="font-mono text-2xl font-black text-slate-800 tracking-tight">#{{ ticket.ref }}</h1>
         <p class="text-base text-slate-600 truncate max-w-xl">{{ ticket.subject }}</p>
       </div>
+      {% if ticket.related_ticket %}
+      <a href="{{ url_for('agent.ticket_detail', ref=ticket.related_ticket.ref) }}"
+         class="inline-flex items-center gap-1.5 text-xs text-primary hover:underline mt-1.5">
+        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+        Related to #{{ ticket.related_ticket.ref }} — {{ ticket.related_ticket.subject }}
+      </a>
+      {% endif %}
     </div>
 
     <!-- Right: action buttons -->

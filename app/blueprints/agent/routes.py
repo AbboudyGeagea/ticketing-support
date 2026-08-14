@@ -340,13 +340,12 @@ def ticket_new():
     form.customer_id.choices = [(0, "— No reporter —")]
     form.product_id.choices = [(0, "— Select product —")]
 
-    related_ref = ""
-    if request.method == "GET":
-        related_ref = request.args.get("related_ref", "")
-        if related_ref:
-            related = Ticket.query.filter_by(ref=related_ref).first()
-            if related:
-                form.subject.data = f"Re: {related.subject}"
+    related_ref = request.args.get("related_ref", "") or request.form.get("related_ref", "")
+    related_ticket = None
+    if related_ref:
+        related_ticket = Ticket.query.filter_by(ref=related_ref).first()
+        if related_ticket and request.method == "GET":
+            form.subject.data = f"Re: {related_ticket.subject}"
 
     if form.validate_on_submit():
         hospital = Hospital.query.get_or_404(form.hospital_id.data)
@@ -359,7 +358,8 @@ def ticket_new():
 
         if product_id is None:
             form.product_id.errors = ["Please select a product."]
-            return render_template("agent/ticket_new.html", form=form, hospitals=hospitals, related_ref=related_ref)
+            return render_template("agent/ticket_new.html", form=form, hospitals=hospitals,
+                                   related_ref=related_ref, related_ticket=related_ticket)
 
         ticket = Ticket(
             ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
@@ -372,6 +372,7 @@ def ticket_new():
             priority=form.priority.data,
             status="assigned",
             source="agent",
+            related_ticket_id=related_ticket.id if related_ticket else None,
         )
         db.session.add(ticket)
         db.session.flush()
@@ -417,7 +418,8 @@ def ticket_new():
         flash(f"Ticket {ticket.ref} created.", "success")
         return redirect(url_for("agent.ticket_detail", ref=ticket.ref))
 
-    return render_template("agent/ticket_new.html", form=form, hospitals=hospitals, related_ref=related_ref)
+    return render_template("agent/ticket_new.html", form=form, hospitals=hospitals,
+                           related_ref=related_ref, related_ticket=related_ticket)
 
 
 @bp.route("/api/hospitals/<int:hospital_id>/customers")
