@@ -1206,14 +1206,14 @@ def _agent_or_admin_required(f):
     return decorated
 
 
-@bp.route("/hospitals/<int:hospital_id>/credentials/add", methods=["GET", "POST"])
-@login_required
-@_agent_or_admin_required
 def _credential_product_choices(hospital):
     products = sorted([p for p in hospital.products if p.active], key=lambda p: p.name)
     return [(0, "— General / Not product-specific —")] + [(p.id, p.name) for p in products]
 
 
+@bp.route("/hospitals/<int:hospital_id>/credentials/add", methods=["GET", "POST"])
+@login_required
+@_agent_or_admin_required
 def credential_add(hospital_id):
     hospital = Hospital.query.get_or_404(hospital_id)
     form = CredentialForm()
