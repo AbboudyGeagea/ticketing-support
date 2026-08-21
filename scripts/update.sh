@@ -85,8 +85,10 @@ log "Uploads folder ownership set."
 
 # ---------------------------------------------------------------------------
 # Step 6: Renew SSL certificate if expired
-# (Assumes Let's Encrypt via the Cloudflare DNS plugin, per scripts/setup-ssl.sh
-#  Option A1 — the manual DNS challenge can't be renewed non-interactively.)
+# This cert renews via the standalone HTTP-01 challenge, which needs port 80
+# free — nginx already holds it (for the HTTP->HTTPS redirect), so stop/start
+# nginx around the renewal via certbot's own hooks. Certbot guarantees the
+# post-hook runs even if the renewal itself fails, so nginx won't get left down.
 # ---------------------------------------------------------------------------
 log "--- Step 6: Checking SSL certificate ---"
 CERT_NAME="support.intermedic.com"
@@ -97,11 +99,18 @@ if [[ -f "${CERT_PATH}" ]]; then
         log "SSL certificate valid until $(openssl x509 -enddate -noout -in "${CERT_PATH}" | cut -d= -f2). Skipping renewal."
     else
         log "SSL certificate has EXPIRED. Attempting renewal..."
-        if certbot renew --cert-name "${CERT_NAME}" --non-interactive; then
-            log "SSL certificate renewed successfully."
-            nginx -t && systemctl reload nginx && log "Nginx reloaded with new certificate."
+        if certbot renew --cert-name "${CERT_NAME}" --non-interactive \
+            --pre-hook "systemctl stop nginx" \
+            --post-hook "systemctl start nginx"; then
+            if openssl x509 -checkend 0 -noout -in "${CERT_PATH}" &>/dev/null; then
+                log "SSL certificate renewed successfully; nginx restarted."
+            else
+                log "WARNING: certbot reported success but ${CERT_PATH} still shows as expired — check manually."
+            fi
         else
-            log "WARNING: certbot renew failed. If this cert uses the manual DNS challenge, it can't renew non-interactively — switch to the Cloudflare plugin (scripts/setup-ssl.sh Option A1) or renew manually: sudo certbot renew --cert-name ${CERT_NAME}"
+            log "WARNING: certbot renew failed (nginx was restarted regardless via post-hook)."
+            log "Check: sudo certbot renew --cert-name ${CERT_NAME} --dry-run"
+            log "If port 80 isn't reachable from the internet on this host, switch to the DNS challenge instead — see scripts/setup-ssl.sh Option A."
         fi
     fi
 else
