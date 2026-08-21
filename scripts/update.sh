@@ -85,36 +85,15 @@ log "Uploads folder ownership set."
 
 # ---------------------------------------------------------------------------
 # Step 6: Renew SSL certificate if expired
-# This cert renews via the standalone HTTP-01 challenge, which needs port 80
-# free — nginx already holds it (for the HTTP->HTTPS redirect). Global hooks
-# at /etc/letsencrypt/renewal-hooks/{pre,post}/ stop/start nginx around every
-# certbot renewal (this script's, certbot.timer's, or a manual run), so no
-# per-call flags are needed here. Certbot guarantees post-hooks run even if
-# the renewal itself fails, so nginx won't get left down.
+# All the renewal logic (hook install, nginx symlink repair, expiry check,
+# renew, verify) lives in scripts/renew-ssl.sh so update.sh, cron, and a
+# manual run all go through the same, self-healing path.
 # ---------------------------------------------------------------------------
 log "--- Step 6: Checking SSL certificate ---"
-CERT_NAME="support.intermedic.com"
-CERT_PATH="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
-
-if [[ -f "${CERT_PATH}" ]]; then
-    if openssl x509 -checkend 0 -noout -in "${CERT_PATH}" &>/dev/null; then
-        log "SSL certificate valid until $(openssl x509 -enddate -noout -in "${CERT_PATH}" | cut -d= -f2). Skipping renewal."
-    else
-        log "SSL certificate has EXPIRED. Attempting renewal..."
-        if certbot renew --cert-name "${CERT_NAME}" --non-interactive; then
-            if openssl x509 -checkend 0 -noout -in "${CERT_PATH}" &>/dev/null; then
-                log "SSL certificate renewed successfully; nginx restarted."
-            else
-                log "WARNING: certbot reported success but ${CERT_PATH} still shows as expired — check manually."
-            fi
-        else
-            log "WARNING: certbot renew failed (nginx was restarted regardless via the post-hook)."
-            log "Check: sudo certbot renew --cert-name ${CERT_NAME} --dry-run"
-            log "If port 80 isn't reachable from the internet on this host, switch to the DNS challenge instead — see scripts/setup-ssl.sh Option A."
-        fi
-    fi
+if [[ -x "${APP_DIR}/scripts/renew-ssl.sh" ]]; then
+    "${APP_DIR}/scripts/renew-ssl.sh" || log "WARNING: renew-ssl.sh failed — check output above."
 else
-    log "No Let's Encrypt cert found at ${CERT_PATH} (self-signed or not yet issued) — skipping SSL check."
+    log "WARNING: scripts/renew-ssl.sh not found or not executable — skipping SSL check."
 fi
 
 # ---------------------------------------------------------------------------
