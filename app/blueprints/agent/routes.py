@@ -9,7 +9,10 @@ from sqlalchemy import or_, and_, func, nulls_last
 from sqlalchemy.orm import joinedload
 from app.blueprints.agent import bp
 from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
-from app.models.ticket import Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES, ALL_TYPES, TYPE_LABELS
+from app.models.ticket import (
+    Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES, ALL_TYPES, TYPE_LABELS,
+    STATUS_RESOLVED, STATUS_CLOSED,
+)
 from app.models.task import Task, TaskChecklist, TaskDependency, TimeEntry, Sprint, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE, ALL_TASK_STATUSES
 from app.models.product import Product
 from app.models.user import User
@@ -185,6 +188,7 @@ def tickets():
     product_filter = request.args.get("product_id", 0, type=int)
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
+    flag_filter = request.args.get("flag", "")
     search = request.args.get("q", "").strip()
 
     sort_by = request.args.get("sort", "updated")
@@ -212,6 +216,22 @@ def tickets():
         query = query.filter_by(assigned_to=current_user.id)
     elif assigned_filter == "unassigned":
         query = query.filter(Ticket.assigned_to.is_(None))
+    if flag_filter == "customer_replied":
+        _last_pub_subq = (
+            db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
+            .filter(TicketMessage.is_internal == False)
+            .group_by(TicketMessage.ticket_id)
+            .subquery()
+        )
+        _customer_reply_ids = (
+            db.session.query(_last_pub_subq.c.ticket_id)
+            .outerjoin(TicketMessage, TicketMessage.id == _last_pub_subq.c.max_id)
+            .outerjoin(User, User.id == TicketMessage.sender_id)
+            .filter(or_(TicketMessage.sender_id.is_(None), ~User.role.in_(["agent", "admin", "viewer"])))
+        )
+        query = query.filter(Ticket.id.in_(_customer_reply_ids))
+        if not status_filters:
+            query = query.filter(~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]))
     if search:
         query = query.filter(
             or_(
@@ -263,6 +283,33 @@ def tickets():
         for _m in db.session.query(TicketMessage).join(_subq, TicketMessage.id == _subq.c.max_id).all():
             last_msg_map[_m.ticket_id] = _m
 
+    # Flag bar stats — always global (ignores the filters above), scoped to active, non-PHI tickets
+    _active_base = Ticket.query.filter(
+        Ticket.phi_flagged == False, ~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED])
+    )
+    status_tile_counts = dict(
+        _active_base.with_entities(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
+    )
+    _tile_last_pub_subq = (
+        db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
+        .join(Ticket, Ticket.id == TicketMessage.ticket_id)
+        .filter(
+            TicketMessage.is_internal == False,
+            Ticket.phi_flagged == False,
+            ~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]),
+        )
+        .group_by(TicketMessage.ticket_id)
+        .subquery()
+    )
+    customer_replied_count = (
+        db.session.query(func.count(_tile_last_pub_subq.c.ticket_id))
+        .select_from(_tile_last_pub_subq)
+        .outerjoin(TicketMessage, TicketMessage.id == _tile_last_pub_subq.c.max_id)
+        .outerjoin(User, User.id == TicketMessage.sender_id)
+        .filter(or_(TicketMessage.sender_id.is_(None), ~User.role.in_(["agent", "admin", "viewer"])))
+        .scalar()
+    ) or 0
+
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
 
@@ -288,6 +335,8 @@ def tickets():
         filter_params["source"] = source_filter
     if assigned_filter:
         filter_params["assigned"] = assigned_filter
+    if flag_filter:
+        filter_params["flag"] = flag_filter
     if search:
         filter_params["q"] = search
 
@@ -315,6 +364,7 @@ def tickets():
             "product_id": product_filter,
             "source": source_filter,
             "assigned": assigned_filter,
+            "flag": flag_filter,
             "q": search,
         },
         filter_params=filter_params,
@@ -323,6 +373,8 @@ def tickets():
         saved_filters=saved_filters,
         last_msg_map=last_msg_map,
         phi_tickets=phi_tickets,
+        status_tile_counts=status_tile_counts,
+        customer_replied_count=customer_replied_count,
     )
 
 
@@ -1616,6 +1668,7 @@ def tickets_export():
     product_filter = request.args.get("product_id", 0, type=int)
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
+    flag_filter = request.args.get("flag", "")
     search = request.args.get("q", "").strip()
 
     query = Ticket.query
@@ -1635,6 +1688,22 @@ def tickets_export():
         query = query.filter_by(assigned_to=current_user.id)
     elif assigned_filter == "unassigned":
         query = query.filter(Ticket.assigned_to.is_(None))
+    if flag_filter == "customer_replied":
+        _last_pub_subq = (
+            db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
+            .filter(TicketMessage.is_internal == False)
+            .group_by(TicketMessage.ticket_id)
+            .subquery()
+        )
+        _customer_reply_ids = (
+            db.session.query(_last_pub_subq.c.ticket_id)
+            .outerjoin(TicketMessage, TicketMessage.id == _last_pub_subq.c.max_id)
+            .outerjoin(User, User.id == TicketMessage.sender_id)
+            .filter(db.or_(TicketMessage.sender_id.is_(None), ~User.role.in_(["agent", "admin", "viewer"])))
+        )
+        query = query.filter(Ticket.id.in_(_customer_reply_ids))
+        if not status_filters:
+            query = query.filter(~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]))
     if search:
         query = query.filter(
             db.or_(
