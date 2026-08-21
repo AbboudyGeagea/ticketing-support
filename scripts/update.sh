@@ -84,6 +84,31 @@ chown -R support:support "${APP_DIR}/uploads"
 log "Uploads folder ownership set."
 
 # ---------------------------------------------------------------------------
+# Step 6: Renew SSL certificate if expired
+# (Assumes Let's Encrypt via the Cloudflare DNS plugin, per scripts/setup-ssl.sh
+#  Option A1 — the manual DNS challenge can't be renewed non-interactively.)
+# ---------------------------------------------------------------------------
+log "--- Step 6: Checking SSL certificate ---"
+CERT_NAME="support.intermedic.com"
+CERT_PATH="/etc/letsencrypt/live/${CERT_NAME}/fullchain.pem"
+
+if [[ -f "${CERT_PATH}" ]]; then
+    if openssl x509 -checkend 0 -noout -in "${CERT_PATH}" &>/dev/null; then
+        log "SSL certificate valid until $(openssl x509 -enddate -noout -in "${CERT_PATH}" | cut -d= -f2). Skipping renewal."
+    else
+        log "SSL certificate has EXPIRED. Attempting renewal..."
+        if certbot renew --cert-name "${CERT_NAME}" --non-interactive; then
+            log "SSL certificate renewed successfully."
+            nginx -t && systemctl reload nginx && log "Nginx reloaded with new certificate."
+        else
+            log "WARNING: certbot renew failed. If this cert uses the manual DNS challenge, it can't renew non-interactively — switch to the Cloudflare plugin (scripts/setup-ssl.sh Option A1) or renew manually: sudo certbot renew --cert-name ${CERT_NAME}"
+        fi
+    fi
+else
+    log "No Let's Encrypt cert found at ${CERT_PATH} (self-signed or not yet issued) — skipping SSL check."
+fi
+
+# ---------------------------------------------------------------------------
 # Step 7: Restart web service
 # ---------------------------------------------------------------------------
 log "--- Step 7: Restarting web service (${WEB_SERVICE}) ---"
