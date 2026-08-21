@@ -3,12 +3,14 @@ from app.extensions import db
 from app.models.product import hospital_products
 
 CREDENTIAL_CATEGORIES = [
+    ("rustdesk", "RustDesk"),
     ("remote_desktop", "Remote Desktop"),
     ("vpn", "VPN"),
     ("network", "Network / IP"),
-    ("admin_account", "Admin Account"),
+    ("admin_account", "Application Admin Tools"),
     ("os_account", "OS Account"),
     ("app_access", "Application Access"),
+    ("vnc", "VNC"),
     ("other", "Other"),
 ]
 
@@ -55,7 +57,7 @@ class HospitalCredential(db.Model):
     role_enc = db.Column(db.Text)
     url = db.Column(db.String(500))
     notes = db.Column(db.Text)
-    rustdesk_id = db.Column(db.String(50), nullable=True)  # for category='remote_desktop': auto-fills new tickets for this product
+    rustdesk_id = db.Column(db.String(50), nullable=True)  # for category='rustdesk': auto-fills new tickets for this product
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

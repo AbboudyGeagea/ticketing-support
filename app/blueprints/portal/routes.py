@@ -153,8 +153,11 @@ def ticket_new():
         if not ticket.rustdesk_peer_id:
             from app.models.hospital import HospitalCredential
             default_cred = HospitalCredential.query.filter_by(
-                hospital_id=ticket.hospital_id, product_id=ticket.product_id, category="remote_desktop",
-            ).filter(HospitalCredential.rustdesk_id.isnot(None)).first()
+                hospital_id=ticket.hospital_id, product_id=ticket.product_id,
+            ).filter(
+                HospitalCredential.category.in_(["rustdesk", "remote_desktop"]),
+                HospitalCredential.rustdesk_id.isnot(None),
+            ).first()
             if default_cred:
                 ticket.rustdesk_peer_id = default_cred.rustdesk_id
 

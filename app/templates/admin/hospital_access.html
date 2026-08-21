@@ -12,19 +12,11 @@
 
 {% block content %}
 
-{% set categories = [
-  ('remote_desktop', 'Remote Desktop'),
-  ('vpn', 'VPN'),
-  ('network', 'Network / IP'),
-  ('admin_account', 'Admin Accounts'),
-  ('os_account', 'OS Accounts'),
-  ('app_access', 'Application Access'),
-  ('other', 'Other'),
-] %}
+{% set categories = credential_categories %}
 
-{# Per-category contextual labels for encrypted fields #}
-{% set role_labels  = {'vpn': 'Client', 'os_account': 'Type', 'app_access': 'Application', 'network': 'Type', 'other': 'Type'} %}
-{% set host_labels  = {'vpn': 'Gateway', 'network': 'IP Address', 'os_account': 'Domain'} %}
+{# Per-category contextual labels for encrypted fields (also covers legacy data from before this category's fields were streamlined) #}
+{% set role_labels  = {'vpn': 'Client', 'os_account': 'Type', 'admin_account': 'Type', 'app_access': 'Application', 'network': 'Type', 'other': 'Type'} %}
+{% set host_labels  = {'vpn': 'Remote Gateway', 'network': 'IP Address', 'os_account': 'Domain', 'remote_desktop': 'IP / Hostname', 'vnc': 'IP / Hostname'} %}
 {% set url_labels   = {'vpn': 'Port'} %}
 
 {% if not credentials %}
@@ -54,6 +46,19 @@
         <div class="flex-1 min-w-0">
           <p class="text-sm font-semibold text-slate-800 mb-2">{{ cred.label }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+
+            {% if cred.rustdesk_id %}
+            <div class="flex items-center gap-2">
+              <span class="text-slate-400 text-xs w-20 flex-shrink-0">RustDesk ID</span>
+              <span class="font-mono text-slate-700 text-xs">{{ cred.rustdesk_id }}</span>
+              <button onclick="copyText('{{ cred.rustdesk_id }}')" title="Copy"
+                      class="text-slate-300 hover:text-primary transition-colors flex-shrink-0">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            </div>
+            {% endif %}
 
             {% if cred.username %}
             <div class="flex items-center gap-2">

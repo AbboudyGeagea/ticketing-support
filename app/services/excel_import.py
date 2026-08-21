@@ -29,7 +29,7 @@ def _get_or_create_hospital(name, cache):
 
 
 def _add_cred(hospital, category, label, username=None, password=None,
-              host=None, role=None, url=None, notes=None, created_by=None):
+              host=None, role=None, url=None, notes=None, created_by=None, rustdesk_id=None):
     if hospital is None:
         return
     cred = HospitalCredential(
@@ -41,6 +41,7 @@ def _add_cred(hospital, category, label, username=None, password=None,
         host_enc=encrypt(host) if host else None,
         role_enc=encrypt(role) if role else None,
         url=url or None,
+        rustdesk_id=rustdesk_id or None,
         notes=notes or None,
         created_by=created_by,
     )
@@ -69,8 +70,8 @@ def _import_hospital_access(ws, cache, created_by):
         rd_pass     = _clean(row[8]) if len(row) > 8 else None
 
         if rustdesk_id:
-            _add_cred(hospital, "remote_desktop", "RustDesk",
-                      username=rustdesk_id, password=rust_pass, created_by=created_by)
+            _add_cred(hospital, "rustdesk", "RustDesk",
+                      rustdesk_id=rustdesk_id, password=rust_pass, created_by=created_by)
             count += 1
         if os_user:
             _add_cred(hospital, "os_account", "OS Account",
@@ -258,16 +259,10 @@ def _import_vpn(ws, cache, created_by):
 
         hospital = _get_or_create_hospital(current_connection, cache)
 
-        note_parts = []
-        if current_vpn_type:
-            note_parts.append(current_vpn_type)
-        if current_gateway:
-            port_str = f":{current_port}" if current_port else ""
-            note_parts.append(f"{current_gateway}{port_str}")
-
         _add_cred(hospital, "vpn", f"VPN - {current_connection}",
                   username=username, password=password,
-                  notes=" | ".join(note_parts) if note_parts else None,
+                  host=current_gateway, url=current_port,
+                  notes=current_vpn_type or None,
                   created_by=created_by)
         count += 1
     return count

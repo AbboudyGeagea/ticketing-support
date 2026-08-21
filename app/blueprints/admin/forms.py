@@ -2,6 +2,7 @@ from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, SelectField, SelectMultipleField, BooleanField, SubmitField, PasswordField, IntegerField, FloatField
 from wtforms.validators import DataRequired, Email, Length, Optional, ValidationError, URL, NumberRange, Regexp
 from app.models.user import User
+from app.models.hospital import CREDENTIAL_CATEGORIES
 
 
 class HospitalForm(FlaskForm):
@@ -139,15 +140,7 @@ class SharedInstallationForm(FlaskForm):
 
 
 class CredentialForm(FlaskForm):
-    category = SelectField("Category", choices=[
-        ("remote_desktop", "Remote Desktop"),
-        ("vpn", "VPN"),
-        ("network", "Network / IP"),
-        ("admin_account", "Admin Account"),
-        ("os_account", "OS Account"),
-        ("app_access", "Application Access"),
-        ("other", "Other"),
-    ])
+    category = SelectField("Category", choices=CREDENTIAL_CATEGORIES)
     product_id = SelectField("Product (optional)", coerce=int, validators=[Optional()])
     label = StringField("Label", validators=[DataRequired(), Length(max=200)])
     username = StringField("Username / Login", validators=[Optional(), Length(max=200)])
@@ -155,7 +148,7 @@ class CredentialForm(FlaskForm):
     host = StringField("Host / IP Address", validators=[Optional(), Length(max=200)])
     role = StringField("Role / Function", validators=[Optional(), Length(max=200)])
     url = StringField("URL", validators=[Optional(), Length(max=500)])
-    rustdesk_id = StringField("RustDesk Device ID", validators=[Optional(), Length(max=50)])
+    rustdesk_id = StringField("RustDesk ID", validators=[Optional(), Length(max=50)])
     notes = TextAreaField("Notes (non-sensitive)", validators=[Optional()])
     submit = SubmitField("Save Credential")
 

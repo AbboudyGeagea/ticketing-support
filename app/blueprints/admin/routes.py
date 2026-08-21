@@ -8,7 +8,7 @@ from app.blueprints.admin.forms import (
     KBArticleForm, TicketTemplateForm, SLAPolicyForm, SharedInstallationForm, TicketStatusForm, NewTicketStatusForm,
     CredentialForm,
 )
-from app.models.hospital import Hospital, HospitalCredential
+from app.models.hospital import Hospital, HospitalCredential, CREDENTIAL_CATEGORIES
 from app.utils.crypto import encrypt, decrypt
 from app.models.product import Product
 from app.models.user import User
@@ -148,6 +148,7 @@ def hospital_detail(hospital_id):
                            subscribed_ids=subscribed_ids, available_products=available_products,
                            hospital_product_list=hospital_product_list,
                            credentials=credentials,
+                           credential_categories=CREDENTIAL_CATEGORIES,
                            projects=projects, templates=templates,
                            add_error=add_error, active_tab=active_tab)
 
@@ -1295,7 +1296,8 @@ def hospital_access(hospital_id):
         cred._password = decrypt(cred.password_enc) if cred.password_enc else ""
         cred._host = decrypt(cred.host_enc) if cred.host_enc else ""
         cred._role = decrypt(cred.role_enc) if cred.role_enc else ""
-    return render_template("admin/hospital_access.html", hospital=hospital, credentials=credentials)
+    return render_template("admin/hospital_access.html", hospital=hospital, credentials=credentials,
+                           credential_categories=CREDENTIAL_CATEGORIES)
 
 
 # ── Email Diagnostics ─────────────────────────────────────────────────────────

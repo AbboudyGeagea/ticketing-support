@@ -216,10 +216,7 @@
 
 <!-- ── ACCESS TAB ─────────────────────────────────────────────────────────── -->
 <div id="tab-access" class="tab-panel {% if active_tab != 'access' %}hidden{% endif %}">
-  {% set categories = [
-    ('remote_desktop','Remote Desktop'),('vpn','VPN'),('network','Network / IP'),
-    ('admin_account','Admin Accounts'),('os_account','OS Accounts'),('other','Other'),
-  ] %}
+  {% set categories = credential_categories %}
   {% if not credentials %}
   <div class="bg-white rounded-xl border border-slate-200 shadow-sm px-6 py-12 text-center">
     <p class="text-slate-400 text-sm mb-4">No credentials stored yet.</p>
