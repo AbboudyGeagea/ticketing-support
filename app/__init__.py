@@ -199,37 +199,14 @@ def _register_cli(app):
         without a department (could be biomedical or IT) rather than guessed at.
         """
         from app.models.user import User
-        from app.models.product import Product
-        from app.models.department import Department
-
-        category_product_names = {
-            "Medical Imaging": {"pacs", "vue pacs", "vue motion", "my vue", "myvue", "ris", "vue ris", "wim"},
-            "Pharmacy": {"pyxis"},
-            "Cathlab": {"cvis", "ibe", "xperim", "xper im"},
-        }
-
-        product_category = {}
-        for p in Product.query.all():
-            for category, names in category_product_names.items():
-                if p.name.strip().lower() in names:
-                    product_category[p.id] = category
-                    break
-
-        departments = {}
-        for category in category_product_names:
-            dept = Department.query.filter_by(name=category).first()
-            if dept is None:
-                dept = Department(name=category, active=True)
-                db.session.add(dept)
-                db.session.flush()
-            departments[category] = dept
+        from app.services.department_rules import categories_for_products, get_or_create_department
 
         customers = User.query.filter_by(role="customer").all()
         to_assign, to_clear = [], []
         for user in customers:
-            matched = {product_category[p.id] for p in user.products if p.id in product_category}
+            matched = categories_for_products(user.products)
             if len(matched) == 1:
-                dept = departments[next(iter(matched))]
+                dept = get_or_create_department(next(iter(matched)))
                 if user.department_id != dept.id:
                     to_assign.append((user, dept))
             elif len(matched) >= 2 and user.department_id is not None:

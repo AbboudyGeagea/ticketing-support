@@ -12,6 +12,7 @@ from app.models.hospital import Hospital, HospitalCredential, CREDENTIAL_CATEGOR
 from app.utils.crypto import encrypt, decrypt
 from app.models.product import Product
 from app.models.department import Department
+from app.services.department_rules import department_category_for_products, get_or_create_department
 from app.models.user import User
 from app.models.ticket import Ticket
 from app.models.task import Task
@@ -134,11 +135,20 @@ def hospital_detail(hospital_id):
             add_error = f"{email} is already registered."
         else:
             valid_dept_ids = {d.id for d in hospital.departments}
-            u = User(hospital_id=hospital_id, email=email, name=name, role="customer", active=True,
-                     department_id=department_id if department_id in valid_dept_ids else None,
-                     job_title=job_title or None)
             valid_ids = {p.id for p in hospital.products}
-            u.products = Product.query.filter(Product.id.in_(set(product_ids) & valid_ids)).all()
+            selected_products = Product.query.filter(Product.id.in_(set(product_ids) & valid_ids)).all()
+            category = department_category_for_products(selected_products)
+            if category:
+                dept = get_or_create_department(category)
+                if dept not in hospital.departments:
+                    hospital.departments.append(dept)
+                inferred_department_id = dept.id
+            else:
+                inferred_department_id = department_id if department_id in valid_dept_ids else None
+            u = User(hospital_id=hospital_id, email=email, name=name, role="customer", active=True,
+                     department_id=inferred_department_id,
+                     job_title=job_title or None)
+            u.products = selected_products
             db.session.add(u)
             db.session.commit()
             from app.services.email_outbound import send_invite_email
@@ -450,12 +460,20 @@ def user_edit(hospital_id, user_id):
             edit_user.email = new_email
             edit_user.active = form.active.data
             edit_user.email_notifications_enabled = form.email_notifications_enabled.data
-            valid_dept_ids = {d.id for d in hospital_departments}
-            edit_user.department_id = form.department_id.data if form.department_id.data in valid_dept_ids else None
             edit_user.job_title = form.job_title.data.strip() if form.job_title.data else None
             valid_ids = {p.id for p in hospital.products}
             selected_ids = set(form.product_ids.data or []) & valid_ids
-            edit_user.products = Product.query.filter(Product.id.in_(selected_ids)).all()
+            selected_products = Product.query.filter(Product.id.in_(selected_ids)).all()
+            edit_user.products = selected_products
+            category = department_category_for_products(selected_products)
+            if category:
+                dept = get_or_create_department(category)
+                if dept not in hospital.departments:
+                    hospital.departments.append(dept)
+                edit_user.department_id = dept.id
+            else:
+                valid_dept_ids = {d.id for d in hospital_departments}
+                edit_user.department_id = form.department_id.data if form.department_id.data in valid_dept_ids else None
             db.session.commit()
             flash("User updated.", "success")
             return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id))
