@@ -24,9 +24,17 @@ class ProductForm(FlaskForm):
     submit = SubmitField("Save Product")
 
 
+class DepartmentForm(FlaskForm):
+    name = StringField("Department Name", validators=[DataRequired(), Length(max=200)])
+    active = BooleanField("Active", default=True)
+    submit = SubmitField("Save Department")
+
+
 class CustomerUserForm(FlaskForm):
     name = StringField("Full Name", validators=[DataRequired(), Length(max=200)])
     email = StringField("Email", validators=[DataRequired(), Email()])
+    department_id = SelectField("Department", coerce=int, default=0, validators=[Optional()], validate_choice=False)
+    job_title = StringField("Title / Role", validators=[Optional(), Length(max=150)])
     submit = SubmitField("Create User")
 
     def validate_email(self, field):
@@ -50,6 +58,8 @@ class EditUserForm(FlaskForm):
     email = StringField("Email", validators=[DataRequired(), Email()])
     active = BooleanField("Active")
     email_notifications_enabled = BooleanField("Email Notifications", default=True)
+    department_id = SelectField("Department", coerce=int, default=0, validators=[Optional()], validate_choice=False)
+    job_title = StringField("Title / Role", validators=[Optional(), Length(max=150)])
     product_ids = SelectMultipleField("Product Access", coerce=int, validators=[], validate_choice=False)
     submit = SubmitField("Save Changes")
 

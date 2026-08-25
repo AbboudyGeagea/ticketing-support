@@ -154,6 +154,15 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
       </select>
     </div>
     <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Department</label>
+      <select name="department_id" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="0" {% if not filters.department_id %}selected{% endif %}>All departments</option>
+        {% for d in departments %}
+        <option value="{{ d.id }}" {% if filters.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
       <label class="block text-xs font-medium text-slate-500 mb-1">Source</label>
       <select name="source" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <option value="" {% if not filters.source %}selected{% endif %}>All sources</option>
@@ -249,8 +258,13 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
             <p class="font-medium text-slate-800 truncate max-w-xs">{{ t.subject }}</p>
             <p class="text-xs text-slate-400 mt-0.5">
               {{ t.type_label }} · {{ t.source.upper() }}
-              {% if t.creator %} · {{ t.creator.name }}{% endif %}
+              {% if t.creator %} · {{ t.creator.name }}
+                {%- if t.creator.job_title %} ({{ t.creator.job_title }}){% endif -%}
+              {% endif %}
             </p>
+            {% if t.creator and t.creator.department %}
+            <p class="text-xs text-slate-400 mt-0.5">{{ t.creator.department.name }}</p>
+            {% endif %}
           </td>
           <td class="px-4 py-3.5 text-slate-600">{{ t.hospital.name }}</td>
           <td class="px-4 py-3.5 text-slate-500 text-xs">{{ t.product.name if t.product else '—' }}</td>
@@ -412,7 +426,7 @@ document.getElementById('save-filter-form').addEventListener('submit', function(
     inp.type = 'hidden'; inp.name = 'status'; inp.value = cb.value; inp.dataset.dyn = '1';
     sf.appendChild(inp);
   });
-  ['priority', 'type', 'hospital_id', 'product_id', 'source', 'assigned', 'q'].forEach(function(name) {
+  ['priority', 'type', 'hospital_id', 'product_id', 'department_id', 'source', 'assigned', 'q'].forEach(function(name) {
     var el = ff.querySelector('[name="' + name + '"]');
     if (el && el.value && el.value !== '0') {
       var inp = document.createElement('input');

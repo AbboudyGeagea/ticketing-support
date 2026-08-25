@@ -21,6 +21,19 @@
         {{ form.email(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
         {% if form.email.errors %}<p class="text-red-500 text-xs mt-1">{{ form.email.errors[0] }}</p>{% endif %}
       </div>
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Department</label>
+          {{ form.department_id(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+          {% if not form.department_id.choices or form.department_id.choices | length <= 1 %}
+          <p class="text-xs text-slate-400 mt-1">No departments assigned to this hospital yet. <a href="{{ url_for('admin.hospital_detail', hospital_id=hospital.id, tab='departments') }}" class="text-primary hover:underline">Add one</a>.</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5">Title / Role</label>
+          {{ form.job_title(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. Radiologist, IT Manager") }}
+        </div>
+      </div>
       {% if not edit_user %}
       <p class="text-xs text-slate-500 mb-5">An invitation email will be sent to the user to set their own password.</p>
       {% else %}

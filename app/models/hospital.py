@@ -1,6 +1,7 @@
 from datetime import datetime
 from app.extensions import db
 from app.models.product import hospital_products
+from app.models.department import hospital_departments
 
 CREDENTIAL_CATEGORIES = [
     ("rustdesk", "RustDesk"),
@@ -31,6 +32,7 @@ class Hospital(db.Model):
 
     users = db.relationship("User", back_populates="hospital", lazy="dynamic")
     products = db.relationship("Product", secondary=hospital_products, back_populates="hospitals")
+    departments = db.relationship("Department", secondary=hospital_departments, back_populates="hospitals")
     tickets = db.relationship("Ticket", back_populates="hospital", lazy="dynamic")
     credentials = db.relationship(
         "HospitalCredential",

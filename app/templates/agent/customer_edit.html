@@ -16,11 +16,32 @@
                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
       </div>
 
-      <div class="mb-6">
+      <div class="mb-4">
         <label class="block text-sm font-medium text-slate-700 mb-1.5" for="email">Email address</label>
         <input id="email" name="email" type="email" value="{{ customer.email }}" required
                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <p class="text-xs text-slate-400 mt-1">This is the address used for login and all ticket notifications.</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-6">
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5" for="department_id">Department</label>
+          <select id="department_id" name="department_id"
+                  class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+            <option value="0">— No department —</option>
+            {% for d in hospital_departments %}
+            <option value="{{ d.id }}" {% if customer.department_id == d.id %}selected{% endif %}>{{ d.name }}</option>
+            {% endfor %}
+          </select>
+          {% if not hospital_departments %}
+          <p class="text-xs text-slate-400 mt-1">No departments set up for {{ customer.hospital.name if customer.hospital else 'this hospital' }} yet.</p>
+          {% endif %}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-slate-700 mb-1.5" for="job_title">Title / Role</label>
+          <input id="job_title" name="job_title" type="text" value="{{ customer.job_title or '' }}" placeholder="e.g. Radiologist, IT Manager"
+                 class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
       </div>
 
       <div class="flex items-center gap-3">

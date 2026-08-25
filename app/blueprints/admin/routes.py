@@ -3,7 +3,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from app.blueprints.admin import bp
 from app.blueprints.admin.forms import (
-    HospitalForm, ProductForm, CustomerUserForm, AgentForm, EditUserForm, ResetPasswordForm,
+    HospitalForm, ProductForm, DepartmentForm, CustomerUserForm, AgentForm, EditUserForm, ResetPasswordForm,
     CannedResponseForm, AssignmentRuleForm, WebhookConfigForm, ProjectTemplateForm,
     KBArticleForm, TicketTemplateForm, SLAPolicyForm, SharedInstallationForm, TicketStatusForm, NewTicketStatusForm,
     CredentialForm,
@@ -11,6 +11,7 @@ from app.blueprints.admin.forms import (
 from app.models.hospital import Hospital, HospitalCredential, CREDENTIAL_CATEGORIES
 from app.utils.crypto import encrypt, decrypt
 from app.models.product import Product
+from app.models.department import Department
 from app.models.user import User
 from app.models.ticket import Ticket
 from app.models.task import Task
@@ -114,6 +115,9 @@ def hospital_detail(hospital_id):
     subscribed_ids = {p.id for p in hospital.products}
     available_products = Product.query.filter_by(active=True).order_by(Product.name).all()
     hospital_product_list = [p for p in hospital.products if p.active]
+    subscribed_dept_ids = {d.id for d in hospital.departments}
+    available_departments = Department.query.filter_by(active=True).order_by(Department.name).all()
+    hospital_department_list = [d for d in hospital.departments if d.active]
 
     # Inline user creation
     add_error = None
@@ -121,13 +125,18 @@ def hospital_detail(hospital_id):
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
         product_ids = request.form.getlist("product_ids", type=int)
+        department_id = request.form.get("department_id", 0, type=int)
+        job_title = request.form.get("job_title", "").strip()
 
         if not name or not email:
             add_error = "Name and email are required."
         elif User.query.filter_by(email=email).first():
             add_error = f"{email} is already registered."
         else:
-            u = User(hospital_id=hospital_id, email=email, name=name, role="customer", active=True)
+            valid_dept_ids = {d.id for d in hospital.departments}
+            u = User(hospital_id=hospital_id, email=email, name=name, role="customer", active=True,
+                     department_id=department_id if department_id in valid_dept_ids else None,
+                     job_title=job_title or None)
             valid_ids = {p.id for p in hospital.products}
             u.products = Product.query.filter(Product.id.in_(set(product_ids) & valid_ids)).all()
             db.session.add(u)
@@ -147,6 +156,9 @@ def hospital_detail(hospital_id):
     return render_template("admin/hospital_detail.html", hospital=hospital, users=users,
                            subscribed_ids=subscribed_ids, available_products=available_products,
                            hospital_product_list=hospital_product_list,
+                           subscribed_dept_ids=subscribed_dept_ids,
+                           available_departments=available_departments,
+                           hospital_department_list=hospital_department_list,
                            credentials=credentials,
                            credential_categories=CREDENTIAL_CATEGORIES,
                            projects=projects, templates=templates,
@@ -178,6 +190,33 @@ def hospital_product_remove(hospital_id, product_id):
         db.session.commit()
         flash(f'"{product.name}" removed from {hospital.name}.', "warning")
     return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id))
+
+
+@bp.route("/hospitals/<int:hospital_id>/departments/add", methods=["POST"])
+@login_required
+@admin_required
+def hospital_department_add(hospital_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    department_id = request.form.get("department_id", type=int)
+    department = Department.query.get_or_404(department_id)
+    if department not in hospital.departments:
+        hospital.departments.append(department)
+        db.session.commit()
+        flash(f'"{department.name}" added to {hospital.name}.', "success")
+    return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="departments"))
+
+
+@bp.route("/hospitals/<int:hospital_id>/departments/<int:department_id>/remove", methods=["POST"])
+@login_required
+@admin_required
+def hospital_department_remove(hospital_id, department_id):
+    hospital = Hospital.query.get_or_404(hospital_id)
+    department = Department.query.get_or_404(department_id)
+    if department in hospital.departments:
+        hospital.departments.remove(department)
+        db.session.commit()
+        flash(f'"{department.name}" removed from {hospital.name}.', "warning")
+    return redirect(url_for("admin.hospital_detail", hospital_id=hospital_id, tab="departments"))
 
 
 @bp.route("/hospitals/<int:hospital_id>/edit", methods=["GET", "POST"])
@@ -304,6 +343,59 @@ def product_delete(product_id):
     return redirect(url_for("admin.products_list"))
 
 
+# ── Departments (global panel) ─────────────────────────────────────────────────
+
+@bp.route("/departments")
+@login_required
+@admin_required
+def departments_list():
+    departments = Department.query.order_by(Department.name).all()
+    return render_template("admin/departments.html", departments=departments)
+
+
+@bp.route("/departments/new", methods=["GET", "POST"])
+@login_required
+@admin_required
+def department_new():
+    form = DepartmentForm()
+    if form.validate_on_submit():
+        d = Department(
+            name=form.name.data,
+            active=form.active.data,
+        )
+        db.session.add(d)
+        db.session.commit()
+        flash(f'Department "{d.name}" added.', "success")
+        return redirect(url_for("admin.departments_list"))
+    return render_template("admin/department_form.html", form=form, department=None)
+
+
+@bp.route("/departments/<int:department_id>/edit", methods=["GET", "POST"])
+@login_required
+@admin_required
+def department_edit(department_id):
+    department = Department.query.get_or_404(department_id)
+    form = DepartmentForm(obj=department)
+    if form.validate_on_submit():
+        department.name = form.name.data
+        department.active = form.active.data
+        db.session.commit()
+        flash("Department updated.", "success")
+        return redirect(url_for("admin.departments_list"))
+    return render_template("admin/department_form.html", form=form, department=department)
+
+
+@bp.route("/departments/<int:department_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def department_delete(department_id):
+    department = Department.query.get_or_404(department_id)
+    db.session.delete(department)
+    db.session.commit()
+    flash(f'Department "{department.name}" deleted.', "success")
+    return redirect(url_for("admin.departments_list"))
+
+
 # ── Customer Users ────────────────────────────────────────────────────────────
 
 @bp.route("/hospitals/<int:hospital_id>/users/new", methods=["GET", "POST"])
@@ -311,12 +403,17 @@ def product_delete(product_id):
 @admin_required
 def user_new(hospital_id):
     hospital = Hospital.query.get_or_404(hospital_id)
+    hospital_departments = sorted([d for d in hospital.departments if d.active], key=lambda d: d.name)
     form = CustomerUserForm()
+    form.department_id.choices = [(0, "— No department —")] + [(d.id, d.name) for d in hospital_departments]
     if form.validate_on_submit():
+        valid_dept_ids = {d.id for d in hospital_departments}
         u = User(
             hospital_id=hospital_id,
             email=form.email.data.lower().strip(),
             name=form.name.data,
+            department_id=form.department_id.data if form.department_id.data in valid_dept_ids else None,
+            job_title=form.job_title.data.strip() if form.job_title.data else None,
             role="customer",
             active=True,
         )
@@ -336,10 +433,13 @@ def user_edit(hospital_id, user_id):
     hospital = Hospital.query.get_or_404(hospital_id)
     edit_user = User.query.get_or_404(user_id)
     hospital_products = sorted([p for p in hospital.products if p.active], key=lambda p: p.name)
+    hospital_departments = sorted([d for d in hospital.departments if d.active], key=lambda d: d.name)
     form = EditUserForm(obj=edit_user)
     form.product_ids.choices = [(p.id, p.name) for p in hospital_products]
+    form.department_id.choices = [(0, "— No department —")] + [(d.id, d.name) for d in hospital_departments]
     if request.method == "GET":
         form.product_ids.data = [p.id for p in edit_user.products]
+        form.department_id.data = edit_user.department_id or 0
     if form.validate_on_submit():
         new_email = form.email.data.lower().strip()
         duplicate = User.query.filter(User.email == new_email, User.id != edit_user.id).first()
@@ -350,6 +450,9 @@ def user_edit(hospital_id, user_id):
             edit_user.email = new_email
             edit_user.active = form.active.data
             edit_user.email_notifications_enabled = form.email_notifications_enabled.data
+            valid_dept_ids = {d.id for d in hospital_departments}
+            edit_user.department_id = form.department_id.data if form.department_id.data in valid_dept_ids else None
+            edit_user.job_title = form.job_title.data.strip() if form.job_title.data else None
             valid_ids = {p.id for p in hospital.products}
             selected_ids = set(form.product_ids.data or []) & valid_ids
             edit_user.products = Product.query.filter(Product.id.in_(selected_ids)).all()

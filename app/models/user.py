@@ -10,8 +10,10 @@ class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True)
     email = db.Column(db.String(200), unique=True, nullable=False, index=True)
     name = db.Column(db.String(200), nullable=False)
+    job_title = db.Column(db.String(150), nullable=True)
     password_hash = db.Column(db.String(256))
     role = db.Column(db.String(20), nullable=False)  # customer | agent | admin
     active = db.Column(db.Boolean, default=True)
@@ -21,6 +23,7 @@ class User(UserMixin, db.Model):
     email_notifications_enabled = db.Column(db.Boolean, default=True, nullable=False)  # customer opt-out
 
     hospital = db.relationship("Hospital", back_populates="users")
+    department = db.relationship("Department", back_populates="users")
     products = db.relationship("Product", secondary=user_products, lazy="subquery")
     created_tickets = db.relationship(
         "Ticket", foreign_keys="Ticket.created_by", back_populates="creator", lazy="dynamic"

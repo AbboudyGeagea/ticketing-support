@@ -53,7 +53,9 @@
     <h2 class="text-sm font-semibold text-slate-700 mb-3">Account Details</h2>
     <dl class="space-y-2 text-sm">
       <div class="flex justify-between"><dt class="text-slate-500">Hospital</dt><dd class="text-slate-800">{{ current_user.hospital.name if current_user.hospital else '—' }}</dd></div>
-      <div class="flex justify-between"><dt class="text-slate-500">Role</dt><dd class="text-slate-800">{{ current_user.role.title() }}</dd></div>
+      <div class="flex justify-between"><dt class="text-slate-500">Department</dt><dd class="text-slate-800">{{ current_user.department.name if current_user.department else '—' }}</dd></div>
+      <div class="flex justify-between"><dt class="text-slate-500">Title / Role</dt><dd class="text-slate-800">{{ current_user.job_title or '—' }}</dd></div>
+      <div class="flex justify-between"><dt class="text-slate-500">Account Role</dt><dd class="text-slate-800">{{ current_user.role.title() }}</dd></div>
       <div class="flex justify-between"><dt class="text-slate-500">Member since</dt><dd class="text-slate-600 text-xs">{{ current_user.created_at | localtime('%B %Y') }}</dd></div>
     </dl>
   </div>

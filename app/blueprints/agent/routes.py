@@ -15,6 +15,7 @@ from app.models.ticket import (
 )
 from app.models.task import Task, TaskChecklist, TaskDependency, TimeEntry, Sprint, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE, ALL_TASK_STATUSES
 from app.models.product import Product
+from app.models.department import Department
 from app.models.user import User
 from app.models.hospital import Hospital
 from app.extensions import db
@@ -186,6 +187,7 @@ def tickets():
     type_filter = request.args.get("type", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     product_filter = request.args.get("product_id", 0, type=int)
+    department_filter = request.args.get("department_id", 0, type=int)
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     flag_filter = request.args.get("flag", "")
@@ -210,6 +212,8 @@ def tickets():
         query = query.filter_by(hospital_id=hospital_filter)
     if product_filter:
         query = query.filter_by(product_id=product_filter)
+    if department_filter:
+        query = query.filter(Ticket.creator.has(department_id=department_filter))
     if source_filter:
         query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
@@ -263,7 +267,7 @@ def tickets():
         .options(
             joinedload(Ticket.hospital),
             joinedload(Ticket.product),
-            joinedload(Ticket.creator),
+            joinedload(Ticket.creator).joinedload(User.department),
             joinedload(Ticket.assignee),
         )
         .order_by(_ticket_order)
@@ -312,6 +316,7 @@ def tickets():
 
     hospitals = Hospital.query.filter_by(active=True).order_by(Hospital.name).all()
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
+    departments = Department.query.filter_by(active=True).order_by(Department.name).all()
 
     from app.models.saved_filter import SavedFilter
     import json as _json
@@ -331,6 +336,8 @@ def tickets():
         filter_params["hospital_id"] = hospital_filter
     if product_filter:
         filter_params["product_id"] = product_filter
+    if department_filter:
+        filter_params["department_id"] = department_filter
     if source_filter:
         filter_params["source"] = source_filter
     if assigned_filter:
@@ -352,6 +359,7 @@ def tickets():
         tickets=tickets_page,
         hospitals=hospitals,
         products=products,
+        departments=departments,
         statuses=ALL_STATUSES,
         priorities=ALL_PRIORITIES,
         types=ALL_TYPES,
@@ -362,6 +370,7 @@ def tickets():
             "type": type_filter,
             "hospital_id": hospital_filter,
             "product_id": product_filter,
+            "department_id": department_filter,
             "source": source_filter,
             "assigned": assigned_filter,
             "flag": flag_filter,
@@ -1556,9 +1565,15 @@ def customer_edit(user_id):
     customer = User.query.get_or_404(user_id)
     if customer.role != "customer":
         abort(404)
+    hospital_departments = (
+        sorted([d for d in customer.hospital.departments if d.active], key=lambda d: d.name)
+        if customer.hospital else []
+    )
     if request.method == "POST":
         name = request.form.get("name", "").strip()
         email = request.form.get("email", "").strip().lower()
+        department_id = request.form.get("department_id", 0, type=int)
+        job_title = request.form.get("job_title", "").strip()
         if not name or not email:
             flash("Name and email are required.", "danger")
         else:
@@ -1566,13 +1581,16 @@ def customer_edit(user_id):
             if existing:
                 flash("That email is already in use by another account.", "danger")
             else:
+                valid_dept_ids = {d.id for d in hospital_departments}
                 customer.name = name
                 customer.email = email
+                customer.department_id = department_id if department_id in valid_dept_ids else None
+                customer.job_title = job_title or None
                 db.session.commit()
                 flash("Customer updated.", "success")
                 next_url = request.form.get("next") or url_for("agent.tickets")
                 return redirect(next_url)
-    return render_template("agent/customer_edit.html", customer=customer)
+    return render_template("agent/customer_edit.html", customer=customer, hospital_departments=hospital_departments)
 
 
 # ── Availability ──────────────────────────────────────────────────────────────
@@ -1669,6 +1687,7 @@ def tickets_export():
     type_filter = request.args.get("type", "")
     hospital_filter = request.args.get("hospital_id", 0, type=int)
     product_filter = request.args.get("product_id", 0, type=int)
+    department_filter = request.args.get("department_id", 0, type=int)
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     flag_filter = request.args.get("flag", "")
@@ -1685,6 +1704,8 @@ def tickets_export():
         query = query.filter_by(hospital_id=hospital_filter)
     if product_filter:
         query = query.filter_by(product_id=product_filter)
+    if department_filter:
+        query = query.filter(Ticket.creator.has(department_id=department_filter))
     if source_filter:
         query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
@@ -1716,13 +1737,18 @@ def tickets_export():
                 Ticket.escalation_url.ilike(f"%{search}%"),
             )
         )
-    query = query.order_by(Ticket.updated_at.desc())
+    query = query.options(
+        joinedload(Ticket.hospital),
+        joinedload(Ticket.product),
+        joinedload(Ticket.creator).joinedload(User.department),
+        joinedload(Ticket.assignee),
+    ).order_by(Ticket.updated_at.desc())
 
     def generate():
         buf = io.StringIO()
         writer = csv.writer(buf)
-        writer.writerow(["Ref", "Subject", "Hospital", "Product", "Status", "Priority",
-                         "Assigned To", "Created", "Updated", "SLA Breached"])
+        writer.writerow(["Ref", "Subject", "Hospital", "Product", "Requester", "Department", "Requester Title",
+                         "Status", "Priority", "Assigned To", "Created", "Updated", "SLA Breached"])
         yield buf.getvalue()
         for t in query.yield_per(200):
             buf.seek(0)
@@ -1731,6 +1757,9 @@ def tickets_export():
                 t.ref, t.subject,
                 t.hospital.name if t.hospital else "",
                 t.product.name if t.product else "",
+                t.creator.name if t.creator else "",
+                t.creator.department.name if t.creator and t.creator.department else "",
+                t.creator.job_title if t.creator and t.creator.job_title else "",
                 t.status, t.priority,
                 t.assignee.name if t.assignee else "",
                 t.created_at.strftime("%Y-%m-%d %H:%M") if t.created_at else "",
