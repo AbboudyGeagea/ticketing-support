@@ -9,6 +9,7 @@ from app.blueprints.portal import bp
 from app.blueprints.portal.forms import NewTicketForm, ReplyForm
 from app.models.ticket import Ticket, TicketMessage, TicketHistory, TicketCollaborator
 from app.models.product import Product
+from app.models.user import User
 from app.extensions import db
 from app.services.email_outbound import notify_agents_new_ticket
 from functools import wraps
@@ -86,7 +87,7 @@ def tickets():
         query = query.filter(Ticket.status == status_filter)
     tickets_page = (
         query
-        .options(joinedload(Ticket.product))
+        .options(joinedload(Ticket.product), joinedload(Ticket.creator).joinedload(User.department))
         .order_by(Ticket.updated_at.desc())
         .paginate(page=page, per_page=20)
     )
@@ -122,8 +123,8 @@ def ticket_new():
     related_ref = request.args.get("related_ref", "") or request.form.get("related_ref", "")
     related_ticket = None
     if related_ref:
-        related = Ticket.query.filter_by(ref=related_ref).first()
-        if related and related.hospital_id == current_user.hospital_id:
+        related = _visible_tickets(current_user).filter(Ticket.ref == related_ref).first()
+        if related:
             related_ticket = related
             if request.method == "GET":
                 form.subject.data = f"Re: {related.subject}"

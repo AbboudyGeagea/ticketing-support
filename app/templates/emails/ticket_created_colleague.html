@@ -8,8 +8,16 @@
   </div>
   <div style="padding:28px;">
     <p style="color:#374151;margin:0 0 16px;">Hello{% if recipient and recipient.name %} {{ recipient.name }}{% endif %},</p>
-    <p style="color:#374151;margin:0 0 16px;"><strong>{{ ticket.creator.name if ticket.creator else 'A team member' }}</strong> has opened a support ticket on behalf of your team. Our team will get back to you shortly.</p>
+    <p style="color:#374151;margin:0 0 16px;">
+      <strong>{{ ticket.creator.name if ticket.creator else 'A team member' }}</strong>
+      {%- if ticket.creator and ticket.creator.job_title %} ({{ ticket.creator.job_title }}){% endif %}
+      has opened a support ticket on behalf of your team. Our team will get back to you shortly.
+    </p>
     <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 20px;">
+      {% if ticket.creator and ticket.creator.department %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Department</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.creator.department.name }}</p>
+      {% endif %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
       <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>

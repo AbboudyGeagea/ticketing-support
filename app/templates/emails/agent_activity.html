@@ -14,7 +14,14 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Subject</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.subject }}</p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
-      <p style="margin:0 {% if actor_name %}0 12px{% else %}0{% endif %};color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>
+      {% if ticket.creator %}
+      <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Requester</p>
+      <p style="margin:0 {% if actor_name %}0 12px{% else %}0{% endif %};color:#1e293b;">
+        {{ ticket.creator.name }}{% if ticket.creator.job_title %} — {{ ticket.creator.job_title }}{% endif %}
+        {%- if ticket.creator.department %} · {{ ticket.creator.department.name }}{% endif %}
+      </p>
+      {% endif %}
       {% if actor_name %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">By</p>
       <p style="margin:0;color:#1e293b;">{{ actor_name }}</p>
