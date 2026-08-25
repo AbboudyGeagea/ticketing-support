@@ -187,6 +187,77 @@ def _register_cli(app):
         db.session.commit()
         click.echo(f"Deleted {len(old_ids)} task(s).")
 
+    @app.cli.command("backfill-departments")
+    @click.option("--dry-run", is_flag=True, help="Preview assignments without making changes.")
+    def backfill_departments(dry_run):
+        """Assign customer users to a department based on their product access.
+
+        Medical Imaging: PACS, Vue Motion, My Vue, RIS, WIM
+        Pharmacy: Pyxis
+        Cathlab: CVIS, IBE, XperIM
+        A customer with access to products from more than one of these groups is left
+        without a department (could be biomedical or IT) rather than guessed at.
+        """
+        from app.models.user import User
+        from app.models.product import Product
+        from app.models.department import Department
+
+        category_product_names = {
+            "Medical Imaging": {"pacs", "vue pacs", "vue motion", "my vue", "myvue", "ris", "vue ris", "wim"},
+            "Pharmacy": {"pyxis"},
+            "Cathlab": {"cvis", "ibe", "xperim", "xper im"},
+        }
+
+        product_category = {}
+        for p in Product.query.all():
+            for category, names in category_product_names.items():
+                if p.name.strip().lower() in names:
+                    product_category[p.id] = category
+                    break
+
+        departments = {}
+        for category in category_product_names:
+            dept = Department.query.filter_by(name=category).first()
+            if dept is None:
+                dept = Department(name=category, active=True)
+                db.session.add(dept)
+                db.session.flush()
+            departments[category] = dept
+
+        customers = User.query.filter_by(role="customer").all()
+        to_assign, to_clear = [], []
+        for user in customers:
+            matched = {product_category[p.id] for p in user.products if p.id in product_category}
+            if len(matched) == 1:
+                dept = departments[next(iter(matched))]
+                if user.department_id != dept.id:
+                    to_assign.append((user, dept))
+            elif len(matched) >= 2 and user.department_id is not None:
+                to_clear.append(user)
+
+        prefix = "[DRY RUN] " if dry_run else ""
+        for user, dept in to_assign:
+            click.echo(f"{prefix}{user.email} -> {dept.name}")
+        for user in to_clear:
+            click.echo(f"{prefix}{user.email} -> (cleared, mixed access)")
+        click.echo(
+            f"{prefix}{len(to_assign)} user(s) to assign, {len(to_clear)} to clear, "
+            f"out of {len(customers)} customer(s)."
+        )
+
+        if dry_run:
+            db.session.rollback()
+            return
+
+        for user, dept in to_assign:
+            user.department_id = dept.id
+            if user.hospital and dept not in user.hospital.departments:
+                user.hospital.departments.append(dept)
+        for user in to_clear:
+            user.department_id = None
+        db.session.commit()
+        click.echo(f"Updated {len(to_assign) + len(to_clear)} user(s).")
+
     @app.cli.command("seed-admin")
     @click.argument("email")
     @click.argument("name")
