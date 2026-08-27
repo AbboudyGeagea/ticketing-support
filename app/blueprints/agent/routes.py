@@ -1546,6 +1546,12 @@ def ticket_phi_flag(ref):
     ticket.phi_flagged_by = current_user.id
     ticket.updated_at = datetime.utcnow()
     _log_history(ticket, current_user.id, "phi_flagged", None, "PHI — Archived")
+    if ticket.status != STATUS_CLOSED:
+        old_status = ticket.status
+        ticket.status = STATUS_CLOSED
+        ticket.closed_at = datetime.utcnow()
+        ticket.close_requested = False
+        _log_history(ticket, current_user.id, "status_change", old_status, STATUS_CLOSED)
     db.session.commit()
     try:
         from app.services.email_outbound import notify_customer_phi_flagged

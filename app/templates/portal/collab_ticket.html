@@ -62,8 +62,7 @@
             {{ (msg.sender_name or msg.sender_email or '?')[:1].upper() }}
           </div>
           <span class="text-sm font-medium text-slate-800">
-            {% if msg.sender and msg.sender.is_agent %}Intermedic Support Team
-            {% else %}{{ msg.sender_name or msg.sender_email }}{% endif %}
+            {{ msg.sender_name or msg.sender_email or 'Intermedic Support' }}
           </span>
         </div>
         <span class="text-xs text-slate-400">{{ msg.created_at | localtime('%b %d, %Y %H:%M') }}</span>

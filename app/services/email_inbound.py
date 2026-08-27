@@ -187,14 +187,25 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
         logger.warning("No hospital match for email %s — ticket not created.", sender_email)
         return
 
-    # Resolve the default product for this hospital (first active product via association)
-    default_product = (
-        Product.query
-        .join(Product.hospitals)
-        .filter(Hospital.id == hospital_id, Product.active == True)
-        .first()
-    )
-    product_id = default_product.id if default_product else None
+    # Resolve the product for this ticket: prefer the sender's own product
+    # access, so an emailed-in ticket lands in the sender's actual department
+    # instead of being misrouted (and its notifications leaked) to whichever
+    # product happens to be first for the hospital. Only fall back to a
+    # hospital-wide default when the sender is unknown or has no single
+    # unambiguous product.
+    product_id = None
+    if sender_user:
+        active_products = [p for p in sender_user.products if p.active]
+        if len(active_products) == 1:
+            product_id = active_products[0].id
+    if product_id is None:
+        default_product = (
+            Product.query
+            .join(Product.hospitals)
+            .filter(Hospital.id == hospital_id, Product.active == True)
+            .first()
+        )
+        product_id = default_product.id if default_product else None
 
     ticket = Ticket(
         ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)

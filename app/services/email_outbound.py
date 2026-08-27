@@ -189,7 +189,13 @@ def _all_agent_emails(exclude_id=None):
 
 
 def _get_hospital_product_users(ticket):
-    """All active, notification-subscribed customers in the ticket's hospital with access to its product."""
+    """All active, notification-subscribed customers in the ticket's hospital with access to its product.
+
+    A ticket without a resolvable product (rare — some email-intake tickets)
+    must never fall back to notifying the whole hospital: that would leak
+    updates across departments. It falls back to the creator's own
+    department, or just the creator if even that is unknown.
+    """
     from app.models.user import User
     users = User.query.filter(
         User.hospital_id == ticket.hospital_id,
@@ -199,6 +205,12 @@ def _get_hospital_product_users(ticket):
     ).all()
     if ticket.product_id:
         users = [u for u in users if any(p.id == ticket.product_id for p in u.products)]
+    else:
+        creator_dept_id = ticket.creator.department_id if ticket.creator else None
+        if creator_dept_id:
+            users = [u for u in users if u.department_id == creator_dept_id]
+        else:
+            users = [u for u in users if u.id == ticket.created_by]
     return [u for u in users if u.email]
 
 

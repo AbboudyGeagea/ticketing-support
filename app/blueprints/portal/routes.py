@@ -57,7 +57,7 @@ def _visible_tickets(user):
             db.and_(Ticket.product_id == pid, Ticket.hospital_id.in_(hosp_ids))
         )
 
-    return Ticket.query.filter(db.or_(*conditions))
+    return Ticket.query.filter(db.or_(*conditions), Ticket.phi_flagged == False)  # noqa: E712
 
 
 def _make_ref(ticket_id):
