@@ -448,18 +448,18 @@
         <div class="space-y-2">
           <div>
             <p class="text-xs font-medium text-red-700 mb-0.5">Reason</p>
-            <p class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{{ req.rejection_reason }}</p>
+            <p class="text-xs text-slate-700 whitespace-pre-wrap break-words leading-relaxed">{{ req.rejection_reason }}</p>
           </div>
           {% if req.rejection_alternative %}
           <div>
             <p class="text-xs font-medium text-slate-600 mb-0.5">Alternative solution proposed</p>
-            <p class="text-xs text-slate-700 whitespace-pre-wrap leading-relaxed">{{ req.rejection_alternative }}</p>
+            <p class="text-xs text-slate-700 whitespace-pre-wrap break-words leading-relaxed">{{ req.rejection_alternative }}</p>
           </div>
           {% endif %}
           {% if req.response_text %}
           <div>
             <p class="text-xs font-medium text-slate-500 mb-0.5">Additional comments</p>
-            <p class="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">{{ req.response_text }}</p>
+            <p class="text-xs text-slate-600 whitespace-pre-wrap break-words leading-relaxed">{{ req.response_text }}</p>
           </div>
           {% endif %}
         </div>
@@ -476,7 +476,7 @@
           </span>
           <span class="text-xs text-slate-400">{{ req.updated_at | localtime('%b %d, %Y %H:%M') if req.updated_at else '' }}</span>
         </div>
-        <p class="text-xs text-slate-600 whitespace-pre-wrap leading-relaxed">{{ req.response_text }}</p>
+        <p class="text-xs text-slate-600 whitespace-pre-wrap break-words leading-relaxed">{{ req.response_text }}</p>
       </div>
       {% elif req.status == 'pending' and req.email_sent %}
       <p class="mt-2 text-xs text-slate-400 italic">Awaiting response — notification sent.</p>
@@ -522,7 +522,7 @@
             <span class="text-sm font-medium text-slate-800">{{ c.author.name }}</span>
             <span class="text-xs text-slate-400">{{ c.created_at | localtime('%b %d, %Y %H:%M') }}</span>
           </div>
-          <p class="text-sm text-slate-700 whitespace-pre-wrap">{{ c.body }}</p>
+          <p class="text-sm text-slate-700 whitespace-pre-wrap break-words">{{ c.body }}</p>
         </div>
       </div>
     </li>
