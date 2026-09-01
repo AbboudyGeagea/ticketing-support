@@ -30,32 +30,52 @@ def _visible_tickets(user):
     """Return a base Query of tickets the portal user is allowed to see.
 
     Rules:
-    - User sees only tickets for products they are assigned to.
-    - If a SharedInstallation links the user's hospital to other hospitals
-      for a given product, tickets from all those hospitals are included.
-    - Hospitals with no shared installation: only the user's own hospital.
+    - User always sees tickets they created themselves.
+    - If the user has a known department, they see every ticket classified to
+      that same department (across SharedInstallation-linked hospitals, same
+      as the product rule below) — product no longer matters for that ticket.
+    - Any ticket with no department classification yet still falls back to
+      the product rule: user sees it if they're assigned that product.
+      - If a SharedInstallation links the user's hospital to other hospitals
+        for a given product, tickets from all those hospitals are included.
+      - Hospitals with no shared installation: only the user's own hospital.
+    - A user with no known department gets the product rule applied with no
+      department restriction at all — i.e. today's exact behavior.
     """
     from app.models.shared_installation import SharedInstallation
 
     user_product_ids = [p.id for p in user.products]
-    if not user_product_ids:
-        return Ticket.query.filter(db.false())
-
-    # Single query for all relevant SharedInstallations instead of one per product
-    installations = (
-        SharedInstallation.query
-        .filter(SharedInstallation.product_id.in_(user_product_ids))
-        .filter(SharedInstallation.hospitals.any(id=user.hospital_id))
-        .all()
-    )
+    installations = []
+    if user_product_ids:
+        # Single query for all relevant SharedInstallations instead of one per product
+        installations = (
+            SharedInstallation.query
+            .filter(SharedInstallation.product_id.in_(user_product_ids))
+            .filter(SharedInstallation.hospitals.any(id=user.hospital_id))
+            .all()
+        )
     install_map = {inst.product_id: [h.id for h in inst.hospitals] for inst in installations}
 
-    conditions = []
+    conditions = [Ticket.created_by == user.id]
+
+    if user.department_id:
+        reachable_hospital_ids = {user.hospital_id}
+        for hosp_ids in install_map.values():
+            reachable_hospital_ids.update(hosp_ids)
+        conditions.append(db.and_(
+            Ticket.hospital_id.in_(reachable_hospital_ids),
+            Ticket.department_id == user.department_id,
+        ))
+
     for pid in user_product_ids:
         hosp_ids = install_map.get(pid, [user.hospital_id])
-        conditions.append(
-            db.and_(Ticket.product_id == pid, Ticket.hospital_id.in_(hosp_ids))
-        )
+        product_condition = db.and_(Ticket.product_id == pid, Ticket.hospital_id.in_(hosp_ids))
+        if user.department_id:
+            # User IS classified: product fallback only fills the gap where the
+            # TICKET has no department classification yet — a ticket with a
+            # known, different department must not leak through here.
+            product_condition = db.and_(product_condition, Ticket.department_id.is_(None))
+        conditions.append(product_condition)
 
     return Ticket.query.filter(db.or_(*conditions), Ticket.phi_flagged == False)  # noqa: E712
 
@@ -87,7 +107,8 @@ def tickets():
         query = query.filter(Ticket.status == status_filter)
     tickets_page = (
         query
-        .options(joinedload(Ticket.product), joinedload(Ticket.creator).joinedload(User.department))
+        .options(joinedload(Ticket.product), joinedload(Ticket.department),
+                joinedload(Ticket.creator).joinedload(User.department))
         .order_by(Ticket.updated_at.desc())
         .paginate(page=page, per_page=20)
     )
@@ -139,6 +160,7 @@ def ticket_new():
             ref=uuid.uuid4().hex[:20],  # temp unique value; sliced to fit VARCHAR(20)
             hospital_id=current_user.hospital_id,
             product_id=form.product_id.data,
+            department_id=current_user.department_id,
             created_by=current_user.id,
             subject=form.subject.data,
             type=form.type.data,

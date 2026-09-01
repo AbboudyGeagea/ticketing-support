@@ -214,6 +214,40 @@ def _get_hospital_product_users(ticket):
     return [u for u in users if u.email]
 
 
+def _get_hospital_department_users(ticket):
+    """All active, notification-subscribed customers in the ticket's hospital who
+    should see this ticket — department-scoped, with a per-user fallback to the
+    legacy product rule (_get_hospital_product_users) when department isn't known
+    on both sides. Mirrors _visible_tickets's SQL rule in portal/routes.py — keep
+    both in sync if this rule ever changes.
+    """
+    from app.models.user import User
+    candidates = User.query.filter(
+        User.hospital_id == ticket.hospital_id,
+        User.role == "customer",
+        User.active == True,  # noqa: E712
+        User.email_notifications_enabled == True,  # noqa: E712
+    ).all()
+
+    creator_dept_id = ticket.creator.department_id if ticket.creator else None
+    matched = []
+    for u in candidates:
+        if u.department_id and ticket.department_id:
+            if u.department_id == ticket.department_id:
+                matched.append(u)
+            continue  # both known -> department alone decides, no product fallback
+        # either side unknown -> legacy product-based rule
+        if ticket.product_id:
+            if any(p.id == ticket.product_id for p in u.products):
+                matched.append(u)
+        elif creator_dept_id:
+            if u.department_id == creator_dept_id:
+                matched.append(u)
+        elif u.id == ticket.created_by:
+            matched.append(u)
+    return [u for u in matched if u.email]
+
+
 def _base_url() -> str:
     return current_app.config.get("APP_BASE_URL", "")
 
@@ -241,9 +275,9 @@ def notify_customer_ticket_created(ticket):
     """Notify all hospital/product users when a ticket is opened.
 
     Creator gets "your ticket was submitted"; everyone else who shares
-    hospital + product gets "your colleague opened a ticket".
+    hospital + department gets "your colleague opened a ticket".
     """
-    users = _get_hospital_product_users(ticket)
+    users = _get_hospital_department_users(ticket)
     if not users:
         logger.info("notify_customer_ticket_created skipped — no matching recipients for ticket %s", ticket.ref)
         return
@@ -259,8 +293,8 @@ def notify_customer_ticket_created(ticket):
 
 
 def notify_customer_reply(ticket, message):
-    """Notify all hospital/product users that an agent replied."""
-    recipients = [u.email for u in _get_hospital_product_users(ticket)]
+    """Notify all hospital/department users that an agent replied."""
+    recipients = [u.email for u in _get_hospital_department_users(ticket)]
     if not recipients:
         return
     ticket_url = f"{_base_url()}/portal/tickets/{ticket.ref}"
@@ -270,8 +304,8 @@ def notify_customer_reply(ticket, message):
 
 
 def notify_customer_status_change(ticket):
-    """Notify all hospital/product users of a status change, each addressed by name."""
-    users = _get_hospital_product_users(ticket)
+    """Notify all hospital/department users of a status change, each addressed by name."""
+    users = _get_hospital_department_users(ticket)
     if not users:
         logger.info("notify_customer_status_change skipped — no matching recipients for ticket %s", ticket.ref)
         return
@@ -423,8 +457,8 @@ def notify_agent_ticket_assigned(ticket, assigned_by_id):
         if html:
             _send(team, subject, html=html)
 
-    # All hospital/product customers (never expose the agent's name), each addressed by name
-    for user in _get_hospital_product_users(ticket):
+    # All hospital/department customers (never expose the agent's name), each addressed by name
+    for user in _get_hospital_department_users(ticket):
         html = _render("ticket_assigned_customer.html", ticket=ticket, ticket_url=portal_url, recipient=user)
         if html:
             _send([user.email], subject, html=html)

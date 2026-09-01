@@ -213,7 +213,7 @@ def tickets():
     if product_filter:
         query = query.filter_by(product_id=product_filter)
     if department_filter:
-        query = query.filter(Ticket.creator.has(department_id=department_filter))
+        query = query.filter(Ticket.department_id == department_filter)
     if source_filter:
         query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
@@ -267,6 +267,7 @@ def tickets():
         .options(
             joinedload(Ticket.hospital),
             joinedload(Ticket.product),
+            joinedload(Ticket.department),
             joinedload(Ticket.creator).joinedload(User.department),
             joinedload(Ticket.assignee),
         )
@@ -1711,7 +1712,7 @@ def tickets_export():
     if product_filter:
         query = query.filter_by(product_id=product_filter)
     if department_filter:
-        query = query.filter(Ticket.creator.has(department_id=department_filter))
+        query = query.filter(Ticket.department_id == department_filter)
     if source_filter:
         query = query.filter_by(source=source_filter)
     if assigned_filter == "me":
@@ -1746,6 +1747,7 @@ def tickets_export():
     query = query.options(
         joinedload(Ticket.hospital),
         joinedload(Ticket.product),
+        joinedload(Ticket.department),
         joinedload(Ticket.creator).joinedload(User.department),
         joinedload(Ticket.assignee),
     ).order_by(Ticket.updated_at.desc())
@@ -1764,7 +1766,8 @@ def tickets_export():
                 t.hospital.name if t.hospital else "",
                 t.product.name if t.product else "",
                 t.creator.name if t.creator else "",
-                t.creator.department.name if t.creator and t.creator.department else "",
+                t.department.name if t.department else
+                (t.creator.department.name if t.creator and t.creator.department else ""),
                 t.creator.job_title if t.creator and t.creator.job_title else "",
                 t.status, t.priority,
                 t.assignee.name if t.assignee else "",

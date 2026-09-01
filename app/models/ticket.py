@@ -56,6 +56,7 @@ class Ticket(db.Model):
     ref = db.Column(db.String(20), unique=True, nullable=False, index=True)
     hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"), nullable=False)
     product_id = db.Column(db.Integer, db.ForeignKey("products.id"), nullable=True)
+    department_id = db.Column(db.Integer, db.ForeignKey("departments.id"), nullable=True, index=True)
     created_by = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     assigned_to = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     subject = db.Column(db.String(500), nullable=False)
@@ -83,6 +84,7 @@ class Ticket(db.Model):
 
     hospital = db.relationship("Hospital", back_populates="tickets")
     product = db.relationship("Product", back_populates="tickets")
+    department = db.relationship("Department", foreign_keys=[department_id])
     creator = db.relationship("User", foreign_keys=[created_by], back_populates="created_tickets")
     assignee = db.relationship("User", foreign_keys=[assigned_to], back_populates="assigned_tickets")
     phi_flagger = db.relationship("User", foreign_keys=[phi_flagged_by])

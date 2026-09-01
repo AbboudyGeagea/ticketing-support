@@ -22,7 +22,8 @@
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Requester</p>
       <p style="margin:0 0 12px;color:#1e293b;">
         {{ ticket.creator.name }}{% if ticket.creator.job_title %} — {{ ticket.creator.job_title }}{% endif %}
-        {%- if ticket.creator.department %} · {{ ticket.creator.department.name }}{% endif %}
+        {%- set dept = ticket.department or ticket.creator.department %}
+        {%- if dept %} · {{ dept.name }}{% endif %}
       </p>
       {% endif %}
       {% if ticket.product %}

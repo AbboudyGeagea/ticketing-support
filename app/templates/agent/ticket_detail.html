@@ -204,9 +204,10 @@
           <dd class="text-right">
             <span class="font-medium text-slate-800">{{ ticket.creator.name }}</span>
             <span class="block text-xs text-slate-400 break-all">{{ ticket.creator.email }}</span>
-            {% if ticket.creator.job_title or ticket.creator.department %}
+            {% set dept = ticket.department or ticket.creator.department %}
+            {% if ticket.creator.job_title or dept %}
             <span class="block text-xs text-slate-500 mt-0.5">
-              {{ ticket.creator.job_title or '—' }}{% if ticket.creator.department %} · {{ ticket.creator.department.name }}{% endif %}
+              {{ ticket.creator.job_title or '—' }}{% if dept %} · {{ dept.name }}{% endif %}
             </span>
             {% endif %}
             <a href="{{ url_for('agent.customer_edit', user_id=ticket.creator.id) }}"

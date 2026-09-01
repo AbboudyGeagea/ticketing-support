@@ -37,9 +37,10 @@
           · {{ t.created_at | localtime('%b %d, %Y') }}
           {% if t.creator %} · Opened by {{ t.creator.name }}{% if t.creator.id == current_user.id %} (you){% endif %}{% endif %}
         </p>
-        {% if t.creator and (t.creator.job_title or t.creator.department) %}
+        {% set dept = t.department or (t.creator.department if t.creator else None) %}
+        {% if t.creator and (t.creator.job_title or dept) %}
         <p class="text-xs text-slate-400 mt-0.5">
-          {{ t.creator.job_title or '—' }}{% if t.creator.department %} · {{ t.creator.department.name }}{% endif %}
+          {{ t.creator.job_title or '—' }}{% if dept %} · {{ dept.name }}{% endif %}
         </p>
         {% endif %}
       </div>

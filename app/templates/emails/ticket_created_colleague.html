@@ -14,9 +14,10 @@
       has opened a support ticket on behalf of your team. Our team will get back to you shortly.
     </p>
     <div style="background:#f1f5f9;border-radius:6px;padding:16px;margin:0 0 20px;">
-      {% if ticket.creator and ticket.creator.department %}
+      {% set dept = ticket.department or (ticket.creator.department if ticket.creator else None) %}
+      {% if dept %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Department</p>
-      <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.creator.department.name }}</p>
+      <p style="margin:0 0 12px;color:#1e293b;">{{ dept.name }}</p>
       {% endif %}
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Reference</p>
       <p style="margin:0 0 12px;font-weight:600;color:#1e293b;font-family:monospace;">{{ ticket.ref }}</p>

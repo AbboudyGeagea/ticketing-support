@@ -262,8 +262,9 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
                 {%- if t.creator.job_title %} ({{ t.creator.job_title }}){% endif -%}
               {% endif %}
             </p>
-            {% if t.creator and t.creator.department %}
-            <p class="text-xs text-slate-400 mt-0.5">{{ t.creator.department.name }}</p>
+            {% set dept = t.department or (t.creator.department if t.creator else None) %}
+            {% if dept %}
+            <p class="text-xs text-slate-400 mt-0.5">{{ dept.name }}</p>
             {% endif %}
           </td>
           <td class="px-4 py-3.5 text-slate-600">{{ t.hospital.name }}</td>

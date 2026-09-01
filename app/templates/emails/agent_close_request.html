@@ -21,7 +21,8 @@
       <p style="margin:0 0 12px;color:#1e293b;">
         {{ ticket.creator.name if ticket.creator else '—' }}
         {%- if ticket.creator and ticket.creator.job_title %} — {{ ticket.creator.job_title }}{% endif %}
-        {%- if ticket.creator and ticket.creator.department %} · {{ ticket.creator.department.name }}{% endif %}
+        {%- set dept = ticket.department or (ticket.creator.department if ticket.creator else None) %}
+        {%- if dept %} · {{ dept.name }}{% endif %}
       </p>
       <p style="margin:0 0 6px;color:#64748b;font-size:13px;">Hospital</p>
       <p style="margin:0 0 12px;color:#1e293b;">{{ ticket.hospital.name if ticket.hospital else '—' }}</p>

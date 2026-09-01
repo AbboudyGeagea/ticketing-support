@@ -38,9 +38,10 @@
     <span>{{ ticket.type_label }}</span> ·
     <span>Opened {{ ticket.created_at | localtime('%B %d, %Y') }}</span>
     {% if ticket.creator %}
+    {% set dept = ticket.department or ticket.creator.department %}
     · <span>by {{ ticket.creator.name }}{% if ticket.creator.id == current_user.id %} (you){% endif %}
       {%- if ticket.creator.job_title %}, {{ ticket.creator.job_title }}{% endif -%}
-      {%- if ticket.creator.department %} · {{ ticket.creator.department.name }}{% endif -%}
+      {%- if dept %} · {{ dept.name }}{% endif -%}
     </span>
     {% endif %}
     {% if ticket.assignee %}
