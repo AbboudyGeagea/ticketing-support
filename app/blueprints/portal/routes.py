@@ -80,6 +80,26 @@ def _visible_tickets(user):
     return Ticket.query.filter(db.or_(*conditions), Ticket.phi_flagged == False)  # noqa: E712
 
 
+def _apply_search(query, term):
+    """Filter a ticket query by a free-text term from the portal search box.
+
+    Matches the ticket ref (customers usually type it as "42" or "#42" rather
+    than the stored "0042"), the subject, and the body of any message the
+    customer can actually read — internal agent notes are never searchable.
+    """
+    like = f"%{term}%"
+    ref_like = f"%{term.lstrip('#').strip()}%"
+    public_msg_ids = db.session.query(TicketMessage.ticket_id).filter(
+        TicketMessage.is_internal == False,  # noqa: E712
+        TicketMessage.body.ilike(like),
+    )
+    return query.filter(db.or_(
+        Ticket.ref.ilike(ref_like),
+        Ticket.subject.ilike(like),
+        Ticket.id.in_(public_msg_ids),
+    ))
+
+
 def _make_ref(ticket_id):
     return f"{ticket_id:04d}"
 
@@ -102,9 +122,12 @@ def dashboard():
 def tickets():
     page = request.args.get("page", 1, type=int)
     status_filter = request.args.get("status", "")
+    search = request.args.get("q", "").strip()
     query = _visible_tickets(current_user)
     if status_filter:
         query = query.filter(Ticket.status == status_filter)
+    if search:
+        query = _apply_search(query, search)
     tickets_page = (
         query
         .options(joinedload(Ticket.product), joinedload(Ticket.department),
@@ -113,7 +136,7 @@ def tickets():
         .paginate(page=page, per_page=20)
     )
     return render_template("portal/tickets.html", tickets=tickets_page,
-                           status_filter=status_filter)
+                           status_filter=status_filter, q=search)
 
 
 @bp.route("/tickets/new", methods=["GET", "POST"])
@@ -320,6 +343,11 @@ def ticket_reply(ref):
                 new_value="in_progress",
             )
             db.session.add(entry)
+            try:
+                from app.services.webhook_service import fire_ticket_status_changed
+                fire_ticket_status_changed(ticket, old_status, "in_progress", current_user.id)
+            except Exception:
+                logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
         ticket.updated_at = datetime.utcnow()
         db.session.commit()
 
@@ -364,6 +392,11 @@ def ticket_confirm(ref):
         db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=None,
                                      action="status_change", old_value=old, new_value="closed"))
         db.session.commit()
+        try:
+            from app.services.webhook_service import fire_ticket_status_changed
+            fire_ticket_status_changed(ticket, old, "closed")
+        except Exception:
+            logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
         flash("Thank you — your ticket has been closed.", "success")
     elif action == "reopen" and ticket.status in ("resolved", "closed"):
         old = ticket.status
@@ -374,6 +407,11 @@ def ticket_confirm(ref):
         db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=None,
                                      action="status_change", old_value=old, new_value="in_progress"))
         db.session.commit()
+        try:
+            from app.services.webhook_service import fire_ticket_status_changed
+            fire_ticket_status_changed(ticket, old, "in_progress")
+        except Exception:
+            logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
         try:
             from app.services.email_outbound import notify_agent_ticket_reopened
             notify_agent_ticket_reopened(ticket)
@@ -595,6 +633,11 @@ def collab_reply(token):
             old_value=old_status,
             new_value="in_progress",
         ))
+        try:
+            from app.services.webhook_service import fire_ticket_status_changed
+            fire_ticket_status_changed(ticket, old_status, "in_progress")
+        except Exception:
+            logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
 
