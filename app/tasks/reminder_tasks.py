@@ -89,32 +89,54 @@ def check_sla_escalations():
 
 @celery.task(name="app.tasks.reminder_tasks.auto_close_resolved_tickets")
 def auto_close_resolved_tickets():
-    """Auto-close tickets that have been resolved for more than 2 days without customer response."""
+    """Auto-close tickets resolved for 48+ hours, or until Monday if resolved on Friday."""
     from datetime import timedelta
     from app.models.ticket import Ticket, TicketHistory
     from app.extensions import db
 
-    cutoff = datetime.utcnow() - timedelta(days=2)
-    tickets = Ticket.query.filter(
-        Ticket.status == "resolved",
-        Ticket.updated_at < cutoff,
-    ).all()
-
+    resolved_tickets = Ticket.query.filter(Ticket.status == "resolved").all()
     now = datetime.utcnow()
-    for ticket in tickets:
-        ticket.status = "closed"
-        ticket.closed_at = now
-        ticket.updated_at = now
-        db.session.add(TicketHistory(
-            ticket_id=ticket.id,
-            agent_id=None,
-            action="status_change",
-            old_value="resolved",
-            new_value="closed",
-        ))
-        logger.info("Auto-closed ticket %s (resolved for >2 days)", ticket.ref)
+    closed_count = 0
 
-    if tickets:
-        db.session.commit()
-        logger.info("Auto-closed %d resolved ticket(s)", len(tickets))
-    return len(tickets)
+    for ticket in resolved_tickets:
+        time_since_resolved = now - ticket.updated_at
+        should_close = False
+
+        if time_since_resolved >= timedelta(hours=48):
+            resolved_day = ticket.updated_at.weekday()
+            if resolved_day == 4:
+                next_monday = ticket.updated_at + timedelta(days=3)
+                next_monday = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
+                if now >= next_monday:
+                    should_close = True
+            else:
+                should_close = True
+
+        if should_close:
+            try:
+                ticket.status = "closed"
+                ticket.closed_at = now
+                ticket.updated_at = now
+                db.session.add(TicketHistory(
+                    ticket_id=ticket.id,
+                    changed_by=None,
+                    action="status_change",
+                    old_value="resolved",
+                    new_value="closed",
+                ))
+                db.session.commit()
+                closed_count += 1
+                logger.info("Auto-closed ticket %s (resolved >48h)", ticket.ref)
+
+                try:
+                    from app.services.webhook_service import fire_ticket_status_changed
+                    fire_ticket_status_changed(ticket, "resolved", "closed")
+                except Exception:
+                    logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
+            except Exception:
+                logger.exception("Failed to auto-close ticket %s", ticket.ref)
+                db.session.rollback()
+
+    if closed_count > 0:
+        logger.info("Auto-closed %d resolved ticket(s)", closed_count)
+    return closed_count
