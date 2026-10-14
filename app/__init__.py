@@ -30,6 +30,7 @@ def create_app(config_class=Config):
     from app.models import email_template  # noqa: F401
     from app.models import rustdesk_log  # noqa: F401
     from app.models import email_log  # noqa: F401
+    from app.models import pm  # noqa: F401
 
     from app.blueprints.auth import bp as auth_bp
     from app.blueprints.portal import bp as portal_bp
@@ -37,6 +38,7 @@ def create_app(config_class=Config):
     from app.blueprints.admin import bp as admin_bp
     from app.blueprints.reports import bp as reports_bp
     from app.blueprints.projects import bp as projects_bp
+    from app.blueprints.pm import bp as pm_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(portal_bp, url_prefix="/portal")
@@ -44,6 +46,7 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_bp, url_prefix="/admin")
     app.register_blueprint(reports_bp, url_prefix="/reports")
     app.register_blueprint(projects_bp, url_prefix="/projects")
+    app.register_blueprint(pm_bp, url_prefix="/pm")
 
     from flask import redirect, url_for
 

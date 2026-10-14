@@ -1,0 +1,120 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles, status_badge, streak_badge, readings_list, attachment_links, finding_actions with context %}
+{% block title %}PM Findings{% endblock %}
+{% block page_title %}PM Findings{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pm.overview') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← PM</a>
+<a href="{{ url_for('pm.findings', **export_args) }}" class="pm-btn pm-btn-ghost">Export Excel</a>
+{% endblock %}
+
+{% block content %}
+{% set next_url = request.full_path %}
+
+<!-- Filters -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-5">
+  <form method="GET" class="flex flex-wrap gap-4 items-end">
+    <input type="hidden" name="f" value="1">
+    <fieldset>
+      <legend class="block text-xs font-medium text-slate-500 mb-1">Status</legend>
+      <div class="flex flex-wrap gap-3 py-2">
+        {% for s in statuses %}
+        <label class="inline-flex items-center gap-1.5 text-sm text-slate-700">
+          <input type="checkbox" name="status" value="{{ s }}" {% if s in flt.statuses %}checked{% endif %}> {{ status_labels[s] }}
+        </label>
+        {% endfor %}
+      </div>
+    </fieldset>
+    <div>
+      <label for="f-state" class="block text-xs font-medium text-slate-500 mb-1">Resolution</label>
+      <select id="f-state" name="state" class="pm-field" style="width:9rem;">
+        <option value="open"     {% if flt.state == 'open' %}selected{% endif %}>Open</option>
+        <option value="resolved" {% if flt.state == 'resolved' %}selected{% endif %}>Resolved</option>
+        <option value="all"      {% if flt.state == 'all' %}selected{% endif %}>All</option>
+      </select>
+    </div>
+    <div>
+      <label for="f-hospital" class="block text-xs font-medium text-slate-500 mb-1">Hospital</label>
+      <select id="f-hospital" name="hospital_id" class="pm-field" style="width:11rem;">
+        <option value="0">All hospitals</option>
+        {% for h in hospitals %}<option value="{{ h.id }}" {% if flt.hospital_id == h.id %}selected{% endif %}>{{ h.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-product" class="block text-xs font-medium text-slate-500 mb-1">Product</label>
+      <select id="f-product" name="product_id" class="pm-field" style="width:10rem;">
+        <option value="0">All products</option>
+        {% for p in products %}<option value="{{ p.id }}" {% if flt.product_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-check" class="block text-xs font-medium text-slate-500 mb-1">Check</label>
+      <select id="f-check" name="check" class="pm-field" style="width:11rem;">
+        <option value="">All checks</option>
+        {% for n in check_names %}<option value="{{ n }}" {% if flt.check == n %}selected{% endif %}>{{ n }}</option>{% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="f-from" class="block text-xs font-medium text-slate-500 mb-1">From</label>
+      <input id="f-from" type="date" name="date_from" value="{{ flt.date_from.isoformat() if flt.date_from else '' }}" class="pm-field" style="width:9.5rem;">
+    </div>
+    <div>
+      <label for="f-to" class="block text-xs font-medium text-slate-500 mb-1">To</label>
+      <input id="f-to" type="date" name="date_to" value="{{ flt.date_to.isoformat() if flt.date_to else '' }}" class="pm-field" style="width:9.5rem;">
+    </div>
+    <button type="submit" class="pm-btn pm-btn-primary">Filter</button>
+    <a href="{{ url_for('pm.findings') }}" class="text-slate-500 hover:text-slate-800 text-sm py-2 transition-colors">Reset</a>
+  </form>
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+  <div class="px-5 py-3 border-b border-slate-100 text-sm text-slate-500">
+    {{ page.total }} finding{{ '' if page.total == 1 else 's' }}
+  </div>
+  {% if page.items %}
+  <div style="overflow-x:auto;">
+  <table class="w-full text-sm pm-table">
+    <thead>
+      <tr><th>Checkup</th><th>Check</th><th>Status</th><th>Details</th><th style="width:20rem;">Follow-up</th></tr>
+    </thead>
+    <tbody>
+      {% for r in page.items %}
+      <tr>
+        <td class="whitespace-nowrap">
+          <a href="{{ url_for('pm.checkup_detail', checkup_id=r.checkup_id, _anchor='result-' ~ r.id) }}" class="font-medium text-slate-800 hover:underline">{{ r.checkup.hospital.name }}</a>
+          <p class="text-xs text-slate-400">{{ r.checkup.check_date.strftime('%d %b %Y') }}</p>
+        </td>
+        <td>
+          <p class="font-medium text-slate-800">{{ r.check_name }}</p>
+          <p class="text-xs text-slate-400">{{ r.product.name }}</p>
+        </td>
+        <td class="whitespace-nowrap">
+          {{ status_badge(r.status) }}
+          <div class="mt-1">{{ streak_badge(streaks.get(r.id)) }}</div>
+        </td>
+        <td>
+          {{ readings_list(r) }}
+          {% if r.comment %}<p class="text-xs text-slate-700 whitespace-pre-line mt-1">{{ r.comment }}</p>{% endif %}
+          {{ attachment_links(r) }}
+        </td>
+        <td>{{ finding_actions(r, agents, default_deadline, next_url) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% if page.pages > 1 %}
+  <div class="px-5 py-3 border-t border-slate-100 flex items-center justify-between text-sm">
+    <span class="text-slate-500">Page {{ page.page }} of {{ page.pages }}</span>
+    <div class="flex gap-2">
+      {% if page.has_prev %}<a href="{{ url_for('pm.findings', page=page.prev_num, **page_args) }}" class="pm-btn pm-btn-ghost">← Previous</a>{% endif %}
+      {% if page.has_next %}<a href="{{ url_for('pm.findings', page=page.next_num, **page_args) }}" class="pm-btn pm-btn-ghost">Next →</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+  {% else %}
+  <p class="px-5 py-10 text-sm text-slate-500 text-center">No findings match these filters.</p>
+  {% endif %}
+</div>
+{% endblock %}

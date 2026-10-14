@@ -84,6 +84,8 @@ def dashboard():
         Ticket.close_requested == True,
         Ticket.status.notin_(["closed"]),
     ).count()
+    from app.services.pm_service import open_alert_count
+    pm_open_alerts = open_alert_count()
 
     # ECharts: ticket volume last 30 days
     daily_counts = (
@@ -168,6 +170,7 @@ def dashboard():
         overdue_tasks=overdue_tasks,
         sla_at_risk=sla_at_risk,
         closed_today=closed_today,
+        pm_open_alerts=pm_open_alerts,
         chart_dates=chart_dates,
         chart_values=chart_values,
         status_data=status_data,
@@ -1075,6 +1078,7 @@ def task_detail(task_id):
 
     if form.validate_on_submit():
         prev_secondary = task.assigned_to_2
+        prev_status = task.status
         task.title = form.title.data
         task.description = form.description.data
         task.assigned_to = form.assigned_to.data
@@ -1095,6 +1099,11 @@ def task_detail(task_id):
         db.session.commit()
         if task.assigned_to_2 and task.assigned_to_2 != prev_secondary:
             notify_secondary_assignee(task)
+        if prev_status != TASK_DONE and task.status == TASK_DONE:
+            from app.services.pm_service import resolve_findings_for_task
+            resolved = resolve_findings_for_task(task, current_user)
+            if resolved:
+                flash(f"{resolved} PM finding(s) marked resolved.", "info")
         flash("Task updated.", "success")
         return redirect(url_for("agent.task_detail", task_id=task_id))
 

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:20px;">
+<div style="max-width:620px;margin:0 auto;background:#fff;border-radius:8px;border:1px solid #e2e8f0;overflow:hidden;">
+  <div style="background:#dc2626;padding:24px 28px;">
+    <h1 style="color:#fff;margin:0;font-size:18px;font-weight:600;">PM Alert — {{ checkup.hospital.name }}</h1>
+    <p style="color:#fecaca;margin:4px 0 0;font-size:14px;">Checkup of {{ checkup.check_date.strftime('%d %b %Y') }} by {{ checkup.performer.name }}</p>
+  </div>
+  <div style="padding:28px;">
+    <p style="color:#374151;margin:0 0 16px;font-size:14px;">
+      {{ alerts|length }} check{{ '' if alerts|length == 1 else 's' }} came back on <strong>Alert</strong>:
+    </p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <tr>
+        <th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;color:#64748b;">Product</th>
+        <th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;color:#64748b;">Check</th>
+        <th style="text-align:left;padding:8px;border-bottom:2px solid #e2e8f0;color:#64748b;">Details</th>
+      </tr>
+      {% for r in alerts %}
+      <tr>
+        <td style="padding:8px;border-bottom:1px solid #f1f5f9;color:#374151;vertical-align:top;">{{ r.product.name }}</td>
+        <td style="padding:8px;border-bottom:1px solid #f1f5f9;color:#111827;font-weight:600;vertical-align:top;">{{ r.check_name }}</td>
+        <td style="padding:8px;border-bottom:1px solid #f1f5f9;color:#374151;vertical-align:top;">
+          {% for rd in r.readings if rd.value %}<div>{{ rd.label }}: <strong>{{ rd.display }}</strong></div>{% endfor %}
+          {% if r.comment %}<div style="color:#64748b;margin-top:4px;white-space:pre-wrap;">{{ r.comment }}</div>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;">
+    <a href="{{ checkup_url }}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Open Checkup</a>
+  </div>
+  <div style="background:#f8fafc;padding:16px 28px;border-top:1px solid #e2e8f0;">
+    <p style="margin:0;color:#94a3b8;font-size:12px;">Intermedic Support — internal PM notification, agents only.</p>
+  </div>
+</div>
+</body>
+</html>

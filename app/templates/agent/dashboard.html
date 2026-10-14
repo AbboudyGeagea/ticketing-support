@@ -38,6 +38,15 @@
   </form>
 </div>
 
+{% if pm_open_alerts %}
+<a href="{{ url_for('pm.findings', f=1, status='alert', state='open') }}"
+   class="flex items-center justify-between gap-3 rounded-xl px-5 py-3 mb-4 text-sm font-medium hover:shadow-md transition-all"
+   style="background:#fef2f2; border:1px solid #fca5a5; color:#b91c1c;">
+  <span>⚠ {{ pm_open_alerts }} open preventive-maintenance alert{{ '' if pm_open_alerts == 1 else 's' }}</span>
+  <span>View →</span>
+</a>
+{% endif %}
+
 <!-- Stat Cards -->
 <div class="grid grid-cols-2 xl:grid-cols-6 gap-4 mb-6">
   {% set cards = [

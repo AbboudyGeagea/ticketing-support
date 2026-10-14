@@ -78,6 +78,8 @@
          class="nav-link {% if request.endpoint == 'agent.workload' %}active{% endif %}">Workload</a>
       <a href="{{ url_for('projects.list_projects') }}"
          class="nav-link {% if request.endpoint and 'projects.' in request.endpoint %}active{% endif %}">Projects</a>
+      <a href="{{ url_for('pm.overview') }}" title="Preventive maintenance"
+         class="nav-link {% if request.endpoint and request.endpoint.startswith('pm.') and not request.endpoint.startswith('pm.catalog') %}active{% endif %}">PM</a>
       <a href="{{ url_for('agent.kb_list') }}"
          class="nav-link {% if request.endpoint and 'agent.kb' in request.endpoint %}active{% endif %}">Knowledge Base</a>
       <a href="{{ url_for('reports.dashboard') }}"
@@ -205,6 +207,12 @@
                     color:{% if request.endpoint and 'admin.email_template' in request.endpoint %}#00A651{% else %}#374151{% endif %};
                     font-weight:{% if request.endpoint and 'admin.email_template' in request.endpoint %}500{% else %}400{% endif %};">
             Email Templates
+          </a>
+          <a href="{{ url_for('pm.catalog') }}"
+             style="display:block; padding:0.375rem 1rem; font-size:0.875rem; text-decoration:none;
+                    color:{% if request.endpoint and request.endpoint.startswith('pm.catalog') %}#00A651{% else %}#374151{% endif %};
+                    font-weight:{% if request.endpoint and request.endpoint.startswith('pm.catalog') %}500{% else %}400{% endif %};">
+            PM Checks
           </a>
 
           <div style="border-top:1px solid #f1f5f9; margin:0.25rem 0;"></div>

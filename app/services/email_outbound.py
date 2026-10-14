@@ -441,6 +441,35 @@ def notify_agents_solution_rejected(ticket, customer):
         _send(recipients, f"[{ticket.ref}] Solution rejected by {customer.name}", html=html)
 
 
+# ---------------------------------------------------------------------------
+# Preventive maintenance (PM) — internal only, never sent to customers
+# ---------------------------------------------------------------------------
+
+def notify_agents_pm_alert(checkup, alerts):
+    """Email agents the Alert findings of a just-submitted PM checkup."""
+    recipients = _all_agent_emails()
+    if not recipients:
+        return
+    checkup_url = f"{_base_url()}/pm/{checkup.id}"
+    html = _render("pm_alert.html", checkup=checkup, alerts=alerts, checkup_url=checkup_url)
+    if html:
+        _send(
+            recipients,
+            f"[PM Alert] {checkup.hospital.name} — {len(alerts)} alert(s) — {checkup.check_date:%d %b %Y}",
+            html=html,
+        )
+
+
+def send_pm_reminder(owner, rows, month_label):
+    """Remind a hospital's responsible agent which PM checkups are still due this month."""
+    if not owner.email:
+        return
+    html = _render("pm_reminder.html", owner=owner, rows=rows, month_label=month_label,
+                   pm_url=f"{_base_url()}/pm/")
+    if html:
+        _send([owner.email], f"[PM] {len(rows)} checkup(s) still due for {month_label}", html=html)
+
+
 def notify_all_agents_activity(ticket, event, actor_name=None, message=None):
     """Broadcast any ticket activity (reply, status change, close, …) to all agents."""
     recipients = _all_agent_emails()

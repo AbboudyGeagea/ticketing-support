@@ -1,0 +1,41 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles %}
+{% block title %}New PM checkup{% endblock %}
+{% block page_title %}New PM checkup{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pm.overview') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← Back to PM</a>
+{% endblock %}
+
+{% block content %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6" style="max-width:36rem;">
+  {% if rows %}
+  <form method="POST" action="{{ url_for('pm.new_checkup') }}" class="space-y-4">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div>
+      <label for="hospital_id" class="block text-sm font-medium text-slate-700 mb-1">Hospital / site</label>
+      <select id="hospital_id" name="hospital_id" class="pm-field" required>
+        <option value="">— Choose —</option>
+        {% for row in rows %}
+        <option value="{{ row.hospital.id }}" {% if selected_id == row.hospital.id %}selected{% endif %}>
+          {{ row.hospital.name }}{% if row.draft %} — draft in progress{% elif row.state == 'done' %} — done this month{% endif %}
+        </option>
+        {% endfor %}
+      </select>
+      <p class="text-xs text-slate-400 mt-1">The checklist is built from the products this hospital has. If it already has a draft, you'll continue that one.</p>
+    </div>
+    <div>
+      <label for="check_date" class="block text-sm font-medium text-slate-700 mb-1">Checkup date</label>
+      <input id="check_date" type="date" name="check_date" value="{{ today.isoformat() }}" class="pm-field" style="width:12rem;" required>
+    </div>
+    <button type="submit" class="pm-btn pm-btn-primary">Start checkup</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-slate-600">
+    No hospital has products with PM checks yet. Add checks and tick their products under
+    <a href="{{ url_for('pm.catalog') }}" class="text-primary hover:underline">Admin → PM Checks</a>.
+  </p>
+  {% endif %}
+</div>
+{% endblock %}

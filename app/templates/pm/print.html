@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PM — {{ checkup.hospital.name }} — {{ checkup.check_date.strftime('%Y-%m-%d') }}</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 12px; color: #111; margin: 0; padding: 24px; }
+    h1 { font-size: 18px; margin: 0 0 4px; }
+    h2 { font-size: 13px; margin: 18px 0 6px; padding-bottom: 4px; border-bottom: 2px solid #334155; }
+    .meta { color: #555; font-size: 12px; margin: 0 0 12px; }
+    .summary span { display: inline-block; margin-right: 10px; }
+    .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+    .s-normal { background: #dcfce7; color: #166534; }
+    .s-attention { background: #fef3c7; color: #92400e; }
+    .s-alert { background: #fee2e2; color: #b91c1c; }
+    .s-na { background: #f1f5f9; color: #475569; }
+    .s-none { border: 1px dashed #999; color: #777; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; font-size: 11px; color: #555; border-bottom: 1px solid #ccc; padding: 5px 6px; }
+    td { padding: 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+    tr { page-break-inside: avoid; }
+    .muted { color: #666; }
+    .pre { white-space: pre-wrap; }
+    .draft { background: #fef3c7; border: 1px solid #fcd34d; padding: 6px 10px; border-radius: 6px; margin-bottom: 12px; }
+    @media print { .no-print { display: none; } body { padding: 0; } }
+  </style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:16px;">
+  <button onclick="window.print()" style="background:#00A651;color:#fff;border:none;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Print / Save PDF</button>
+  <button onclick="window.close()" style="margin-left:8px;background:#f1f5f9;border:1px solid #ddd;padding:8px 20px;border-radius:6px;cursor:pointer;font-size:13px;">Close</button>
+</div>
+
+{% set LABEL = {'normal': 'Normal', 'attention': 'Needs attention', 'alert': 'Alert', 'na': 'N/A'} %}
+
+<h1>Preventive maintenance — {{ checkup.hospital.name }}</h1>
+<p class="meta">
+  {{ checkup.check_date.strftime('%A %d %B %Y') }} · Performed by {{ checkup.performer.name }}
+  {% if checkup.submitted_at %} · Submitted {{ checkup.submitted_at | localtime('%d %b %Y %H:%M') }}{% endif %}
+</p>
+{% if checkup.is_draft %}<p class="draft">Draft — not submitted yet. Statuses may still change.</p>{% endif %}
+<p class="summary">
+  {% for s in ['alert', 'attention', 'normal', 'na'] %}
+  <span><span class="badge s-{{ s }}">{{ LABEL[s] }}</span> {{ counts[s] }}</span>
+  {% endfor %}
+</p>
+{% if checkup.notes %}<p class="pre"><strong>Notes:</strong> {{ checkup.notes }}</p>{% endif %}
+
+{% for product, results in groups %}
+<h2>{{ product.name }}</h2>
+<table>
+  <thead><tr><th style="width:22%;">Check</th><th style="width:13%;">Status</th><th style="width:22%;">Readings</th><th>Comment</th><th style="width:20%;">Resolution</th></tr></thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td><strong>{{ r.check_name }}</strong></td>
+      <td><span class="badge s-{{ r.status or 'none' }}">{{ LABEL.get(r.status, 'Not set') }}</span></td>
+      <td>{% for rd in r.readings if rd.value %}<div><span class="muted">{{ rd.label }}:</span> {{ rd.display }}</div>{% endfor %}</td>
+      <td class="pre">{{ r.comment or '' }}{% if r.attachments %}<div class="muted">{{ r.attachments | length }} attachment(s)</div>{% endif %}</td>
+      <td>
+        {% if r.resolved_at %}
+        Resolved by {{ r.resolver.name if r.resolver else '?' }}, {{ r.resolved_at | localtime('%d %b %Y') }}
+        {% if r.resolution_note %}<div class="muted pre">{{ r.resolution_note }}</div>{% endif %}
+        {% elif r.task %}Task: {{ r.task.assignee.name }} ({{ r.task.status.replace('_', ' ') }})
+        {% elif r.status in ('attention', 'alert') and not checkup.is_draft %}<span class="muted">Open</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+</body>
+</html>

@@ -32,6 +32,9 @@ class Config:
 
     EMAIL_POLL_INTERVAL_SECONDS = int(os.environ.get("EMAIL_POLL_INTERVAL_SECONDS", 60))
 
+    # Preventive maintenance: day of the month responsible agents get a reminder
+    PM_REMINDER_DAY = int(os.environ.get("PM_REMINDER_DAY", 20))
+
     # All timestamps are stored in UTC; this is the timezone used to display them.
     LOCAL_TZ_NAME = os.environ.get("LOCAL_TZ_NAME", "Asia/Beirut")
 

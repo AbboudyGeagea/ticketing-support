@@ -1,0 +1,61 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles, threshold_hint %}
+{% block title %}PM Checks{% endblock %}
+{% block page_title %}PM Checks{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pm.catalog_new') }}" class="pm-btn pm-btn-primary">+ New check</a>
+{% endblock %}
+
+{% block content %}
+<div class="mb-4 bg-blue-50 border border-blue-200 rounded-xl px-5 py-3 text-sm text-blue-700">
+  Each check is done once per product it's ticked for. A new checkup lists the checks for every product the hospital has.
+  Changes apply to <strong>new</strong> checkups; drafts and reports already started keep the checks they were created with.
+</div>
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+  {% if checks %}
+  <div style="overflow-x:auto;">
+  <table class="w-full text-sm pm-table">
+    <thead>
+      <tr><th>Order</th><th>Check</th><th>Products</th><th>Readings</th><th>Active</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in checks %}
+      <tr class="hover:bg-slate-50 transition-colors" {% if not c.active %}style="opacity:.55;"{% endif %}>
+        <td class="text-xs text-slate-400">{{ c.sort_order }}</td>
+        <td>
+          <p class="font-medium text-slate-800">{{ c.name }}</p>
+          {% if c.description %}<p class="text-xs text-slate-400 mt-0.5">{{ c.description }}</p>{% endif %}
+        </td>
+        <td class="text-xs text-slate-600">
+          {% if c.products %}{{ c.products | map(attribute='name') | join(', ') }}{% else %}<span style="color:#b45309;">No products — never shown</span>{% endif %}
+        </td>
+        <td class="text-xs text-slate-600">
+          {% for f in c.fields %}
+          <div>{{ f.label }}{% if f.has_thresholds %} <span class="text-slate-400">({{ threshold_hint(f) }})</span>{% endif %}</div>
+          {% else %}<span class="text-slate-400">—</span>{% endfor %}
+        </td>
+        <td class="text-xs">{% if c.active %}<span style="color:#166534;">Active</span>{% else %}<span class="text-slate-400">Inactive</span>{% endif %}</td>
+        <td class="text-right whitespace-nowrap">
+          <a href="{{ url_for('pm.catalog_edit', check_id=c.id) }}" class="text-primary hover:underline text-xs font-medium">Edit</a>
+          {% if c.id not in used %}
+          <form method="POST" action="{{ url_for('pm.catalog_delete', check_id=c.id) }}" style="display:inline;"
+                data-confirm="Delete “{{ c.name }}”? It hasn't been used in any checkup." data-confirm-title="Delete check?"
+                data-confirm-ok="Delete" data-confirm-variant="danger">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="text-xs font-medium ml-3" style="color:#dc2626; background:none; border:none; cursor:pointer;">Delete</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="px-5 py-10 text-sm text-slate-500 text-center">No checks yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

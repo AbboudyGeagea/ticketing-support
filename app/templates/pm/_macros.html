@@ -1,0 +1,180 @@
+{# Shared PM building blocks. Colours are inline/custom CSS (not new Tailwind
+   classes) so they render the same with the CDN and the bundled stylesheet. #}
+
+{% set PM_STYLE = {
+  'normal':    ('#dcfce7', '#166534'),
+  'attention': ('#fef3c7', '#92400e'),
+  'alert':     ('#fee2e2', '#b91c1c'),
+  'na':        ('#f1f5f9', '#475569'),
+} %}
+{% set PM_LABEL = {'normal': 'Normal', 'attention': 'Needs attention', 'alert': 'Alert', 'na': 'N/A'} %}
+{% set STATE_STYLE = {
+  'done':        ('#dcfce7', '#166534', 'Done this month'),
+  'in_progress': ('#dbeafe', '#1e40af', 'In progress'),
+  'due':         ('#f1f5f9', '#475569', 'Due'),
+  'overdue':     ('#fee2e2', '#b91c1c', 'Overdue'),
+} %}
+
+{% macro status_badge(status) -%}
+{%- set s = PM_STYLE.get(status) -%}
+<span class="pm-badge" style="{% if s %}background:{{ s[0] }};color:{{ s[1] }};{% else %}background:#fff;color:#94a3b8;border:1px dashed #cbd5e1;{% endif %}">{{ PM_LABEL.get(status, 'Not set') }}</span>
+{%- endmacro %}
+
+{% macro state_badge(state) -%}
+{%- set s = STATE_STYLE[state] -%}
+<span class="pm-badge" style="background:{{ s[0] }};color:{{ s[1] }};">{{ s[2] }}</span>
+{%- endmacro %}
+
+{% macro streak_badge(n) -%}
+{%- if n and n >= 2 -%}
+<span class="pm-badge" style="{% if n >= 3 %}background:#7f1d1d;color:#fff;{% else %}background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;{% endif %}"
+      title="Flagged in {{ n }} checkups in a row">Repeated {{ n }}×</span>
+{%- endif -%}
+{%- endmacro %}
+
+{# "Attention < 20% · Alert < 10%" for a PMCheckField with thresholds. #}
+{% macro threshold_hint(f) -%}
+{%- set op = '<' if f.direction == 'below' else '≥' -%}
+{%- set unit = '%' if f.field_type == 'percent' else (' ' ~ f.unit if f.unit else '') -%}
+{%- if f.attention_threshold is not none %}Attention {{ op }} {{ '%g' | format(f.attention_threshold) }}{{ unit }}{% endif -%}
+{%- if f.attention_threshold is not none and f.alert_threshold is not none %} · {% endif -%}
+{%- if f.alert_threshold is not none %}Alert {{ op }} {{ '%g' | format(f.alert_threshold) }}{{ unit }}{% endif -%}
+{%- endmacro %}
+
+{% macro readings_list(result) -%}
+{%- set rs = result.readings | selectattr('value') | list -%}
+{%- if rs -%}
+<div class="text-xs text-slate-600">
+  {% for rd in rs %}<div><span class="text-slate-400">{{ rd.label }}:</span> <span class="font-medium">{{ rd.display }}</span></div>{% endfor %}
+</div>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro attachment_links(result) -%}
+{%- if result.attachments -%}
+<div class="pm-file-list">
+  {% for a in result.attachments %}
+  <a href="{{ url_for('pm.attachment_download', att_id=a.id) }}" target="_blank" rel="noopener">📎 {{ a.original_name }}</a>
+  {% endfor %}
+</div>
+{%- endif -%}
+{%- endmacro %}
+
+{# Resolution state + Resolve / Follow-up task actions for a submitted finding. #}
+{% macro finding_actions(r, agents, default_deadline, next_url) %}
+<div class="space-y-1">
+  {% if r.resolved_at %}
+  <p class="text-xs font-medium" style="color:#166534;">✓ Resolved by {{ r.resolver.name if r.resolver else '?' }}</p>
+  <p class="text-xs text-slate-400">{{ r.resolved_at | localtime('%d %b %Y %H:%M') }}</p>
+  {% if r.resolution_note %}<p class="text-xs text-slate-600 whitespace-pre-line">{{ r.resolution_note }}</p>{% endif %}
+  {% elif r.is_flagged %}
+  <p class="text-xs font-medium" style="color:#b45309;">Open</p>
+  {% endif %}
+
+  {% if r.task %}
+  <p class="text-xs">
+    Task:
+    <a href="{{ url_for('agent.task_detail', task_id=r.task.id) }}" class="text-primary hover:underline">
+      {{ r.task.assignee.name }} · {{ r.task.status.replace('_', ' ') }}
+    </a>
+  </p>
+  {% endif %}
+
+  {% if r.is_flagged and not r.resolved_at %}
+  <div class="pm-actions">
+    <details class="pm-pop">
+      <summary>Resolve</summary>
+      <form method="POST" action="{{ url_for('pm.resolve', result_id=r.id) }}" class="pm-pop-body">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <label class="block text-xs font-medium text-slate-600 mb-1" for="note-{{ r.id }}">What was done?</label>
+        <textarea id="note-{{ r.id }}" name="note" rows="3" class="pm-field" placeholder="e.g. Extended D: by 200 GB"></textarea>
+        <p class="text-xs text-slate-400 mt-1 mb-2">The report keeps the original status ({{ r.status_label }}); your name and the time are logged.</p>
+        <button type="submit" class="pm-btn pm-btn-primary">Mark resolved</button>
+      </form>
+    </details>
+    {% if not r.task %}
+    <details class="pm-pop">
+      <summary>Follow-up task</summary>
+      <form method="POST" action="{{ url_for('pm.create_task', result_id=r.id) }}" class="pm-pop-body">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <label class="block text-xs font-medium text-slate-600 mb-1" for="tt-{{ r.id }}">Title</label>
+        <input id="tt-{{ r.id }}" type="text" name="title" class="pm-field mb-2"
+               value="PM: {{ r.check_name }} — {{ r.checkup.hospital.name }} ({{ r.product.name }})">
+        <label class="block text-xs font-medium text-slate-600 mb-1" for="ta-{{ r.id }}">Assign to</label>
+        <select id="ta-{{ r.id }}" name="assigned_to" class="pm-field mb-2" required>
+          <option value="">— Choose —</option>
+          {% for a in agents %}<option value="{{ a.id }}" {% if a.id == current_user.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+        </select>
+        <label class="block text-xs font-medium text-slate-600 mb-1" for="td-{{ r.id }}">Deadline</label>
+        <input id="td-{{ r.id }}" type="date" name="deadline" class="pm-field mb-2" value="{{ default_deadline.isoformat() }}">
+        <p class="text-xs text-slate-400 mb-2">Marking the task Done resolves this finding automatically.</p>
+        <button type="submit" class="pm-btn pm-btn-primary">Create task</button>
+      </form>
+    </details>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{% macro pm_styles() %}
+<style>
+  .pm-badge { display:inline-block; padding:2px 10px; border-radius:9999px; font-size:0.72rem; font-weight:600; white-space:nowrap; line-height:1.5; }
+  .pm-field { width:100%; border:1px solid #cbd5e1; border-radius:0.5rem; padding:0.4rem 0.65rem; font-size:0.875rem; background:#fff; color:#1e293b; }
+  .pm-field:focus { outline:none; border-color:#00A651; box-shadow:0 0 0 2px rgba(0,166,81,.25); }
+  .pm-num { width:7.5rem; }
+  .pm-wide { width:16rem; max-width:100%; }
+  .pm-btn { display:inline-flex; align-items:center; justify-content:center; gap:0.375rem; font-size:0.8125rem; font-weight:500; padding:0.45rem 0.9rem; border-radius:0.5rem; border:1px solid transparent; cursor:pointer; text-decoration:none; transition:background-color .15s; }
+  .pm-btn-primary { background:#00A651; color:#fff; }
+  .pm-btn-primary:hover { background:#008f45; }
+  .pm-btn-ghost { background:#fff; color:#334155; border-color:#cbd5e1; }
+  .pm-btn-ghost:hover { background:#f8fafc; }
+  .pm-btn-danger { background:#fff; color:#b91c1c; border-color:#fecaca; }
+  .pm-btn-danger:hover { background:#fef2f2; }
+  .pm-actions { display:flex; flex-direction:column; gap:0.375rem; padding-top:0.25rem; }
+  .pm-pop > summary { list-style:none; cursor:pointer; display:inline-flex; align-items:center; font-size:0.75rem; font-weight:500; padding:0.25rem 0.6rem; border-radius:0.375rem; border:1px solid #cbd5e1; color:#334155; background:#fff; user-select:none; }
+  .pm-pop > summary::-webkit-details-marker { display:none; }
+  .pm-pop > summary::after { content:"▾"; margin-left:0.35rem; color:#94a3b8; }
+  .pm-pop[open] > summary { background:#f1f5f9; }
+  .pm-pop-body { margin-top:0.4rem; width:17rem; max-width:100%; background:#fff; border:1px solid #e2e8f0; border-radius:0.6rem; box-shadow:0 6px 18px rgba(0,0,0,.08); padding:0.75rem; }
+  .pm-opts { display:flex; flex-wrap:wrap; align-items:center; gap:0.375rem; }
+  .pm-opt { position:relative; }
+  .pm-opt input { position:absolute; opacity:0; width:1px; height:1px; }
+  .pm-opt span { display:inline-block; padding:0.3rem 0.8rem; border-radius:9999px; border:1px solid #cbd5e1; font-size:0.8rem; font-weight:500; color:#475569; background:#fff; cursor:pointer; user-select:none; transition:background-color .12s, color .12s; }
+  .pm-opt span:hover { background:#f8fafc; }
+  .pm-opt input:focus-visible + span { box-shadow:0 0 0 2px rgba(0,166,81,.35); }
+  .pm-opt input:checked + span.o-normal    { background:#16a34a; border-color:#16a34a; color:#fff; }
+  .pm-opt input:checked + span.o-attention { background:#d97706; border-color:#d97706; color:#fff; }
+  .pm-opt input:checked + span.o-alert     { background:#dc2626; border-color:#dc2626; color:#fff; }
+  .pm-opt input:checked + span.o-na        { background:#64748b; border-color:#64748b; color:#fff; }
+  .pm-result { border-left:4px solid transparent; }
+  .pm-result[data-status="normal"]    { border-left-color:#16a34a; }
+  .pm-result[data-status="attention"] { border-left-color:#d97706; background:#fffbeb; }
+  .pm-result[data-status="alert"]     { border-left-color:#dc2626; background:#fef2f2; }
+  .pm-result[data-status="na"]        { border-left-color:#94a3b8; }
+  .pm-readings { display:flex; flex-wrap:wrap; gap:0.75rem 1.25rem; }
+  .pm-reading { display:flex; flex-direction:column; gap:0.2rem; }
+  .pm-suggest { color:#92400e; font-weight:500; margin-left:0.25rem; }
+  .pm-file-list { display:flex; flex-direction:column; gap:0.2rem; font-size:0.75rem; }
+  .pm-file-list a { color:#00A651; text-decoration:none; word-break:break-all; }
+  .pm-file-list a:hover { text-decoration:underline; }
+  .pm-file-del { border:none; background:none; color:#94a3b8; cursor:pointer; font-size:0.9rem; line-height:1; padding:0 0.2rem; }
+  .pm-file-del:hover { color:#dc2626; }
+  .pm-file-add { display:inline-flex; align-items:center; gap:0.3rem; font-size:0.75rem; color:#475569; border:1px dashed #cbd5e1; border-radius:0.5rem; padding:0.3rem 0.6rem; cursor:pointer; margin-top:0.35rem; }
+  .pm-file-add:hover { border-color:#00A651; color:#00A651; }
+  .pm-sr { position:absolute; width:1px; height:1px; opacity:0; overflow:hidden; }
+  .pm-progress { height:0.4rem; background:#e2e8f0; border-radius:9999px; overflow:hidden; }
+  .pm-progress > div { height:100%; background:#00A651; transition:width .2s; }
+  .pm-table th { text-align:left; padding:0.65rem 1rem; font-size:0.7rem; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; background:#f8fafc; border-bottom:1px solid #e2e8f0; white-space:nowrap; }
+  .pm-table td { padding:0.75rem 1rem; vertical-align:top; border-bottom:1px solid #f1f5f9; }
+  .pm-chip { display:inline-flex; align-items:center; gap:0.35rem; font-size:0.8rem; font-weight:500; padding:0.3rem 0.8rem; border-radius:9999px; border:1px solid #e2e8f0; background:#fff; color:#475569; text-decoration:none; }
+  .pm-chip:hover { border-color:#cbd5e1; background:#f8fafc; }
+  .pm-chip.is-active { background:#334155; border-color:#334155; color:#fff; }
+  .pm-layout { display:grid; grid-template-columns:minmax(0,1fr); gap:1.25rem; }
+  @media (min-width:1280px) { .pm-layout { grid-template-columns:17rem minmax(0,1fr); align-items:start; } }
+  .pm-name-row { display:grid; grid-template-columns:minmax(0,1fr); gap:1rem; }
+  @media (min-width:768px) { .pm-name-row { grid-template-columns:minmax(0,1fr) 8rem; } }
+</style>
+{% endmacro %}

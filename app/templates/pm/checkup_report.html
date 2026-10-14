@@ -1,0 +1,68 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles, status_badge, streak_badge, readings_list, attachment_links, finding_actions with context %}
+{% block title %}PM report — {{ checkup.hospital.name }}{% endblock %}
+{% block page_title %}PM report — {{ checkup.hospital.name }}{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pm.overview') }}" class="text-slate-500 hover:text-slate-800 text-sm transition-colors">← PM</a>
+<a href="{{ url_for('pm.checkup_print', checkup_id=checkup.id) }}" target="_blank" class="pm-btn pm-btn-ghost">Print / PDF</a>
+<a href="{{ url_for('pm.checkup_export', checkup_id=checkup.id) }}" class="pm-btn pm-btn-ghost">Excel</a>
+{% endblock %}
+
+{% block content %}
+{% set next_url = url_for('pm.checkup_detail', checkup_id=checkup.id) %}
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-5">
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-sm text-slate-500">
+        <span class="font-medium text-slate-800">{{ checkup.check_date.strftime('%A %d %B %Y') }}</span>
+        · by {{ checkup.performer.name }}
+        · submitted {{ checkup.submitted_at | localtime('%d %b %Y %H:%M') }}
+      </p>
+      {% if checkup.notes %}<p class="text-sm text-slate-700 mt-2 whitespace-pre-line">{{ checkup.notes }}</p>{% endif %}
+    </div>
+    <div class="flex flex-wrap gap-2">
+      {% for s in ['alert', 'attention', 'normal', 'na'] %}
+      {% if counts[s] %}<span>{{ status_badge(s) }} <span class="text-sm font-semibold text-slate-700">{{ counts[s] }}</span></span>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+{% for product, results in groups %}
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-5">
+  <div class="px-5 py-3 border-b border-slate-100">
+    <h3 class="text-sm font-semibold text-slate-800">{{ product.name }}</h3>
+  </div>
+  <div style="overflow-x:auto;">
+  <table class="w-full text-sm pm-table">
+    <thead>
+      <tr><th style="width:22%;">Check</th><th>Status</th><th>Readings</th><th>Comment</th><th style="width:20rem;">Follow-up</th></tr>
+    </thead>
+    <tbody>
+      {% for r in results %}
+      <tr id="result-{{ r.id }}">
+        <td>
+          <p class="font-medium text-slate-800">{{ r.check_name }}</p>
+          {% if r.check_description %}<p class="text-xs text-slate-400 mt-0.5">{{ r.check_description }}</p>{% endif %}
+        </td>
+        <td class="whitespace-nowrap">
+          {{ status_badge(r.status) }}
+          <div class="mt-1">{{ streak_badge(streaks.get(r.id)) }}</div>
+        </td>
+        <td>{{ readings_list(r) }}</td>
+        <td>
+          {% if r.comment %}<p class="text-xs text-slate-700 whitespace-pre-line">{{ r.comment }}</p>{% endif %}
+          {{ attachment_links(r) }}
+        </td>
+        <td>{{ finding_actions(r, agents, default_deadline, next_url) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

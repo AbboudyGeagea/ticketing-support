@@ -25,6 +25,7 @@ from app.models.ticket_template import TicketTemplate
 from app.models.sla_policy import SLAPolicy
 from app.models.shared_installation import SharedInstallation
 from app.models.ticket_status import TicketStatus
+from app.models.pm import PMCheckup, PMResult, PMHospitalSettings
 from app.models.email_template import EmailTemplate, TEMPLATE_REGISTRY, TEMPLATE_MAP, DEFAULT_SUBJECTS
 from app.extensions import db, csrf
 from functools import wraps
@@ -265,9 +266,11 @@ def hospital_bulk_delete():
             continue
         user_count = User.query.filter_by(hospital_id=hospital_id).count()
         ticket_count = hospital.tickets.count()
-        if user_count or ticket_count:
-            skipped.append(f"{hospital.name} ({user_count} users, {ticket_count} tickets)")
+        pm_count = PMCheckup.query.filter_by(hospital_id=hospital_id).count()
+        if user_count or ticket_count or pm_count:
+            skipped.append(f"{hospital.name} ({user_count} users, {ticket_count} tickets, {pm_count} PM checkups)")
             continue
+        PMHospitalSettings.query.filter_by(hospital_id=hospital_id).delete()
         db.session.delete(hospital)
         deleted += 1
     db.session.commit()
@@ -285,13 +288,16 @@ def hospital_delete(hospital_id):
     hospital = Hospital.query.get_or_404(hospital_id)
     user_count = User.query.filter_by(hospital_id=hospital_id).count()
     ticket_count = hospital.tickets.count()
-    if user_count or ticket_count:
+    pm_count = PMCheckup.query.filter_by(hospital_id=hospital_id).count()
+    if user_count or ticket_count or pm_count:
         flash(
             f'Cannot delete "{hospital.name}" — it still has '
-            f'{user_count} user(s) and {ticket_count} ticket(s). Remove them first.',
+            f'{user_count} user(s), {ticket_count} ticket(s) and {pm_count} PM checkup(s). '
+            f'Remove them first, or deactivate the hospital.',
             "error",
         )
         return redirect(url_for("admin.hospitals"))
+    PMHospitalSettings.query.filter_by(hospital_id=hospital_id).delete()
     db.session.delete(hospital)
     db.session.commit()
     flash(f'"{hospital.name}" deleted.', "success")
@@ -347,6 +353,13 @@ def product_edit(product_id):
 @admin_required
 def product_delete(product_id):
     product = Product.query.get_or_404(product_id)
+    if PMResult.query.filter_by(product_id=product_id).count():
+        flash(
+            f'Cannot delete "{product.name}" — it has preventive maintenance history. '
+            f'Deactivate it instead.',
+            "error",
+        )
+        return redirect(url_for("admin.products_list"))
     db.session.delete(product)
     db.session.commit()
     flash(f'Product "{product.name}" deleted.', "success")

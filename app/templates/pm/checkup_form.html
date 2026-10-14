@@ -1,0 +1,316 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles, status_badge, streak_badge, threshold_hint %}
+{% block title %}PM — {{ checkup.hospital.name }}{% endblock %}
+{% block page_title %}PM checkup — {{ checkup.hospital.name }} <span class="text-sm font-normal text-slate-400">· draft</span>{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<form method="POST" action="{{ url_for('pm.checkup_delete', checkup_id=checkup.id) }}" style="margin:0;"
+      data-confirm="This deletes the draft and everything entered in it, including uploaded files."
+      data-confirm-title="Delete this draft?" data-confirm-ok="Delete draft" data-confirm-variant="danger">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="pm-btn pm-btn-danger">Delete draft</button>
+</form>
+<a href="{{ url_for('pm.checkup_print', checkup_id=checkup.id) }}" target="_blank" class="pm-btn pm-btn-ghost">Print</a>
+<button type="submit" form="pm-form" class="pm-btn pm-btn-ghost">Save draft</button>
+<button type="button" class="pm-btn pm-btn-primary pm-submit-btn">Submit checkup</button>
+{% endblock %}
+
+{% block content %}
+<form id="pm-form" method="POST" action="{{ url_for('pm.checkup_detail', checkup_id=checkup.id) }}" novalidate>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="action" id="pm-action" value="save">
+
+  <div class="pm-layout">
+
+    <!-- ── Side column ─────────────────────────────────────────────────── -->
+    <div class="space-y-4">
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Checkup</h4>
+        <label for="check_date" class="block text-xs font-medium text-slate-600 mb-1">Date</label>
+        <input id="check_date" type="date" name="check_date" value="{{ checkup.check_date.isoformat() }}" class="pm-field mb-3">
+        <p class="text-xs text-slate-500">Performed by <span class="font-medium text-slate-700">{{ checkup.performer.name }}</span></p>
+        <p class="text-xs text-slate-400 mb-4">Started {{ checkup.created_at | localtime('%d %b %Y %H:%M') }}</p>
+        <p class="text-xs text-slate-600 mb-1"><span id="pm-progress-text">0 / {{ checkup.results | length }}</span> checks have a status</p>
+        <div class="pm-progress" aria-hidden="true"><div id="pm-progress-bar" style="width:0%"></div></div>
+        <p id="pm-progress-alerts" class="text-xs font-medium mt-2" style="color:#b91c1c;"></p>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Remote Access</h4>
+        {% if checkup.hospital.rustdesk_id %}
+        <a href="rustdesk://connect/{{ checkup.hospital.rustdesk_id }}" class="pm-btn pm-btn-primary" style="width:100%;"
+           title="Requires RustDesk to be installed">Connect via RustDesk</a>
+        <p class="text-xs text-slate-400 mt-2">Device ID: <span class="font-mono font-medium text-slate-700">{{ checkup.hospital.rustdesk_id }}</span></p>
+        {% else %}
+        <p class="text-xs text-slate-400">No RustDesk ID saved for this hospital.</p>
+        {% endif %}
+        {% if checkup.hospital.rustdesk_server_url %}
+        <p class="text-xs text-slate-400 mt-1">Server: <span class="font-mono text-slate-600 break-all">{{ checkup.hospital.rustdesk_server_url }}</span></p>
+        {% endif %}
+        <a href="{{ url_for('admin.hospital_detail', hospital_id=checkup.hospital.id, tab='access') }}" target="_blank"
+           class="text-primary hover:underline text-xs font-medium inline-block mt-3">Open credentials & access →</a>
+      </div>
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 text-xs text-slate-500 space-y-2">
+        <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">How this works</h4>
+        <p><strong class="text-slate-700">Save draft</strong> as often as you like. <strong class="text-slate-700">Submit</strong> locks the statuses; issues can still be resolved later on the Findings page.</p>
+        <p>Use <strong class="text-slate-700">N/A</strong> for checks that don't apply or couldn't be done.</p>
+        <p>Only <strong style="color:#b91c1c;">Alert</strong> items are emailed, to agents only. Nothing is sent to the hospital.</p>
+        <p>“Last” shows the previous checkup's result for reference.</p>
+      </div>
+    </div>
+
+    <!-- ── Checks ──────────────────────────────────────────────────────── -->
+    <div class="min-w-0 space-y-5">
+      {% for product, results in groups %}
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+          <h3 class="text-sm font-semibold text-slate-800">{{ product.name }}</h3>
+          <span class="text-xs text-slate-400">{{ results | length }} check{{ '' if results | length == 1 else 's' }}</span>
+        </div>
+        <div class="divide-y divide-slate-100">
+          {% for r in results %}
+          {% set prev = previous.get((r.check_id, r.product_id)) %}
+          <div class="pm-result px-5 py-4" id="result-{{ r.id }}" data-status="{{ r.status or '' }}" data-manual="{{ '1' if r.status else '' }}">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-sm font-semibold text-slate-800">{{ r.check_name }}</p>
+                {% if r.check_description %}<p class="text-xs text-slate-500 mt-0.5">{{ r.check_description }}</p>{% endif %}
+              </div>
+              {% if prev %}
+              {% set p = prev[0] %}
+              <div class="text-xs text-slate-500 text-right" style="max-width:20rem;">
+                <div>Last ({{ p.checkup.check_date.strftime('%d %b') }}): {{ status_badge(p.status) }} {{ streak_badge(prev[1]) }}</div>
+                {% set pr = p.readings | selectattr('value') | list %}
+                {% if pr %}<div class="mt-0.5">{% for rd in pr %}{{ rd.label }}: {{ rd.display }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}
+                {% if p.comment %}<div class="mt-0.5 truncate" title="{{ p.comment }}">“{{ p.comment }}”</div>{% endif %}
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="pm-opts mt-3" role="radiogroup" aria-label="Status for {{ product.name }} — {{ r.check_name }}">
+              {% for s in statuses %}
+              <label class="pm-opt">
+                <input type="radio" name="status_{{ r.id }}" value="{{ s }}" {% if r.status == s %}checked{% endif %}>
+                <span class="o-{{ s }}">{{ status_labels[s] }}</span>
+              </label>
+              {% endfor %}
+              <span class="pm-suggest text-xs" hidden></span>
+            </div>
+
+            {% if r.readings %}
+            <div class="pm-readings mt-3">
+              {% for rd in r.readings %}
+              {% set f = fields_by_id.get(rd.field_id) %}
+              <label class="pm-reading">
+                <span class="text-xs text-slate-500">{{ rd.label }}{% if rd.field_type == 'percent' %} (%){% elif rd.unit %} ({{ rd.unit }}){% endif %}</span>
+                <input type="text" name="reading_{{ rd.id }}" value="{{ rd.value or '' }}"
+                       class="pm-field {% if rd.field_type == 'text' %}pm-wide{% else %}pm-num{% endif %}"
+                       {% if rd.field_type != 'text' %}inputmode="decimal"{% endif %}
+                       {% if f and f.has_thresholds %}data-direction="{{ f.direction }}"
+                         data-att="{{ f.attention_threshold if f.attention_threshold is not none else '' }}"
+                         data-alert="{{ f.alert_threshold if f.alert_threshold is not none else '' }}"{% endif %}>
+                {% if f and f.has_thresholds %}<span class="text-xs text-slate-400">{{ threshold_hint(f) }}</span>{% endif %}
+              </label>
+              {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
+              <div class="lg:col-span-2">
+                <label class="pm-sr" for="comment-{{ r.id }}">Comment for {{ r.check_name }}</label>
+                <textarea id="comment-{{ r.id }}" name="comment_{{ r.id }}" rows="2" class="pm-field"
+                          placeholder="Comment — what you saw, anything fixed on the spot…">{{ r.comment or '' }}</textarea>
+              </div>
+              <div class="pm-files" data-upload-url="{{ url_for('pm.attachment_upload', result_id=r.id) }}">
+                <div class="pm-file-list">
+                  {% for a in r.attachments %}
+                  <span data-id="{{ a.id }}">
+                    <a href="{{ url_for('pm.attachment_download', att_id=a.id) }}" target="_blank" rel="noopener">📎 {{ a.original_name }}</a>
+                    <button type="button" class="pm-file-del" data-url="{{ url_for('pm.attachment_delete', att_id=a.id) }}" aria-label="Remove {{ a.original_name }}">×</button>
+                  </span>
+                  {% endfor %}
+                </div>
+                <label class="pm-file-add">
+                  <span aria-hidden="true">📎</span> Add screenshot / file
+                  <input type="file" class="pm-sr" multiple accept="image/*,.pdf,.txt,.csv,.zip,.docx,.xlsx">
+                </label>
+                <p class="pm-file-msg text-xs mt-1"></p>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+        <label for="pm-notes" class="block text-sm font-semibold text-slate-800 mb-2">General notes</label>
+        <textarea id="pm-notes" name="notes" rows="3" class="pm-field"
+                  placeholder="Anything about this visit that doesn't belong to a single check">{{ checkup.notes or '' }}</textarea>
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <button type="submit" class="pm-btn pm-btn-ghost">Save draft</button>
+        <button type="button" class="pm-btn pm-btn-primary pm-submit-btn">Submit checkup</button>
+      </div>
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var form = document.getElementById('pm-form');
+  var csrf = '{{ csrf_token() }}';
+  var LABELS = {normal: 'Normal', attention: 'Needs attention', alert: 'Alert', na: 'N/A'};
+  var RANK = {normal: 0, attention: 1, alert: 2};
+  var dirty = false, leaving = false;
+
+  /* ── Unsaved-changes guard ─────────────────────────────────────────── */
+  form.addEventListener('input', function (e) { if (e.target.type !== 'file') dirty = true; });
+  form.addEventListener('change', function (e) { if (e.target.type !== 'file') dirty = true; });
+  form.addEventListener('submit', function () { leaving = true; });
+  window.addEventListener('beforeunload', function (e) {
+    if (dirty && !leaving) { e.preventDefault(); e.returnValue = ''; }
+  });
+
+  function blocks() { return form.querySelectorAll('.pm-result'); }
+  function statusOf(block) {
+    var c = block.querySelector('input[type=radio]:checked');
+    return c ? c.value : '';
+  }
+
+  /* ── Progress ─────────────────────────────────────────────────────── */
+  function updateProgress() {
+    var all = blocks(), set = 0, alerts = 0;
+    all.forEach(function (b) {
+      var s = statusOf(b);
+      if (s) set++;
+      if (s === 'alert') alerts++;
+    });
+    document.getElementById('pm-progress-text').textContent = set + ' / ' + all.length;
+    document.getElementById('pm-progress-bar').style.width = (all.length ? Math.round(set * 100 / all.length) : 0) + '%';
+    document.getElementById('pm-progress-alerts').textContent = alerts ? alerts + ' alert' + (alerts === 1 ? '' : 's') : '';
+  }
+
+  /* ── Threshold suggestions ────────────────────────────────────────── */
+  function suggestion(block) {
+    var worst = null;
+    block.querySelectorAll('input[data-direction]').forEach(function (inp) {
+      var v = parseFloat((inp.value || '').replace(',', '.').replace('%', ''));
+      if (isNaN(v)) return;
+      var att = parseFloat(inp.dataset.att), al = parseFloat(inp.dataset.alert), s = 'normal';
+      if (inp.dataset.direction === 'below') {
+        if (!isNaN(al) && v < al) s = 'alert'; else if (!isNaN(att) && v < att) s = 'attention';
+      } else {
+        if (!isNaN(al) && v >= al) s = 'alert'; else if (!isNaN(att) && v >= att) s = 'attention';
+      }
+      if (worst === null || RANK[s] > RANK[worst]) worst = s;
+    });
+    return worst;
+  }
+  function applySuggestion(block) {
+    var hint = block.querySelector('.pm-suggest');
+    var s = suggestion(block);
+    if (!s) { hint.hidden = true; return; }
+    hint.hidden = false;
+    hint.textContent = 'Suggested from reading: ' + LABELS[s];
+    if (!block.dataset.manual) {
+      var radio = block.querySelector('input[type=radio][value="' + s + '"]');
+      if (radio) { radio.checked = true; block.dataset.status = s; }
+    }
+  }
+
+  blocks().forEach(function (block) {
+    block.querySelectorAll('input[type=radio]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        block.dataset.manual = '1';
+        block.dataset.status = radio.value;
+        updateProgress();
+      });
+    });
+    block.querySelectorAll('input[data-direction]').forEach(function (inp) {
+      inp.addEventListener('input', function () { applySuggestion(block); updateProgress(); });
+    });
+    applySuggestion(block);
+  });
+  updateProgress();
+
+  /* ── Submit ───────────────────────────────────────────────────────── */
+  function submitCheckup() {
+    var missing = 0, alerts = 0;
+    blocks().forEach(function (b) {
+      var s = statusOf(b);
+      if (!s) missing++;
+      if (s === 'alert') alerts++;
+    });
+    var opts;
+    if (missing) {
+      opts = {
+        title: 'Some checks have no status',
+        body: missing + ' check' + (missing === 1 ? '' : 's') + ' still need a status (use N/A if a check doesn\'t apply). ' +
+              'Your work will be saved and the missing ones highlighted.',
+        ok: 'Save and show me', variant: 'warning'
+      };
+    } else {
+      opts = {
+        title: 'Submit this checkup?',
+        body: 'Statuses are locked after submitting.\n' +
+              (alerts ? alerts + ' alert' + (alerts === 1 ? '' : 's') + ' will be emailed to the agents.'
+                      : 'No alerts — nothing will be emailed.'),
+        ok: 'Submit', variant: alerts ? 'danger' : 'info'
+      };
+    }
+    smoothConfirm(opts).then(function (ok) {
+      if (!ok) return;
+      document.getElementById('pm-action').value = 'submit';
+      leaving = true;
+      form.submit();
+    });
+  }
+  document.querySelectorAll('.pm-submit-btn').forEach(function (b) { b.addEventListener('click', submitCheckup); });
+
+  /* ── Attachments (uploaded immediately, one request per selection) ─── */
+  function fileItem(f) {
+    var wrap = document.createElement('span');
+    wrap.dataset.id = f.id;
+    var a = document.createElement('a');
+    a.href = f.url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '📎 ' + f.name;
+    var del = document.createElement('button');
+    del.type = 'button'; del.className = 'pm-file-del'; del.dataset.url = f.delete_url;
+    del.setAttribute('aria-label', 'Remove ' + f.name); del.textContent = '×';
+    wrap.appendChild(a); wrap.appendChild(document.createTextNode(' ')); wrap.appendChild(del);
+    return wrap;
+  }
+  form.querySelectorAll('.pm-files').forEach(function (box) {
+    var input = box.querySelector('input[type=file]');
+    var list = box.querySelector('.pm-file-list');
+    var msg = box.querySelector('.pm-file-msg');
+    input.addEventListener('change', function () {
+      if (!input.files.length) return;
+      var fd = new FormData();
+      Array.prototype.forEach.call(input.files, function (f) { fd.append('files', f); });
+      msg.style.color = '#64748b'; msg.textContent = 'Uploading…';
+      fetch(box.dataset.uploadUrl, {method: 'POST', headers: {'X-CSRFToken': csrf}, body: fd, credentials: 'same-origin'})
+        .then(function (r) {
+          if (r.status === 413) throw new Error('Too large — 10 MB max per upload.');
+          return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Upload failed.'); return j; });
+        })
+        .then(function (j) { j.files.forEach(function (f) { list.appendChild(fileItem(f)); }); msg.textContent = ''; })
+        .catch(function (err) { msg.style.color = '#b91c1c'; msg.textContent = err.message || 'Upload failed.'; })
+        .then(function () { input.value = ''; });
+    });
+  });
+  form.addEventListener('click', function (e) {
+    var del = e.target.closest('.pm-file-del');
+    if (!del) return;
+    e.preventDefault();
+    fetch(del.dataset.url, {method: 'POST', headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'})
+      .then(function (r) { if (r.ok) del.parentNode.remove(); });
+  });
+})();
+</script>
+{% endblock %}

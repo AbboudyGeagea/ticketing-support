@@ -1,0 +1,162 @@
+{% extends 'base_agent.html' %}
+{% from 'pm/_macros.html' import pm_styles, state_badge with context %}
+{% block title %}Preventive Maintenance{% endblock %}
+{% block page_title %}Preventive Maintenance{% endblock %}
+{% block head_extra %}{{ pm_styles() }}{% endblock %}
+
+{% block header_actions %}
+<a href="{{ url_for('pm.findings') }}" class="pm-btn pm-btn-ghost">Findings</a>
+<a href="{{ url_for('pm.new_checkup') }}" class="pm-btn pm-btn-primary">+ New checkup</a>
+{% endblock %}
+
+{% block content %}
+
+<!-- Open findings -->
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+  {% set open_alerts = open_counts.get('alert', 0) %}
+  {% set open_attention = open_counts.get('attention', 0) %}
+  <a href="{{ url_for('pm.findings', f=1, status='alert', state='open') }}"
+     class="bg-white rounded-xl border shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-all"
+     style="border-color:{% if open_alerts %}#fca5a5{% else %}#e2e8f0{% endif %};">
+    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background:#fee2e2;">
+      <svg class="w-5 h-5" style="color:#dc2626;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-bold" style="color:{% if open_alerts %}#b91c1c{% else %}#1e293b{% endif %};">{{ open_alerts }}</p>
+      <p class="text-xs text-slate-500 mt-0.5">Open alerts</p>
+    </div>
+  </a>
+  <a href="{{ url_for('pm.findings', f=1, status='attention', state='open') }}"
+     class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-all">
+    <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0" style="background:#fef3c7;">
+      <svg class="w-5 h-5" style="color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+      </svg>
+    </div>
+    <div>
+      <p class="text-2xl font-bold text-slate-800">{{ open_attention }}</p>
+      <p class="text-xs text-slate-500 mt-0.5">Open “needs attention”</p>
+    </div>
+  </a>
+</div>
+
+<!-- This month -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+  <div class="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
+    <h2 class="text-sm font-semibold text-slate-800">{{ today.strftime('%B %Y') }}</h2>
+    <div class="flex flex-wrap gap-2">
+      <a href="{{ url_for('pm.overview') }}" class="pm-chip {% if not state_filter %}is-active{% endif %}">All · {{ all_count }}</a>
+      {% for key, label in [('overdue', 'Overdue'), ('due', 'Due'), ('in_progress', 'In progress'), ('done', 'Done')] %}
+      <a href="{{ url_for('pm.overview', state=key) }}" class="pm-chip {% if state_filter == key %}is-active{% endif %}">{{ label }} · {{ state_counts.get(key, 0) }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% if rows %}
+  <div style="overflow-x:auto;">
+  <table class="w-full text-sm pm-table">
+    <thead>
+      <tr>
+        <th>Hospital</th>
+        <th>Products checked</th>
+        <th>Responsible</th>
+        <th>Last checkup</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in rows %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="font-medium text-slate-800">{{ row.hospital.name }}</td>
+        <td class="text-xs text-slate-500">{{ row.products | map(attribute='name') | join(', ') }}</td>
+        <td>
+          <form method="POST" action="{{ url_for('pm.set_owner', hospital_id=row.hospital.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="state" value="{{ state_filter }}">
+            <label class="pm-sr" for="owner-{{ row.hospital.id }}">Responsible agent for {{ row.hospital.name }}</label>
+            <select id="owner-{{ row.hospital.id }}" name="owner_id" class="pm-field" style="width:11rem; padding:0.25rem 0.5rem; font-size:0.8rem;"
+                    onchange="this.form.submit()">
+              <option value="">— Not set —</option>
+              {% for a in agents %}
+              <option value="{{ a.id }}" {% if row.owner and row.owner.id == a.id %}selected{% endif %}>{{ a.name }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </td>
+        <td class="text-xs text-slate-600 whitespace-nowrap">
+          {% if row.last_date %}{{ row.last_date.strftime('%d %b %Y') }}{% else %}<span class="text-slate-400">Never</span>{% endif %}
+        </td>
+        <td>{{ state_badge(row.state) }}</td>
+        <td class="text-right whitespace-nowrap">
+          {% if row.draft %}
+          <a href="{{ url_for('pm.checkup_detail', checkup_id=row.draft.id) }}" class="pm-btn pm-btn-ghost">Continue draft</a>
+          {% else %}
+          <form method="POST" action="{{ url_for('pm.new_checkup') }}" style="display:inline;">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="hospital_id" value="{{ row.hospital.id }}">
+            <input type="hidden" name="check_date" value="{{ today.isoformat() }}">
+            <button type="submit" class="pm-btn {% if row.state == 'done' %}pm-btn-ghost{% else %}pm-btn-primary{% endif %}">Start checkup</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="px-5 py-8 text-sm text-slate-500 text-center">
+    {% if state_filter %}No hospitals in this state.{% else %}No hospital has products with PM checks yet.{% endif %}
+  </p>
+  {% endif %}
+
+  {% if skipped %}
+  <p class="px-5 py-3 text-xs text-slate-400 border-t border-slate-100">
+    {{ skipped }} active hospital{{ '' if skipped == 1 else 's' }} not listed: none of their products have PM checks (e.g. Pyxis-only sites).
+    Checks per product are managed under <a href="{{ url_for('pm.catalog') }}" class="text-primary hover:underline">Admin → PM Checks</a>.
+  </p>
+  {% endif %}
+</div>
+
+<!-- Recent checkups -->
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+  <div class="px-5 py-4 border-b border-slate-100">
+    <h2 class="text-sm font-semibold text-slate-800">Recent checkups</h2>
+  </div>
+  {% if recent %}
+  <div style="overflow-x:auto;">
+  <table class="w-full text-sm pm-table">
+    <thead>
+      <tr><th>Date</th><th>Hospital</th><th>By</th><th>State</th><th>Results</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for c in recent %}
+      {% set n = c.counts() %}
+      <tr class="hover:bg-slate-50 transition-colors">
+        <td class="text-xs text-slate-600 whitespace-nowrap">{{ c.check_date.strftime('%d %b %Y') }}</td>
+        <td class="font-medium text-slate-800">{{ c.hospital.name }}</td>
+        <td class="text-xs text-slate-600">{{ c.performer.name }}</td>
+        <td>
+          {% if c.is_draft %}<span class="pm-badge" style="background:#dbeafe;color:#1e40af;">Draft</span>
+          {% else %}<span class="pm-badge" style="background:#f1f5f9;color:#334155;">Submitted</span>{% endif %}
+        </td>
+        <td class="text-xs whitespace-nowrap">
+          {% if n.alert %}<span class="pm-badge" style="background:#fee2e2;color:#b91c1c;">{{ n.alert }} alert</span>{% endif %}
+          {% if n.attention %}<span class="pm-badge" style="background:#fef3c7;color:#92400e;">{{ n.attention }} attention</span>{% endif %}
+          {% if n.normal %}<span class="pm-badge" style="background:#dcfce7;color:#166534;">{{ n.normal }} normal</span>{% endif %}
+        </td>
+        <td class="text-right"><a href="{{ url_for('pm.checkup_detail', checkup_id=c.id) }}" class="text-primary hover:underline text-xs font-medium">Open</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <p class="px-5 py-8 text-sm text-slate-500 text-center">No checkups yet. Start one from the list above.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

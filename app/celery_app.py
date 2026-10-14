@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 
 # Bare instance — tasks decorate against this. make_celery() configures it with the Flask app.
 celery = Celery("ticketing")
@@ -13,7 +14,7 @@ def make_celery(app):
         accept_content=["json"],
         timezone="UTC",
         enable_utc=True,
-        include=["app.tasks.email_tasks", "app.tasks.reminder_tasks"],
+        include=["app.tasks.email_tasks", "app.tasks.reminder_tasks", "app.tasks.pm_tasks"],
         beat_schedule={
             "poll-email": {
                 "task": "app.tasks.email_tasks.poll_email",
@@ -34,6 +35,10 @@ def make_celery(app):
             "auto-close-resolved": {
                 "task": "app.tasks.reminder_tasks.auto_close_resolved_tickets",
                 "schedule": 3600,  # every hour
+            },
+            "pm-reminders": {
+                "task": "app.tasks.pm_tasks.send_pm_reminders",
+                "schedule": crontab(hour=5, minute=0),  # 05:00 UTC daily; acts only on PM_REMINDER_DAY
             },
         },
     )
