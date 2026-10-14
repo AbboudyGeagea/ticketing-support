@@ -31,19 +31,37 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
 
 <!-- Flag Bar / Quick Stats -->
 <div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
-  {% for s in ticket_status_map.values() | sort(attribute='order') if s.slug not in ('resolved', 'closed') %}
-  {% set active = (filters.status == [s.slug] and not filters.flag) %}
-  <a href="{{ url_for('agent.tickets', status=s.slug) }}"
-     class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
-       {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
-     style="{% if active %}border-color:{{ s.color }};box-shadow:0 0 0 2px {{ s.color }}40;{% endif %}"
-     aria-label="{{ s.label }}: {{ status_tile_counts.get(s.slug, 0) }} tickets">
-    <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ s.color }};"></span>
-    <div>
-      <p class="text-xl font-bold text-slate-800">{{ status_tile_counts.get(s.slug, 0) }}</p>
-      <p class="text-xs text-slate-500 mt-0.5">{{ s.label }}</p>
-    </div>
-  </a>
+  {% for status_slug in ['new', 'assigned', 'awaiting_info'] %}
+    {% set s = ticket_status_map.get(status_slug) %}
+    {% if s %}
+      {% if status_slug == 'assigned' %}
+        {% set active = (filters.assigned == 'me' and not filters.status and not filters.flag) %}
+        <a href="{{ url_for('agent.tickets', assigned='me') }}"
+           class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
+             {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
+           style="{% if active %}border-color:{{ s.color }};box-shadow:0 0 0 2px {{ s.color }}40;{% endif %}"
+           aria-label="Assigned to Me: {{ assigned_to_me_count }} tickets">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ s.color }};"></span>
+          <div>
+            <p class="text-xl font-bold text-slate-800">{{ assigned_to_me_count }}</p>
+            <p class="text-xs text-slate-500 mt-0.5">Assigned to Me</p>
+          </div>
+        </a>
+      {% else %}
+        {% set active = (filters.status == [s.slug] and not filters.flag) %}
+        <a href="{{ url_for('agent.tickets', status=s.slug) }}"
+           class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
+             {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
+           style="{% if active %}border-color:{{ s.color }};box-shadow:0 0 0 2px {{ s.color }}40;{% endif %}"
+           aria-label="{{ s.label }}: {{ status_tile_counts.get(s.slug, 0) }} tickets">
+          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ s.color }};"></span>
+          <div>
+            <p class="text-xl font-bold text-slate-800">{{ status_tile_counts.get(s.slug, 0) }}</p>
+            <p class="text-xs text-slate-500 mt-0.5">{{ s.label }}</p>
+          </div>
+        </a>
+      {% endif %}
+    {% endif %}
   {% endfor %}
   {% set cr_active = (filters.flag == 'customer_replied') %}
   <a href="{{ url_for('agent.tickets', flag='customer_replied') }}"

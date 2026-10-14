@@ -17,6 +17,27 @@ def fire_webhook(event: str, payload: dict):
         _dispatch(hook, event, payload)
 
 
+def fire_ticket_status_changed(ticket, old_status: str, new_status: str, changed_by_id=None):
+    """Call after ticket.status changes and the change is committed.
+
+    Fires "ticket_status_changed" always, plus "ticket_closed"/"ticket_resolved"
+    when new_status is one of those specific values.
+    """
+    payload = {
+        "ticket_ref": ticket.ref,
+        "ticket_id": ticket.id,
+        "subject": ticket.subject,
+        "old_status": old_status,
+        "new_status": new_status,
+        "changed_by": changed_by_id,
+    }
+    fire_webhook("ticket_status_changed", payload)
+    if new_status == "closed":
+        fire_webhook("ticket_closed", payload)
+    elif new_status == "resolved":
+        fire_webhook("ticket_resolved", payload)
+
+
 def _dispatch(hook, event: str, payload: dict):
     body = json.dumps({"event": event, "timestamp": datetime.now(timezone.utc).isoformat(), "data": payload})
     headers = {"Content-Type": "application/json", "X-Intermedic-Event": event}

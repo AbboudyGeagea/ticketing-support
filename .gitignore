@@ -23,3 +23,9 @@ htmlcov/
 Thumbs.db
 node_modules/
 app/static/css/tailwind.css
+
+# Licensing — never commit issued licenses or key material
+*.lic
+license/
+license_private_key*
+Licenses_gitignore/

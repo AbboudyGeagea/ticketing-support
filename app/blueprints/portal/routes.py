@@ -450,6 +450,63 @@ def ticket_request_close(ref):
     return redirect(url_for("portal.ticket_detail", ref=ref))
 
 
+@bp.route("/tickets/<ref>/accept-solution", methods=["POST"])
+@login_required
+@customer_required
+def accept_solution(ref):
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
+    if ticket.status != "resolved":
+        flash("This ticket is not in a resolved state.", "info")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    old = ticket.status
+    ticket.status = "closed"
+    ticket.closed_at = datetime.utcnow()
+    ticket.updated_at = datetime.utcnow()
+    db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=current_user.id,
+                                  action="status_change", old_value=old, new_value="closed"))
+    db.session.commit()
+    try:
+        from app.services.webhook_service import fire_ticket_status_changed
+        fire_ticket_status_changed(ticket, old, "closed", current_user.id)
+    except Exception:
+        logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
+    try:
+        from app.services.email_outbound import notify_agents_solution_accepted
+        notify_agents_solution_accepted(ticket, current_user)
+    except Exception:
+        logger.exception("notify_agents_solution_accepted failed for %s", ticket.ref)
+    flash("Thank you for confirming this solution. Your ticket is now closed.", "success")
+    return redirect(url_for("portal.ticket_detail", ref=ref))
+
+
+@bp.route("/tickets/<ref>/reject-solution", methods=["POST"])
+@login_required
+@customer_required
+def reject_solution(ref):
+    ticket = _visible_tickets(current_user).filter(Ticket.ref == ref).first_or_404()
+    if ticket.status != "resolved":
+        flash("This ticket is not in a resolved state.", "info")
+        return redirect(url_for("portal.ticket_detail", ref=ref))
+    old = ticket.status
+    ticket.status = "in_progress"
+    ticket.updated_at = datetime.utcnow()
+    db.session.add(TicketHistory(ticket_id=ticket.id, changed_by=current_user.id,
+                                  action="status_change", old_value=old, new_value="in_progress"))
+    db.session.commit()
+    try:
+        from app.services.webhook_service import fire_ticket_status_changed
+        fire_ticket_status_changed(ticket, old, "in_progress", current_user.id)
+    except Exception:
+        logger.exception("fire_ticket_status_changed webhook failed for %s", ticket.ref)
+    try:
+        from app.services.email_outbound import notify_agents_solution_rejected
+        notify_agents_solution_rejected(ticket, current_user)
+    except Exception:
+        logger.exception("notify_agents_solution_rejected failed for %s", ticket.ref)
+    flash("We'll continue working on your issue. Thank you for letting us know.", "success")
+    return redirect(url_for("portal.ticket_detail", ref=ref))
+
+
 @bp.route("/profile", methods=["GET", "POST"])
 @login_required
 @customer_required

@@ -48,6 +48,31 @@
     · <span>Handled by {{ ticket.assignee.name }}</span>
     {% endif %}
   </div>
+
+  {% if ticket.status == 'resolved' %}
+  <div class="bg-green-50 border border-green-200 rounded-lg px-4 py-3 mt-4 flex items-center justify-between gap-4">
+    <div>
+      <p class="text-sm font-medium text-green-800">Solution proposed</p>
+      <p class="text-xs text-green-700 mt-0.5">Does this solution resolve your issue?</p>
+    </div>
+    <div class="flex gap-2">
+      <form method="POST" action="{{ url_for('portal.accept_solution', ref=ticket.ref) }}" class="inline">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+          Accept Solution
+        </button>
+      </form>
+      <form method="POST" action="{{ url_for('portal.reject_solution', ref=ticket.ref) }}" class="inline">
+        {{ reply_form.hidden_tag() }}
+        <button type="submit"
+                class="bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+          Reject Solution
+        </button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <!-- Messages -->

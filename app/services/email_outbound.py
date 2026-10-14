@@ -419,6 +419,28 @@ def notify_agent_close_request(ticket):
         _send(recipients, f"[{ticket.ref}] {ticket.subject}", html=html)
 
 
+def notify_agents_solution_accepted(ticket, customer):
+    """Notify agents when a customer accepts the proposed solution."""
+    recipients = _all_agent_emails()
+    if not recipients:
+        return
+    ticket_url = f"{_base_url()}/agent/tickets/{ticket.ref}"
+    html = _render("solution_accepted.html", ticket=ticket, customer=customer, ticket_url=ticket_url)
+    if html:
+        _send(recipients, f"[{ticket.ref}] Solution accepted by {customer.name}", html=html)
+
+
+def notify_agents_solution_rejected(ticket, customer):
+    """Notify agents when a customer rejects the proposed solution."""
+    recipients = _all_agent_emails()
+    if not recipients:
+        return
+    ticket_url = f"{_base_url()}/agent/tickets/{ticket.ref}"
+    html = _render("solution_rejected.html", ticket=ticket, customer=customer, ticket_url=ticket_url)
+    if html:
+        _send(recipients, f"[{ticket.ref}] Solution rejected by {customer.name}", html=html)
+
+
 def notify_all_agents_activity(ticket, event, actor_name=None, message=None):
     """Broadcast any ticket activity (reply, status change, close, …) to all agents."""
     recipients = _all_agent_emails()

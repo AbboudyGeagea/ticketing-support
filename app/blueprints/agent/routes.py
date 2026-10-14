@@ -48,7 +48,10 @@ def dashboard():
     thirty_days_ago = now - timedelta(days=30)
 
     # Stat cards
-    open_count = Ticket.query.filter(Ticket.status.notin_(["closed", "resolved"])).count()
+    open_count = Ticket.query.filter(
+        Ticket.phi_flagged == False,
+        Ticket.status.notin_(["closed", "resolved"])
+    ).count()
     my_count = Ticket.query.filter_by(assigned_to=current_user.id).filter(
         Ticket.status.notin_(["closed"])
     ).count()
@@ -73,8 +76,8 @@ def dashboard():
             ),
         ),
     ).count()
-    resolved_today = Ticket.query.filter(
-        Ticket.status == "resolved",
+    closed_today = Ticket.query.filter(
+        Ticket.status == "closed",
         Ticket.updated_at >= now.replace(hour=0, minute=0, second=0),
     ).count()
     close_requested_count = Ticket.query.filter(
@@ -105,7 +108,10 @@ def dashboard():
     hosp_counts = (
         db.session.query(Hospital.name, func.count(Ticket.id))
         .join(Ticket, Ticket.hospital_id == Hospital.id)
-        .filter(Ticket.status.notin_(["closed"]))
+        .filter(
+            Ticket.phi_flagged == False,
+            Ticket.status.notin_(["closed", "resolved"])
+        )
         .group_by(Hospital.name)
         .order_by(func.count(Ticket.id).desc())
         .limit(8)
@@ -161,7 +167,7 @@ def dashboard():
         my_count=my_count,
         overdue_tasks=overdue_tasks,
         sla_at_risk=sla_at_risk,
-        resolved_today=resolved_today,
+        closed_today=closed_today,
         chart_dates=chart_dates,
         chart_values=chart_values,
         status_data=status_data,
@@ -295,6 +301,7 @@ def tickets():
     status_tile_counts = dict(
         _active_base.with_entities(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
     )
+    assigned_to_me_count = _active_base.filter_by(assigned_to=current_user.id).count()
     _tile_last_pub_subq = (
         db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
         .join(Ticket, Ticket.id == TicketMessage.ticket_id)
@@ -385,6 +392,7 @@ def tickets():
         phi_tickets=phi_tickets,
         status_tile_counts=status_tile_counts,
         customer_replied_count=customer_replied_count,
+        assigned_to_me_count=assigned_to_me_count,
     )
 
 
