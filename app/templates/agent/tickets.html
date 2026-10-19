@@ -9,6 +9,9 @@
 tr[data-status="{{ slug }}"] { background-color: {{ s.color }}18; }
 tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
 {% endfor %}
+.flag-bar { display: grid; gap: 0.75rem; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 640px)  { .flag-bar { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (min-width: 1440px) { .flag-bar { grid-template-columns: repeat(7, minmax(0, 1fr)); } }
 </style>
 {% endblock %}
 
@@ -30,50 +33,41 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
 {% block content %}
 
 <!-- Flag Bar / Quick Stats -->
-<div class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 mb-5">
-  {% for status_slug in ['new', 'assigned', 'awaiting_info'] %}
+{% macro flag_tile(href, count, label, color, active) %}
+<a href="{{ href }}"
+   class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
+     {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
+   style="{% if active %}border-color:{{ color }};box-shadow:0 0 0 2px {{ color }}40;{% endif %}"
+   aria-label="{{ label }}: {{ count }} tickets">
+  <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ color }};"></span>
+  <div>
+    <p class="text-xl font-bold text-slate-800">{{ count }}</p>
+    <p class="text-xs text-slate-500 mt-0.5">{{ label }}</p>
+  </div>
+</a>
+{% endmacro %}
+{% set no_other_filters = not filters.status and not filters.flag %}
+<div class="flag-bar mb-5">
+  {% for status_slug in ['new', 'assigned', 'awaiting_info', 'resolved'] %}
     {% set s = ticket_status_map.get(status_slug) %}
     {% if s %}
       {% if status_slug == 'assigned' %}
-        {% set active = (filters.assigned == 'me' and not filters.status and not filters.flag) %}
-        <a href="{{ url_for('agent.tickets', assigned='me') }}"
-           class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
-             {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
-           style="{% if active %}border-color:{{ s.color }};box-shadow:0 0 0 2px {{ s.color }}40;{% endif %}"
-           aria-label="Assigned to Me: {{ assigned_to_me_count }} tickets">
-          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ s.color }};"></span>
-          <div>
-            <p class="text-xl font-bold text-slate-800">{{ assigned_to_me_count }}</p>
-            <p class="text-xs text-slate-500 mt-0.5">Assigned to Me</p>
-          </div>
-        </a>
+        {{ flag_tile(url_for('agent.tickets', assigned='me', scope='open'), assigned_to_me_count, 'Assigned to Me', s.color,
+                     filters.assigned == 'me' and filters.scope == 'open' and no_other_filters) }}
       {% else %}
-        {% set active = (filters.status == [s.slug] and not filters.flag) %}
-        <a href="{{ url_for('agent.tickets', status=s.slug) }}"
-           class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
-             {% if active %}ring-2{% else %}border-slate-200 hover:border-slate-300{% endif %}"
-           style="{% if active %}border-color:{{ s.color }};box-shadow:0 0 0 2px {{ s.color }}40;{% endif %}"
-           aria-label="{{ s.label }}: {{ status_tile_counts.get(s.slug, 0) }} tickets">
-          <span class="w-2.5 h-2.5 rounded-full flex-shrink-0" style="background-color: {{ s.color }};"></span>
-          <div>
-            <p class="text-xl font-bold text-slate-800">{{ status_tile_counts.get(s.slug, 0) }}</p>
-            <p class="text-xs text-slate-500 mt-0.5">{{ s.label }}</p>
-          </div>
-        </a>
+        {{ flag_tile(url_for('agent.tickets', status=s.slug), status_tile_counts.get(s.slug, 0), s.label, s.color,
+                     filters.status == [s.slug] and not filters.flag) }}
       {% endif %}
     {% endif %}
   {% endfor %}
-  {% set cr_active = (filters.flag == 'customer_replied') %}
-  <a href="{{ url_for('agent.tickets', flag='customer_replied') }}"
-     class="bg-white rounded-xl border shadow-sm px-4 py-3 flex items-center gap-3 hover:shadow-md transition-all
-       {% if cr_active %}border-orange-400 ring-2 ring-orange-200{% else %}border-slate-200 hover:border-slate-300{% endif %}"
-     aria-label="Customer Replied: {{ customer_replied_count }} tickets">
-    <span class="w-2.5 h-2.5 rounded-full bg-orange-500 flex-shrink-0"></span>
-    <div>
-      <p class="text-xl font-bold text-slate-800">{{ customer_replied_count }}</p>
-      <p class="text-xs text-slate-500 mt-0.5">Customer Replied</p>
-    </div>
-  </a>
+  {{ flag_tile(url_for('agent.tickets', flag='customer_replied'), customer_replied_count, 'Customer Replied', '#F97316',
+               filters.flag == 'customer_replied') }}
+  {{ flag_tile(url_for('agent.tickets', scope='open'), all_open_count, 'All Open', '#6366F1',
+               filters.scope == 'open' and not filters.assigned and no_other_filters) }}
+  {% set closed_s = ticket_status_map.get('closed') %}
+  {{ flag_tile(url_for('agent.tickets', scope='recently_closed'), recently_closed_count,
+               'Closed · Last ' ~ recently_closed_days ~ ' Days', closed_s.color if closed_s else '#64748B',
+               filters.scope == 'recently_closed' and not filters.assigned and no_other_filters) }}
 </div>
 
 <!-- Saved Views -->
@@ -194,6 +188,14 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
         <option value="" {% if not filters.assigned %}selected{% endif %}>Everyone</option>
         <option value="me" {% if filters.assigned == 'me' %}selected{% endif %}>Mine</option>
         <option value="unassigned" {% if filters.assigned == 'unassigned' %}selected{% endif %}>Unassigned</option>
+      </select>
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-slate-500 mb-1">Show</label>
+      <select name="scope" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="" {% if not filters.scope %}selected{% endif %}>All tickets</option>
+        <option value="open" {% if filters.scope == 'open' %}selected{% endif %}>Open (not closed)</option>
+        <option value="recently_closed" {% if filters.scope == 'recently_closed' %}selected{% endif %}>Closed last {{ recently_closed_days }} days</option>
       </select>
     </div>
     <button type="submit"
@@ -445,7 +447,7 @@ document.getElementById('save-filter-form').addEventListener('submit', function(
     inp.type = 'hidden'; inp.name = 'status'; inp.value = cb.value; inp.dataset.dyn = '1';
     sf.appendChild(inp);
   });
-  ['priority', 'type', 'hospital_id', 'product_id', 'department_id', 'source', 'assigned', 'q'].forEach(function(name) {
+  ['priority', 'type', 'hospital_id', 'product_id', 'department_id', 'source', 'assigned', 'scope', 'q'].forEach(function(name) {
     var el = ff.querySelector('[name="' + name + '"]');
     if (el && el.value && el.value !== '0') {
       var inp = document.createElement('input');

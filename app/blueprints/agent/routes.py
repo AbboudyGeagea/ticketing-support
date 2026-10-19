@@ -186,6 +186,19 @@ def dashboard():
 
 # ── Ticket List ───────────────────────────────────────────────────────────────
 
+RECENTLY_CLOSED_DAYS = 7
+
+
+def _apply_ticket_scope(query, scope):
+    """'open' = every status except closed; 'recently_closed' = closed in the last RECENTLY_CLOSED_DAYS days."""
+    if scope == "open":
+        return query.filter(Ticket.status != STATUS_CLOSED)
+    if scope == "recently_closed":
+        cutoff = datetime.utcnow() - timedelta(days=RECENTLY_CLOSED_DAYS)
+        return query.filter(Ticket.status == STATUS_CLOSED, Ticket.closed_at >= cutoff)
+    return query
+
+
 @bp.route("/tickets")
 @login_required
 @agent_required
@@ -200,6 +213,7 @@ def tickets():
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     flag_filter = request.args.get("flag", "")
+    scope_filter = request.args.get("scope", "")
     search = request.args.get("q", "").strip()
 
     sort_by = request.args.get("sort", "updated")
@@ -245,6 +259,7 @@ def tickets():
         query = query.filter(Ticket.id.in_(_customer_reply_ids))
         if not status_filters:
             query = query.filter(~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]))
+    query = _apply_ticket_scope(query, scope_filter)
     if search:
         query = query.filter(
             or_(
@@ -297,14 +312,15 @@ def tickets():
         for _m in db.session.query(TicketMessage).join(_subq, TicketMessage.id == _subq.c.max_id).all():
             last_msg_map[_m.ticket_id] = _m
 
-    # Flag bar stats — always global (ignores the filters above), scoped to active, non-PHI tickets
-    _active_base = Ticket.query.filter(
-        Ticket.phi_flagged == False, ~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED])
-    )
+    # Flag bar stats — always global (ignores the filters above), non-PHI tickets
+    _tile_base = Ticket.query.filter(Ticket.phi_flagged == False)
+    _open_base = _apply_ticket_scope(_tile_base, "open")
     status_tile_counts = dict(
-        _active_base.with_entities(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
+        _open_base.with_entities(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
     )
-    assigned_to_me_count = _active_base.filter_by(assigned_to=current_user.id).count()
+    all_open_count = sum(status_tile_counts.values())
+    assigned_to_me_count = _open_base.filter_by(assigned_to=current_user.id).count()
+    recently_closed_count = _apply_ticket_scope(_tile_base, "recently_closed").count()
     _tile_last_pub_subq = (
         db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
         .join(Ticket, Ticket.id == TicketMessage.ticket_id)
@@ -355,6 +371,8 @@ def tickets():
         filter_params["assigned"] = assigned_filter
     if flag_filter:
         filter_params["flag"] = flag_filter
+    if scope_filter:
+        filter_params["scope"] = scope_filter
     if search:
         filter_params["q"] = search
 
@@ -385,6 +403,7 @@ def tickets():
             "source": source_filter,
             "assigned": assigned_filter,
             "flag": flag_filter,
+            "scope": scope_filter,
             "q": search,
         },
         filter_params=filter_params,
@@ -396,6 +415,9 @@ def tickets():
         status_tile_counts=status_tile_counts,
         customer_replied_count=customer_replied_count,
         assigned_to_me_count=assigned_to_me_count,
+        all_open_count=all_open_count,
+        recently_closed_count=recently_closed_count,
+        recently_closed_days=RECENTLY_CLOSED_DAYS,
     )
 
 
@@ -1715,6 +1737,7 @@ def tickets_export():
     source_filter = request.args.get("source", "")
     assigned_filter = request.args.get("assigned", "")
     flag_filter = request.args.get("flag", "")
+    scope_filter = request.args.get("scope", "")
     search = request.args.get("q", "").strip()
 
     query = Ticket.query
@@ -1752,6 +1775,7 @@ def tickets_export():
         query = query.filter(Ticket.id.in_(_customer_reply_ids))
         if not status_filters:
             query = query.filter(~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]))
+    query = _apply_ticket_scope(query, scope_filter)
     if search:
         query = query.filter(
             db.or_(
@@ -1828,7 +1852,7 @@ def save_filter():
     statuses = request.form.getlist("status")
     if statuses:
         params["status"] = statuses
-    for k in ("priority", "hospital_id", "product_id", "source", "assigned", "q"):
+    for k in ("priority", "hospital_id", "product_id", "source", "assigned", "scope", "q"):
         v = request.form.get(k, "")
         if v and v != "0":
             params[k] = v
