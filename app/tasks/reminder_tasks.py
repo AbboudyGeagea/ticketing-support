@@ -117,10 +117,12 @@ def auto_close_resolved_tickets():
                 ticket.status = "closed"
                 ticket.closed_at = now
                 ticket.updated_at = now
+                # Own action name so reports can tell "no answer, auto-closed" apart
+                # from a customer accepting via the emailed link (also changed_by=None).
                 db.session.add(TicketHistory(
                     ticket_id=ticket.id,
                     changed_by=None,
-                    action="status_change",
+                    action="auto_close",
                     old_value="resolved",
                     new_value="closed",
                 ))

@@ -1,320 +1,919 @@
 {% extends 'base_agent.html' %}
-{% block title %}KPI Reports{% endblock %}
-{% block page_title %}KPI Reports{% endblock %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports &amp; Analytics{% endblock %}
+
+{# ── Formatting helpers ──────────────────────────────────────────────────── #}
+{% macro dur(h) -%}
+{%- if h is none -%}—{%- elif h < 1 -%}{{ (h * 60)|round|int }}m{%- elif h < 48 -%}{{ '%.1f'|format(h) }}h{%- else -%}{{ '%.1f'|format(h / 24) }}d{%- endif -%}
+{%- endmacro %}
+{% macro pct(v) -%}{% if v is none %}—{% else %}{{ v }}%{% endif %}{%- endmacro %}
+{% macro num(v) -%}{% if v is none %}—{% else %}{{ v }}{% endif %}{%- endmacro %}
+{% macro delta(d, better='up') -%}
+{%- if d -%}
+  {%- set is_pct = d.get('pct') is not none -%}
+  {%- set val = d.pct if is_pct else d.abs -%}
+  {%- set dir = 'up' if val > 0 else ('down' if val < 0 else 'flat') -%}
+  {%- set tone = 'neutral' if (better == 'none' or dir == 'flat') else ('good' if dir == better else 'bad') -%}
+  <span class="rp-delta rp-delta-{{ tone }}" title="Previous period: {{ d.prev }}">{{ '▲' if dir == 'up' else ('▼' if dir == 'down' else '•') }} {{ '%+g'|format(val) }}{{ '%' if is_pct else (' ' ~ d.unit if d.get('unit') else '') }}</span>
+{%- endif -%}
+{%- endmacro %}
+{% macro tile(label, value, sub=None, d=None, better='up', hint=None) %}
+<div class="rp-tile"{% if hint %} title="{{ hint }}"{% endif %}>
+  <p class="rp-tile-label">{{ label }}{% if hint %} <span class="rp-info">ⓘ</span>{% endif %}</p>
+  <p class="rp-tile-value">{{ value }}</p>
+  <div class="rp-tile-foot">{{ delta(d, better) }}{% if sub %}<span>{{ sub }}</span>{% endif %}</div>
+</div>
+{% endmacro %}
+{% macro empty(msg='No data for this range.') %}<div class="rp-empty">{{ msg }}</div>{% endmacro %}
+
+{% block head_extra %}
+<script src="https://cdn.jsdelivr.net/npm/echarts-wordcloud@2.1.0/dist/echarts-wordcloud.min.js"
+        onload="window.__wordcloudReady = true"></script>
+<style>
+  .rp { --ink:#0f172a; --ink2:#475569; --muted:#64748b; --line:#e2e8f0; --soft:#f8fafc; --brand:#00A651; }
+  .rp-card { background:#fff; border:1px solid var(--line); border-radius:.75rem; box-shadow:0 1px 2px rgba(15,23,42,.04); padding:1.1rem 1.25rem; min-width:0; }
+  .rp-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:.75rem; margin-bottom:.75rem; }
+  .rp-card h2 { font-size:.875rem; font-weight:600; color:#1e293b; margin:0; }
+  .rp-sub { font-size:.72rem; color:var(--muted); margin:.15rem 0 0; }
+  .rp-note { font-size:.72rem; color:var(--muted); line-height:1.5; }
+  .rp-cols { display:grid; gap:1rem; grid-template-columns:minmax(0,1fr); margin-bottom:1rem; }
+  @media (min-width:1024px) {
+    .rp-cols-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .rp-cols-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .rp-cols-wide { grid-template-columns:minmax(0,2fr) minmax(0,1fr); }
+  }
+  .rp-tiles { display:grid; gap:.75rem; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); margin-bottom:1rem; }
+  .rp-tile { background:#fff; border:1px solid var(--line); border-radius:.75rem; padding:.9rem 1rem; min-width:0; }
+  .rp-tile-label { font-size:.68rem; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:0; }
+  .rp-tile-value { font-size:1.6rem; font-weight:600; color:var(--ink); margin:.2rem 0 0; line-height:1.15; }
+  .rp-tile-foot { display:flex; flex-wrap:wrap; gap:.35rem; align-items:center; margin-top:.35rem; font-size:.72rem; color:var(--muted); min-height:1.1rem; }
+  .rp-info { color:#94a3b8; font-weight:400; cursor:help; }
+  .rp-delta { font-weight:600; font-size:.7rem; padding:.05rem .4rem; border-radius:999px; white-space:nowrap; }
+  .rp-delta-good { color:#006300; background:#e6f4e6; }
+  .rp-delta-bad { color:#b42318; background:#fdecec; }
+  .rp-delta-neutral { color:#475569; background:#f1f5f9; }
+
+  .rp-filter { background:#fff; border:1px solid var(--line); border-radius:.75rem; padding:1rem 1.25rem; margin-bottom:1rem; }
+  .rp-chips { display:flex; flex-wrap:wrap; gap:.375rem; }
+  .rp-chip { padding:.3rem .7rem; border-radius:999px; font-size:.75rem; font-weight:500; border:1px solid var(--line); color:var(--ink2); background:#fff; text-decoration:none; white-space:nowrap; }
+  .rp-chip:hover { background:var(--soft); }
+  .rp-chip.is-active { background:var(--brand); border-color:var(--brand); color:#fff; }
+  .rp-form { display:flex; flex-wrap:wrap; gap:.75rem; align-items:flex-end; margin-top:.9rem; padding-top:.9rem; border-top:1px solid #f1f5f9; }
+  .rp-field label { display:block; font-size:.68rem; font-weight:600; color:var(--muted); margin-bottom:.25rem; text-transform:uppercase; letter-spacing:.04em; }
+  .rp-field input, .rp-field select { border:1px solid #cbd5e1; border-radius:.5rem; padding:.4rem .6rem; font-size:.8125rem; background:#fff; color:var(--ink); max-width:14rem; }
+  .rp-field input:focus, .rp-field select:focus { outline:2px solid var(--brand); outline-offset:0; border-color:transparent; }
+  .rp-btn { background:var(--brand); color:#fff; border:none; border-radius:.5rem; padding:.45rem .95rem; font-size:.8125rem; font-weight:500; cursor:pointer; }
+  .rp-btn:hover { background:#008f45; }
+  .rp-link { font-size:.8125rem; color:var(--muted); text-decoration:none; padding:.45rem .25rem; }
+  .rp-link:hover { color:var(--ink); }
+  .rp-scope { display:flex; flex-wrap:wrap; gap:.25rem .75rem; align-items:center; margin-top:.75rem; font-size:.75rem; color:var(--muted); }
+  .rp-scope strong { color:var(--ink); font-weight:600; }
+
+  .rp-export { position:relative; }
+  .rp-export summary { list-style:none; cursor:pointer; padding:.4rem .8rem; border:1px solid var(--line); border-radius:.5rem; font-size:.8125rem; color:var(--ink2); background:#fff; }
+  .rp-export summary::-webkit-details-marker { display:none; }
+  .rp-export[open] summary { background:var(--soft); }
+  .rp-export-menu { position:absolute; right:0; top:calc(100% + .35rem); width:15rem; background:#fff; border:1px solid var(--line); border-radius:.6rem; box-shadow:0 10px 25px rgba(0,0,0,.1); padding:.35rem 0; z-index:40; }
+  .rp-export-menu a { display:block; padding:.45rem .9rem; font-size:.8125rem; color:#334155; text-decoration:none; }
+  .rp-export-menu a:hover { background:var(--soft); }
+  .rp-export-menu small { display:block; color:var(--muted); font-size:.7rem; }
+
+  .rp-tabs { display:flex; gap:.25rem; border-bottom:1px solid var(--line); margin-bottom:1rem; overflow-x:auto; scrollbar-width:none; }
+  .rp-tab { padding:.6rem .9rem; font-size:.8125rem; font-weight:500; color:var(--muted); border:none; background:none; border-bottom:2px solid transparent; cursor:pointer; white-space:nowrap; font-family:inherit; }
+  .rp-tab:hover { color:var(--ink); }
+  .rp-tab[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--brand); }
+  .rp-panel[hidden] { display:none; }
+
+  .rp-chart { width:100%; }
+  .rp-empty { display:flex; align-items:center; justify-content:center; min-height:180px; font-size:.8125rem; color:#94a3b8; text-align:center; }
+  .rp-table-wrap { overflow-x:auto; }
+  .rp-table { width:100%; border-collapse:collapse; font-size:.8125rem; }
+  .rp-table th { text-align:left; font-size:.66rem; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); padding:.5rem .7rem; background:var(--soft); border-bottom:1px solid var(--line); white-space:nowrap; }
+  .rp-table td { padding:.5rem .7rem; border-bottom:1px solid #f1f5f9; color:#334155; white-space:nowrap; }
+  .rp-table .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .rp-table tbody tr:hover td { background:var(--soft); }
+  .rp-table th.grp { text-align:center; background:#f1f5f9; border-left:1px solid var(--line); }
+  .rp-table .gl { border-left:1px solid var(--line); }
+  .rp-table .sticky { position:sticky; left:0; background:#fff; z-index:1; }
+  .rp-table thead .sticky { background:var(--soft); }
+  .rp-table tbody tr:hover .sticky { background:var(--soft); }
+  .rp-table a { color:#0f766e; text-decoration:none; font-weight:500; }
+  .rp-table a:hover { text-decoration:underline; }
+  .rp-dim { color:#94a3b8; }
+  .rp-tv { margin-top:.6rem; }
+  .rp-tv summary { font-size:.72rem; color:var(--muted); cursor:pointer; user-select:none; }
+  .rp-tv .rp-table-wrap { margin-top:.5rem; max-height:16rem; overflow:auto; }
+
+  .rp-meter-row { margin-bottom:1rem; }
+  .rp-meter-head { display:flex; justify-content:space-between; font-size:.8125rem; color:#334155; margin-bottom:.35rem; }
+  .rp-meter-head strong { font-weight:600; color:var(--ink); }
+  .rp-meter { height:8px; border-radius:999px; overflow:hidden; }
+  .rp-meter > span { display:block; height:100%; border-radius:999px; }
+  .rp-meter.good { background:#d5ecd5; } .rp-meter.good > span { background:#0ca30c; }
+  .rp-meter.warn { background:#fdefc9; } .rp-meter.warn > span { background:#e09a00; }
+  .rp-meter.bad  { background:#f8dada; } .rp-meter.bad  > span { background:#d03b3b; }
+  .rp-meter.none { background:#f1f5f9; }
+
+  .rp-stack { display:flex; gap:2px; height:16px; border-radius:4px; overflow:hidden; }
+  .rp-stack > span { display:block; height:100%; min-width:3px; }
+  .rp-legend { display:flex; flex-wrap:wrap; gap:.45rem 1.1rem; margin-top:.75rem; font-size:.75rem; color:var(--ink2); }
+  .rp-key { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:.35rem; vertical-align:-1px; }
+  .rp-legend b { color:var(--ink); font-weight:600; }
+
+  .rp-kw { display:inline-block; font-size:.72rem; padding:.1rem .5rem; border-radius:999px; background:#eef4fc; color:#184f95; margin:0 .25rem .3rem 0; white-space:nowrap; }
+  .rp-kw em { font-style:normal; color:#64748b; margin-left:.25rem; }
+  .rp-rank { list-style:none; margin:0; padding:0; }
+  .rp-rank li { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:.5rem; align-items:center; padding:.3rem 0; font-size:.8125rem; color:#334155; border-bottom:1px solid #f8fafc; }
+  .rp-rank .bar { grid-column:1 / -1; height:4px; border-radius:2px; background:#eef4fc; }
+  .rp-rank .bar > span { display:block; height:100%; border-radius:2px; background:#2a78d6; }
+  .rp-rank .val { font-variant-numeric:tabular-nums; color:var(--muted); font-size:.75rem; }
+  .rp-callout { border-radius:.6rem; background:var(--soft); border:1px solid var(--line); padding:.75rem .9rem; font-size:.8125rem; color:#334155; }
+  .rp-callout strong { color:var(--ink); }
+  .rp-big { font-size:1.35rem; font-weight:600; color:var(--ink); }
+  .rp-pill { display:inline-block; font-size:.66rem; font-weight:600; padding:.08rem .45rem; border-radius:999px; background:#f1f5f9; color:#475569; text-transform:uppercase; letter-spacing:.03em; }
+</style>
+{% endblock %}
 
 {% block header_actions %}
-<div class="flex gap-2">
-  {% for d in [7, 30, 90] %}
-  <a href="?days={{ d }}" class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
-    {% if days == d %}bg-primary text-white{% else %}bg-white border border-slate-200 text-slate-600 hover:bg-slate-50{% endif %}">
-    {{ d }} days
-  </a>
-  {% endfor %}
-</div>
+<details class="rp-export">
+  <summary>⤓ Export CSV</summary>
+  <div class="rp-export-menu">
+    <a href="{{ url_for('reports.export_csv', kind='tickets', **query_args) }}">Tickets<small>One row per ticket created in range</small></a>
+    <a href="{{ url_for('reports.export_csv', kind='resolutions', **query_args) }}">Resolutions<small>Each resolution, outcome &amp; customer response time</small></a>
+    <a href="{{ url_for('reports.export_csv', kind='agents', **query_args) }}">Agent scorecard<small>The Agents table</small></a>
+  </div>
+</details>
 {% endblock %}
 
 {% block content %}
+<div class="rp">
 
-<!-- ── KPI Stat Cards ─────────────────────────────────────────────────────── -->
-<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6">
-
-  <!-- 1. Ticket Volume -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ticket Volume</p>
-    <p class="text-3xl font-bold text-slate-800 mt-1">{{ total_tickets }}</p>
-    <p class="text-xs text-slate-400 mt-1">Created in last {{ days }} days</p>
+<!-- ── Filters: one row above everything they scope ────────────────────── -->
+<div class="rp-filter">
+  <div class="rp-chips" role="group" aria-label="Date range presets">
+    {% for key, label in presets %}
+    <a href="{{ url_for('reports.dashboard', range=key, **filters.as_args()) }}" data-keep-hash
+       class="rp-chip {% if rng.preset == key %}is-active{% endif %}"
+       {% if rng.preset == key %}aria-current="true"{% endif %}>{{ label }}</a>
+    {% endfor %}
   </div>
 
-  <!-- 2. First Response Time -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Avg FRT</p>
-    <p class="text-3xl font-bold mt-1
-      {% if avg_frt is not none %}
-        {% if avg_frt <= 24 %}text-green-600{% elif avg_frt <= 48 %}text-amber-600{% else %}text-red-600{% endif %}
-      {% else %}text-slate-800{% endif %}">
-      {% if avg_frt is not none %}
-        {% if avg_frt < 1 %}{{ (avg_frt * 60)|round|int }}m{% else %}{{ avg_frt }}h{% endif %}
-      {% else %}—{% endif %}
-    </p>
-    <p class="text-xs text-slate-400 mt-1">First response (email target &lt;24h)</p>
-  </div>
+  <form method="GET" id="rp-form" class="rp-form">
+    {% if rng.preset != 'custom' %}<input type="hidden" name="range" value="{{ rng.preset }}" id="rp-range">{% endif %}
+    <div class="rp-field">
+      <label for="rp-start">From</label>
+      <input type="date" id="rp-start" {% if rng.preset == 'custom' %}name="start"{% endif %} data-name="start"
+             value="{{ rng.start.isoformat() }}" max="{{ today.isoformat() }}">
+    </div>
+    <div class="rp-field">
+      <label for="rp-end">To</label>
+      <input type="date" id="rp-end" {% if rng.preset == 'custom' %}name="end"{% endif %} data-name="end"
+             value="{{ rng.end.isoformat() }}">
+    </div>
+    <div class="rp-field">
+      <label for="rp-hospital">Hospital</label>
+      <select name="hospital_id" id="rp-hospital" data-autosubmit>
+        <option value="0">All hospitals</option>
+        {% for h in hospital_choices %}<option value="{{ h.id }}" {% if filters.hospital_id == h.id %}selected{% endif %}>{{ h.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="rp-field">
+      <label for="rp-product">Product</label>
+      <select name="product_id" id="rp-product" data-autosubmit>
+        <option value="0">All products</option>
+        {% for p in product_choices %}<option value="{{ p.id }}" {% if filters.product_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="rp-field">
+      <label for="rp-agent">Assignee</label>
+      <select name="agent_id" id="rp-agent" data-autosubmit>
+        <option value="0">All agents</option>
+        {% for a in agent_choices %}<option value="{{ a.id }}" {% if filters.agent_id == a.id %}selected{% endif %}>{{ a.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="rp-field">
+      <label for="rp-priority">Priority</label>
+      <select name="priority" id="rp-priority" data-autosubmit>
+        <option value="">Any priority</option>
+        {% for key, label in priority_choices %}<option value="{{ key }}" {% if filters.priority == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="rp-btn" data-no-disable>Apply</button>
+    <a href="{{ url_for('reports.dashboard') }}" class="rp-link" data-keep-hash>Reset</a>
+  </form>
 
-  <!-- 3. Time to Resolution -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Time to Resolution</p>
-    <p class="text-3xl font-bold text-slate-800 mt-1">
-      {% if avg_tat is not none %}{{ avg_tat }}h{% else %}—{% endif %}
-    </p>
-    <p class="text-xs text-slate-400 mt-1">Avg hours to close (period)</p>
-  </div>
-
-  <!-- 4. Ticket Backlog -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ticket Backlog</p>
-    <p class="text-3xl font-bold mt-1
-      {% if ticket_backlog > 50 %}text-red-600{% elif ticket_backlog > 20 %}text-amber-600{% else %}text-slate-800{% endif %}">
-      {{ ticket_backlog }}
-    </p>
-    <p class="text-xs text-slate-400 mt-1">Open &amp; unresolved tickets</p>
-  </div>
-
-  <!-- 5. Escalation Rate -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Escalation Rate</p>
-    <p class="text-3xl font-bold mt-1
-      {% if escalation_rate > 20 %}text-red-600{% elif escalation_rate > 10 %}text-amber-600{% else %}text-slate-800{% endif %}">
-      {{ escalation_rate }}%
-    </p>
-    <p class="text-xs text-slate-400 mt-1">Of active tickets escalated</p>
-  </div>
-
-  <!-- 6. CSAT Score -->
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">CSAT Score</p>
-    <p class="text-3xl font-bold mt-1
-      {% if csat_score is not none %}
-        {% if csat_score >= 4 %}text-green-600{% elif csat_score >= 3 %}text-amber-600{% else %}text-red-600{% endif %}
-      {% else %}text-slate-800{% endif %}">
-      {% if csat_score is not none %}{{ csat_score }}<span class="text-base font-normal text-slate-400">/5</span>{% else %}—{% endif %}
-    </p>
-    <p class="text-xs text-slate-400 mt-1">
-      {% if csat_responses > 0 %}Based on {{ csat_responses }} response{{ 's' if csat_responses != 1 }}{% else %}No responses yet{% endif %}
-    </p>
-  </div>
-
-</div>
-
-<!-- ── Secondary Metrics ─────────────────────────────────────────────────── -->
-<div class="grid grid-cols-2 gap-4 mb-6">
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">SLA Breach Rate</p>
-    <p class="text-3xl font-bold {% if breach_rate > 20 %}text-red-600{% elif breach_rate > 10 %}text-amber-600{% else %}text-green-600{% endif %} mt-1">
-      {{ breach_rate }}%
-    </p>
-    <p class="text-xs text-slate-400 mt-1">Open/in-progress &gt;24h without resolution</p>
-  </div>
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Resolution Rate</p>
-    <p class="text-3xl font-bold {% if resolution_rate >= 75 %}text-green-600{% elif resolution_rate >= 50 %}text-amber-600{% else %}text-red-600{% endif %} mt-1">
-      {{ resolution_rate }}%
-    </p>
-    <p class="text-xs text-slate-400 mt-1">Resolved / total tickets created in period</p>
+  <div class="rp-scope">
+    <span><strong>{{ rng.label }}</strong> · {{ rng.span_label }} · {{ rng.days }} day{{ 's' if rng.days != 1 }}</span>
+    {% if prev_rng %}<span>Changes compared with {{ prev_rng.span_label }}</span>{% endif %}
+    <span>Charts grouped by {{ rng.granularity }}</span>
+    {% if filters.active %}<span class="rp-pill">Filtered</span>{% endif %}
   </div>
 </div>
 
-<!-- ── Charts Row 1: Volume + Incident Severity ───────────────────────────── -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-
-  <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Ticket Volume — Last {{ days }} Days</h2>
-    <div id="chart-volume" style="height: 220px;"></div>
-  </div>
-
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Incident Severity</h2>
-    {% if incident_severity %}
-    <div id="chart-severity" style="height: 220px;"></div>
-    {% else %}
-    <div class="flex items-center justify-center h-[220px] text-sm text-slate-400">No ticket data.</div>
-    {% endif %}
-  </div>
-
+<!-- ── Tabs ─────────────────────────────────────────────────────────────── -->
+<div class="rp-tabs" role="tablist" aria-label="Report sections">
+  <button class="rp-tab" role="tab" id="tab-overview" aria-controls="panel-overview" aria-selected="true" data-tab="overview">Overview</button>
+  <button class="rp-tab" role="tab" id="tab-agents" aria-controls="panel-agents" aria-selected="false" data-tab="agents">Agents</button>
+  <button class="rp-tab" role="tab" id="tab-acceptance" aria-controls="panel-acceptance" aria-selected="false" data-tab="acceptance">Resolution acceptance</button>
+  <button class="rp-tab" role="tab" id="tab-customers" aria-controls="panel-customers" aria-selected="false" data-tab="customers">Hospitals &amp; products</button>
+  <button class="rp-tab" role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false" data-tab="text">Text analytics</button>
 </div>
 
-<!-- ── Charts Row 2: Resolution Time Trend + By Status ───────────────────── -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+<!-- ═════════════════════════ OVERVIEW ═════════════════════════════════════ -->
+<section class="rp-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
 
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Resolution Time Trend (weekly avg)</h2>
-    {% if tat_weeks %}
-    <div id="chart-tat" style="height: 220px;"></div>
-    {% else %}
-    <div class="flex items-center justify-center h-[220px] text-sm text-slate-400">No resolution data for this period.</div>
-    {% endif %}
+  <div class="rp-tiles">
+    {{ tile('Tickets created', kpis.created, d=deltas.get('created'), better='none') }}
+    {{ tile('Resolved', kpis.resolved, sub=kpis.closed ~ ' closed', d=deltas.get('resolved'), better='up',
+            hint='Tickets whose first resolution (or close, if never resolved) falls in this range') }}
+    {{ tile('Median time to resolve', dur(kpis.median_tat), sub='avg ' ~ dur(kpis.avg_tat), d=deltas.get('median_tat'), better='down',
+            hint='Created → first marked resolved (or closed). Calendar time.') }}
+    {{ tile('Median first response', dur(kpis.median_frt), d=deltas.get('median_frt'), better='down',
+            hint='Created → first public reply from an agent, for tickets created in range') }}
+    {{ tile('Acceptance rate', pct(kpis.acceptance_rate), d=deltas.get('acceptance_rate'), better='up',
+            hint='Accepted ÷ (accepted + rejected) — explicit customer decisions on resolutions in range') }}
+    {{ tile('Reopen rate', pct(kpis.reopen_rate), d=deltas.get('reopen_rate'), better='down',
+            hint='Share of resolutions rejected by the customer or reopened by an agent') }}
+    {{ tile('CSAT', (kpis.csat ~ ' / 5') if kpis.csat is not none else '—', sub=kpis.csat_n ~ ' response' ~ ('s' if kpis.csat_n != 1 else ''),
+            d=deltas.get('csat'), better='up') }}
+    {{ tile('Open backlog now', ov.backlog_total, sub=ov.backlog_unassigned ~ ' unassigned · ' ~ ov.backlog_breached ~ ' SLA-breached',
+            hint='Current snapshot; ignores the date range, honours the filters') }}
   </div>
 
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Tickets by Status (current)</h2>
-    <div id="chart-status" style="height: 220px;"></div>
-  </div>
+  <div class="rp-cols rp-cols-wide">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Ticket flow</h2><p class="rp-sub">Created, resolved and closed per {{ ov.granularity }}</p></div></div>
+      <div id="ch-flow" class="rp-chart" style="height:280px"></div>
+      <details class="rp-tv"><summary>Table view</summary><div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>{{ ov.granularity|title }}</th><th class="num">Created</th><th class="num">Resolved</th><th class="num">Closed</th></tr></thead>
+        <tbody>{% for l in ov.labels %}<tr><td>{{ l }}</td><td class="num">{{ ov.created_series[loop.index0] }}</td><td class="num">{{ ov.resolved_series[loop.index0] }}</td><td class="num">{{ ov.closed_series[loop.index0] }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+    </div>
 
-</div>
-
-<!-- ── Charts Row 3: By Hospital + By Source ─────────────────────────────── -->
-<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Top Hospitals by Volume ({{ days }}d)</h2>
-    <div id="chart-hospitals" style="height: 220px;"></div>
-  </div>
-
-  <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-slate-700 mb-4">Tickets by Source ({{ days }}d)</h2>
-    <div id="chart-source" style="height: 220px;"></div>
-  </div>
-
-</div>
-
-<!-- ── Agent Activity Table ───────────────────────────────────────────────── -->
-<div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
-  <div class="px-6 py-4 border-b border-slate-200">
-    <h2 class="text-sm font-semibold text-slate-800">Agent Activity — Last {{ days }} Days</h2>
-  </div>
-  <table class="w-full text-sm">
-    <thead class="bg-slate-50">
-      <tr>
-        <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Agent</th>
-        <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Tickets Resolved</th>
-        <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Replies Sent</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-slate-100">
-      {% for row in agent_activity %}
-      <tr class="hover:bg-slate-50">
-        <td class="px-6 py-3 font-medium text-slate-800">{{ row.name }}</td>
-        <td class="px-6 py-3 text-right text-slate-600">{{ row.resolved }}</td>
-        <td class="px-6 py-3 text-right text-slate-600">{{ row.replies }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="3" class="px-6 py-8 text-center text-slate-400">No data</td></tr>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>SLA compliance</h2><p class="rp-sub">Tickets created in range that have an SLA</p></div></div>
+      {% for label, r, met, missed in [('First response within SLA', ov.sla.resp_rate, ov.sla.resp_met, ov.sla.resp_missed),
+                                        ('Resolved within SLA', ov.sla.res_rate, ov.sla.res_met, ov.sla.res_missed)] %}
+      {% set cls = 'none' if r is none else ('good' if r >= 90 else ('warn' if r >= 75 else 'bad')) %}
+      <div class="rp-meter-row">
+        <div class="rp-meter-head"><span>{{ label }}</span><strong>{{ pct(r) }}</strong></div>
+        <div class="rp-meter {{ cls }}" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ r or 0 }}" aria-label="{{ label }}"><span style="width:{{ r or 0 }}%"></span></div>
+        <p class="rp-note" style="margin:.3rem 0 0">{{ met }} met · {{ missed }} missed{% if r is not none %} · {{ 'on target' if cls == 'good' else ('watch' if cls == 'warn' else 'below target') }}{% endif %}</p>
+      </div>
       {% endfor %}
-    </tbody>
-  </table>
-</div>
+      <div class="rp-callout"><strong>{{ ov.sla.breached_flag }}</strong> ticket{{ 's' if ov.sla.breached_flag != 1 }} created in range {{ 'was' if ov.sla.breached_flag == 1 else 'were' }} flagged SLA-breached by the escalation job.</div>
+    </div>
+  </div>
 
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Turnaround trend</h2><p class="rp-sub">Median per {{ ov.granularity }}, in hours</p></div></div>
+      {% if ov.tat_series|select('ne', none)|list or ov.frt_series|select('ne', none)|list %}
+      <div id="ch-tat-trend" class="rp-chart" style="height:260px"></div>
+      <details class="rp-tv"><summary>Table view</summary><div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>{{ ov.granularity|title }}</th><th class="num">Median to resolve</th><th class="num">Median first response</th></tr></thead>
+        <tbody>{% for l in ov.labels %}<tr><td>{{ l }}</td><td class="num">{{ dur(ov.tat_series[loop.index0]) }}</td><td class="num">{{ dur(ov.frt_series[loop.index0]) }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+      {% else %}{{ empty() }}{% endif %}
+    </div>
+
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>How long resolutions take</h2>
+        <p class="rp-sub">{{ ov.tat_summary.n }} resolved · median {{ dur(ov.tat_summary.median) }} · P90 {{ dur(ov.tat_summary.p90) }} · max {{ dur(ov.tat_summary.max) }}</p></div></div>
+      {% if ov.tat_summary.n %}
+      <div id="ch-tat-hist" class="rp-chart" style="height:260px"></div>
+      <details class="rp-tv"><summary>Table view</summary><div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>Time to resolve</th><th class="num">Tickets</th></tr></thead>
+        <tbody>{% for l in ov.tat_hist_labels %}<tr><td>{{ l }}</td><td class="num">{{ ov.tat_hist[loop.index0] }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+      {% else %}{{ empty() }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-cols rp-cols-wide">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>When tickets arrive</h2><p class="rp-sub">Tickets created by weekday and hour (local time)</p></div></div>
+      {% if kpis.created %}<div id="ch-heat" class="rp-chart" style="height:270px"></div>{% else %}{{ empty() }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Turnaround by priority</h2><p class="rp-sub">Resolved in range</p></div></div>
+      <div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>Priority</th><th class="num">Resolved</th><th class="num">Median</th><th class="num">Avg</th><th class="num">P90</th></tr></thead>
+        <tbody>
+        {% for p in ov.priority_rows %}
+          <tr><td>{{ p.label }}</td><td class="num">{{ p.n }}</td><td class="num">{{ dur(p.median) }}</td><td class="num">{{ dur(p.avg) }}</td><td class="num">{{ dur(p.p90) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <h2 style="margin-top:1.25rem">Priority mix</h2><p class="rp-sub">Tickets created in range</p>
+      {% if ov.priority_mix %}
+      {% set ptotal = ov.priority_mix|sum(attribute='value') %}
+      <div class="rp-stack" style="margin-top:.6rem">
+        {% for m in ov.priority_mix %}<span style="flex:{{ m.value }};background:{{ m.itemStyle.color }}" title="{{ m.name }}: {{ m.value }}"></span>{% endfor %}
+      </div>
+      <div class="rp-legend">{% for m in ov.priority_mix %}<span><i class="rp-key" style="background:{{ m.itemStyle.color }}"></i>{{ m.name }} <b>{{ m.value }}</b> ({{ (m.value / ptotal * 100)|round|int }}%)</span>{% endfor %}</div>
+      {% else %}{{ empty() }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-cols rp-cols-3">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Backlog age</h2><p class="rp-sub">{{ ov.backlog_total }} open tickets right now</p></div></div>
+      {% if ov.backlog_total %}<div id="ch-backlog" class="rp-chart" style="height:220px"></div>{% else %}{{ empty('Nothing open. Nice.') }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Open by status</h2><p class="rp-sub">Current snapshot</p></div></div>
+      {% if ov.backlog_status %}
+      {% set btop = ov.backlog_status[0].value %}
+      <ul class="rp-rank">{% for s in ov.backlog_status %}<li><span>{{ s.name }}</span><span class="val">{{ s.value }}</span><div class="bar"><span style="width:{{ (s.value / btop * 100)|round(1) }}%"></span></div></li>{% endfor %}</ul>
+      {% else %}{{ empty('Nothing open.') }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Channel &amp; type</h2><p class="rp-sub">Tickets created in range</p></div></div>
+      {% if kpis.created %}
+      {% for group in [ov.source_mix, ov.type_mix] %}
+      {% set gtop = group[0].value if group else 1 %}
+      <ul class="rp-rank" style="margin-bottom:.9rem">{% for s in group %}<li><span>{{ s.name }}</span><span class="val">{{ s.value }} · {{ (s.value / kpis.created * 100)|round|int }}%</span><div class="bar"><span style="width:{{ (s.value / gtop * 100)|round(1) }}%"></span></div></li>{% endfor %}</ul>
+      {% endfor %}
+      {% else %}{{ empty() }}{% endif %}
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ AGENTS ═══════════════════════════════════════ -->
+<section class="rp-panel" id="panel-agents" role="tabpanel" aria-labelledby="tab-agents" hidden>
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Time to resolve per agent</h2><p class="rp-sub">Median, with P90 in the tooltip · credited to the agent who marked it resolved</p></div></div>
+      {% if agents|selectattr('resolved')|list %}<div id="ch-agent-tat" class="rp-chart" style="height:{{ [220, (agents|selectattr('resolved')|list|length) * 34 + 60]|max }}px"></div>{% else %}{{ empty() }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>What customers did with each agent's resolutions</h2><p class="rp-sub">Outcome of every "resolved" status set in range</p></div></div>
+      {% if agents|selectattr('resolutions')|list %}<div id="ch-agent-outcomes" class="rp-chart" style="height:{{ [220, (agents|selectattr('resolutions')|list|length) * 34 + 90]|max }}px"></div>{% else %}{{ empty() }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-card" style="padding:0">
+    <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Agent scorecard</h2>
+      <p class="rp-sub">TAT = turnaround time (calendar). FRT = first response time. Acceptance = accepted ÷ (accepted + rejected).</p></div></div>
+    <div class="rp-table-wrap" style="margin-top:.75rem">
+      <table class="rp-table">
+        <thead>
+          <tr>
+            <th class="sticky"></th>
+            <th class="grp" colspan="3">Workload</th>
+            <th class="grp" colspan="4">Speed</th>
+            <th class="grp" colspan="6">Customer verdict on resolutions</th>
+            <th class="grp" colspan="4">Activity</th>
+            <th class="grp" colspan="2">Quality</th>
+          </tr>
+          <tr>
+            <th class="sticky">Agent</th>
+            <th class="num gl" title="Tickets created in range and assigned to this agent">Assigned</th>
+            <th class="num" title="Open tickets assigned right now">Open now</th>
+            <th class="num">Resolved</th>
+            <th class="num gl">Median FRT</th>
+            <th class="num">Median TAT</th>
+            <th class="num">Avg TAT</th>
+            <th class="num">P90 TAT</th>
+            <th class="num gl">Accepted</th>
+            <th class="num">Rejected</th>
+            <th class="num" title="Closed automatically after 48h without an answer">Auto-closed</th>
+            <th class="num">Acceptance</th>
+            <th class="num" title="Median time for the customer to accept">To accept</th>
+            <th class="num" title="Median time for the customer to reject / reopen">To reject</th>
+            <th class="num gl">Replies</th>
+            <th class="num">Notes</th>
+            <th class="num" title="Average words per public reply">Words/reply</th>
+            <th class="num" title="From the Time Report, logged in range">Hours</th>
+            <th class="num gl">CSAT</th>
+            <th class="num" title="Tickets created in range, assigned to agent, flagged SLA-breached">SLA breached</th>
+          </tr>
+        </thead>
+        <tbody>
+        {% for a in agents %}
+          <tr>
+            <td class="sticky"><span style="font-weight:600;color:#0f172a">{{ a.name }}</span>{% if not a.active %} <span class="rp-pill">inactive</span>{% endif %}</td>
+            <td class="num gl">{{ a.assigned }}</td>
+            <td class="num">{{ a.open_now }}</td>
+            <td class="num"><strong>{{ a.resolved }}</strong></td>
+            <td class="num gl">{{ dur(a.frt.median) }}</td>
+            <td class="num">{{ dur(a.tat.median) }}</td>
+            <td class="num">{{ dur(a.tat.avg) }}</td>
+            <td class="num">{{ dur(a.tat.p90) }}</td>
+            <td class="num gl">{{ a.outcomes.accepted }}</td>
+            <td class="num">{{ a.outcomes.rejected }}</td>
+            <td class="num">{{ a.outcomes.auto_closed }}</td>
+            <td class="num">{{ pct(a.acceptance_rate) }}</td>
+            <td class="num">{{ dur(a.accept_median) }}</td>
+            <td class="num">{{ dur(a.reject_median) }}</td>
+            <td class="num gl">{{ a.replies }}</td>
+            <td class="num">{{ a.notes }}</td>
+            <td class="num">{{ num(a.avg_reply_words) }}</td>
+            <td class="num">{{ a.hours_logged if a.hours_logged else '—' }}</td>
+            <td class="num gl">{% if a.csat is not none %}{{ a.csat }} <span class="rp-dim">({{ a.csat_n }})</span>{% else %}—{% endif %}</td>
+            <td class="num">{{ a.sla_breached }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="20">{{ empty('No agent activity for this range.') }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ ACCEPTANCE ═══════════════════════════════════ -->
+<section class="rp-panel" id="panel-acceptance" role="tabpanel" aria-labelledby="tab-acceptance" hidden>
+  <div class="rp-tiles">
+    {{ tile('Resolutions in range', acc.total, hint='Every time a ticket was set to "resolved" in this range') }}
+    {{ tile('Acceptance rate', pct(acc.acceptance_rate), sub=acc.counts.accepted ~ ' accepted · ' ~ acc.counts.rejected ~ ' rejected',
+            d=deltas.get('acceptance_rate'), better='up') }}
+    {{ tile('Customer engagement', pct(acc.engagement_rate), hint='Share of concluded resolutions where the customer explicitly accepted or rejected (vs. silence → auto-close or an agent closing it)') }}
+    {{ tile('First-time fix', pct(acc.first_fix_rate), hint="A ticket's first resolution stuck: accepted, auto-closed or closed — not rejected or reopened") }}
+    {{ tile('Median time to accept', dur(acc.accept.median), sub='avg ' ~ dur(acc.accept.avg) ~ ' · P90 ' ~ dur(acc.accept.p90)) }}
+    {{ tile('Median time to reject', dur(acc.reject.median), sub='avg ' ~ dur(acc.reject.avg) ~ ' · P90 ' ~ dur(acc.reject.p90)) }}
+    {{ tile('Awaiting customer now', acc.awaiting|length, sub='auto-close after 48h', hint='Tickets sitting in "resolved" right now') }}
+  </div>
+
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Outcome of resolutions</h2><p class="rp-sub">What happened after each ticket was marked resolved</p></div></div>
+      {% if acc.total %}
+      <div class="rp-stack" role="img" aria-label="Outcome mix">
+        {% for m in acc.mix %}<span style="flex:{{ m.value }};background:{{ m.color }}" title="{{ m.name }}: {{ m.value }}"></span>{% endfor %}
+      </div>
+      <div class="rp-legend">{% for m in acc.mix %}<span><i class="rp-key" style="background:{{ m.color }}"></i>{{ m.name }} <b>{{ m.value }}</b> ({{ (m.value / acc.total * 100)|round(1) }}%)</span>{% endfor %}</div>
+      <p class="rp-note" style="margin-top:1rem">
+        <strong>Accepted</strong>: customer clicked “accept” in the portal or the “Yes, close it” email link.
+        <strong>Rejected</strong>: customer rejected, replied (portal or email) or used the reopen link.
+        <strong>Auto-closed</strong>: no answer within 48h (Friday resolutions wait until Monday).
+      </p>
+      {% else %}{{ empty('No tickets were marked resolved in this range.') }}{% endif %}
+    </div>
+
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>How long customers take to respond</h2><p class="rp-sub">Time from “resolved” to the customer’s accept / reject</p></div></div>
+      {% if acc.accept.n or acc.reject.n %}
+      <div id="ch-response" class="rp-chart" style="height:250px"></div>
+      <details class="rp-tv"><summary>Table view</summary><div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>Response time</th><th class="num">Accepted</th><th class="num">Rejected</th></tr></thead>
+        <tbody>{% for l in acc.hist_labels %}<tr><td>{{ l }}</td><td class="num">{{ acc.accept_hist[loop.index0] }}</td><td class="num">{{ acc.reject_hist[loop.index0] }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+      {% else %}{{ empty('No customer decisions in this range.') }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-cols rp-cols-wide">
+    <div class="rp-card" style="padding:0">
+      <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>By hospital</h2><p class="rp-sub">Who confirms, who rejects, who stays silent</p></div></div>
+      <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
+        <thead><tr><th>Hospital</th><th class="num">Resolutions</th><th class="num">Accepted</th><th class="num">Rejected</th><th class="num">Auto-closed</th><th class="num">Pending</th><th class="num">Acceptance</th><th class="num" title="Explicit answers ÷ concluded resolutions">Engagement</th><th class="num" title="Median time to accept or reject">Median response</th></tr></thead>
+        <tbody>
+        {% for h in acc.hospital_rows %}
+          <tr><td>{{ h.name }}</td><td class="num">{{ h.total }}</td><td class="num">{{ h.accepted }}</td><td class="num">{{ h.rejected }}</td><td class="num">{{ h.auto_closed }}</td><td class="num">{{ h.pending }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ pct(h.engagement) }}</td><td class="num">{{ dur(h.resp_median) }}</td></tr>
+        {% else %}
+          <tr><td colspan="9">{{ empty() }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="rp-card" style="padding:0">
+      <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Waiting on the customer</h2><p class="rp-sub">{{ acc.awaiting|length }} resolved ticket{{ 's' if acc.awaiting|length != 1 }} not yet confirmed · oldest first</p></div></div>
+      <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
+        <thead><tr><th>Ticket</th><th>Hospital</th><th>Agent</th><th class="num">Waiting</th></tr></thead>
+        <tbody>
+        {% for a in acc.awaiting[:12] %}
+          <tr><td><a href="{{ url_for('agent.ticket_detail', ref=a.t.ref) }}">{{ a.t.ref }}</a></td>
+              <td>{{ hospital_names.get(a.t.hospital_id, '—') }}</td>
+              <td>{{ agent_names.get(a.t.assigned_to, '—') }}</td>
+              <td class="num">{{ dur(a.waited) }}</td></tr>
+        {% else %}
+          <tr><td colspan="4">{{ empty('Nobody is waiting. All resolutions confirmed.') }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ HOSPITALS & PRODUCTS ═════════════════════════ -->
+<section class="rp-panel" id="panel-customers" role="tabpanel" aria-labelledby="tab-customers" hidden>
+  <div class="rp-card" style="padding:0;margin-bottom:1rem">
+    <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Hospitals</h2><p class="rp-sub">Volume and experience per site in this range</p></div></div>
+    <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
+      <thead><tr><th>Hospital</th><th class="num">Created</th><th class="num" title="Created in range and not yet resolved">Still open</th><th class="num">High / urgent</th><th class="num">Resolved</th><th class="num">Median TAT</th><th class="num">Acceptance</th><th class="num">CSAT</th><th class="num" title="Average words in the ticket description">Words / description</th></tr></thead>
+      <tbody>
+      {% for h in cust.hospitals %}
+        <tr><td>{{ h.name }}</td><td class="num"><strong>{{ h.created }}</strong></td><td class="num">{{ h.still_open }}</td><td class="num">{{ pct(h.high_share) }}</td><td class="num">{{ h.resolved }}</td><td class="num">{{ dur(h.tat_median) }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ num(h.csat) }}</td><td class="num">{{ num(h.words) }}</td></tr>
+      {% else %}
+        <tr><td colspan="9">{{ empty() }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="rp-cols rp-cols-wide">
+    <div class="rp-card" style="padding:0">
+      <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Products</h2><p class="rp-sub">Top keywords come from ticket subjects and descriptions</p></div></div>
+      <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
+        <thead><tr><th>Product</th><th class="num">Created</th><th class="num">Resolved</th><th class="num">Median TAT</th><th class="num">P90 TAT</th><th>What it's about</th></tr></thead>
+        <tbody>
+        {% for p in cust.products %}
+          <tr><td>{{ p.name }}</td><td class="num"><strong>{{ p.created }}</strong></td><td class="num">{{ p.resolved }}</td><td class="num">{{ dur(p.tat_median) }}</td><td class="num">{{ dur(p.tat_p90) }}</td>
+              <td style="white-space:normal;min-width:14rem">{% for k in p.keywords %}<span class="rp-kw">{{ k }}</span>{% else %}<span class="rp-dim">—</span>{% endfor %}</td></tr>
+        {% else %}
+          <tr><td colspan="6">{{ empty() }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Top requesters</h2><p class="rp-sub">People who opened the most tickets</p></div></div>
+      {% if cust.requesters %}
+      {% set rtop = cust.requesters[0].count %}
+      <ul class="rp-rank">{% for r in cust.requesters %}<li><span>{{ r.name }}{% if r.hospital %} <span class="rp-dim">· {{ r.hospital }}</span>{% endif %}</span><span class="val">{{ r.count }}</span><div class="bar"><span style="width:{{ (r.count / rtop * 100)|round(1) }}%"></span></div></li>{% endfor %}</ul>
+      {% else %}{{ empty() }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Satisfaction ratings</h2>
+        <p class="rp-sub">{{ kpis.csat_n }} survey{{ 's' if kpis.csat_n != 1 }} answered in range{% if cust.csat_response_rate is not none %} · {{ cust.csat_response_rate }}% response rate{% endif %}</p></div></div>
+      {% if kpis.csat_n %}<div id="ch-csat" class="rp-chart" style="height:220px"></div>{% else %}{{ empty('No survey answers in this range.') }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Latest survey comments</h2></div></div>
+      {% for c in cust.csat_comments %}
+        <div class="rp-callout" style="margin-bottom:.5rem">
+          <strong>{{ c.rating }}/5</strong> · <span class="rp-dim">{{ c.ref }} · {{ c.submitted_at|localtime('%d %b %Y') }}</span>
+          <p style="margin:.3rem 0 0;white-space:normal;overflow-wrap:anywhere">{{ c.comment|truncate(280) }}</p>
+        </div>
+      {% else %}{{ empty('No written comments in this range.') }}{% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════ TEXT ANALYTICS ═══════════════════════════════ -->
+<section class="rp-panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
+  {% set lr = text.length_rows %}
+  <div class="rp-tiles">
+    {{ tile('Tickets analysed', text.analysed, sub=(text.phi_excluded ~ ' PHI-flagged excluded') if text.phi_excluded else 'created in range') }}
+    {{ tile('Words · subject', num(lr[0].avg), sub='median ' ~ num(lr[0].median)) }}
+    {{ tile('Words · description', num(lr[1].avg), sub='median ' ~ num(lr[1].median) ~ ' · max ' ~ num(lr[1].max)) }}
+    {{ tile('Words · customer follow-up', num(lr[2].avg), sub=lr[2].n ~ ' messages') }}
+    {{ tile('Words · agent reply', num(lr[3].avg), sub=lr[3].n ~ ' replies') }}
+    {{ tile('Messages per ticket', num(text.msgs_per_ticket.avg), sub='median ' ~ num(text.msgs_per_ticket.median) ~ ' · public only') }}
+    {{ tile('Vocabulary', text.vocabulary, sub='distinct meaningful terms') }}
+  </div>
+
+  {% if text.analysed %}
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Most mentioned terms</h2><p class="rp-sub">Number of tickets mentioning each term (subject + description, stop words removed)</p></div></div>
+      {% if text.keywords %}<div id="ch-keywords" class="rp-chart" style="height:520px"></div>{% else %}{{ empty() }}{% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Word cloud</h2><p class="rp-sub">Top {{ text.cloud|length }} terms, sized by ticket count</p></div></div>
+      {% if text.cloud %}<div id="ch-cloud" class="rp-chart" style="height:300px"></div>{% else %}{{ empty() }}{% endif %}
+      <div class="rp-cols rp-cols-2" style="margin:1rem 0 0">
+        <div>
+          <h2>Top phrases</h2><p class="rp-sub">Two-word phrases</p>
+          <div style="margin-top:.5rem">{% for w, n in text.bigrams %}<span class="rp-kw">{{ w }}<em>{{ n }}</em></span>{% else %}<span class="rp-dim">—</span>{% endfor %}</div>
+        </div>
+        <div>
+          <h2>Subject lines</h2><p class="rp-sub">Terms used in subjects</p>
+          <div style="margin-top:.5rem">{% for w, n in text.subject_keywords %}<span class="rp-kw">{{ w }}<em>{{ n }}</em></span>{% else %}<span class="rp-dim">—</span>{% endfor %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rp-card" style="padding:0;margin-bottom:1rem">
+    <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Word counts</h2><p class="rp-sub">Quoted email history and signatures are stripped before counting</p></div></div>
+    <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
+      <thead><tr><th>Text</th><th class="num">Count</th><th class="num">Min</th><th class="num">Median</th><th class="num">Average</th><th class="num">P90</th><th class="num">Max</th></tr></thead>
+      <tbody>{% for r in lr %}<tr><td>{{ r.field }}</td><td class="num">{{ r.n }}</td><td class="num">{{ num(r.min) }}</td><td class="num">{{ num(r.median) }}</td><td class="num"><strong>{{ num(r.avg) }}</strong></td><td class="num">{{ num(r.p90) }}</td><td class="num">{{ num(r.max) }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+
+  <div class="rp-cols rp-cols-2">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Description length</h2><p class="rp-sub">Tickets by words in the first message</p></div></div>
+      <div id="ch-desc-hist" class="rp-chart" style="height:240px"></div>
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Does detail speed things up?</h2><p class="rp-sub">Median time to resolve by description length</p></div></div>
+      {% if text.len_tat|select('ne', none)|list %}
+      <div id="ch-len-tat" class="rp-chart" style="height:240px"></div>
+      <details class="rp-tv"><summary>Table view</summary><div class="rp-table-wrap"><table class="rp-table">
+        <thead><tr><th>Words</th><th class="num">Tickets</th><th class="num">Median to resolve</th></tr></thead>
+        <tbody>{% for l in text.desc_hist_labels %}<tr><td>{{ l }}</td><td class="num">{{ text.desc_hist[loop.index0] }}</td><td class="num">{{ dur(text.len_tat[loop.index0]) }}</td></tr>{% endfor %}</tbody>
+      </table></div></details>
+      {% else %}{{ empty('None of these tickets are resolved yet.') }}{% endif %}
+    </div>
+  </div>
+
+  <div class="rp-cols rp-cols-3">
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Urgent language</h2><p class="rp-sub">“urgent”, “asap”, “system down”, “bloqué”…</p></div></div>
+      <p class="rp-big">{{ text.urgency.count }} <span class="rp-sub" style="font-size:.8rem">tickets · {{ pct(text.urgency.share) }}</span></p>
+      <div style="margin:.5rem 0 .75rem">{% for w, n in text.urgency.terms %}<span class="rp-kw">{{ w }}<em>{{ n }}</em></span>{% endfor %}</div>
+      <div class="rp-callout">Median time to resolve: <strong>{{ dur(text.urgency.tat_with) }}</strong> with urgent wording vs <strong>{{ dur(text.urgency.tat_without) }}</strong> without.</div>
+      {% if text.urgency.underprioritized_n %}
+      <p class="rp-note" style="margin:.9rem 0 .35rem"><strong style="color:#0f172a">{{ text.urgency.underprioritized_n }} possibly under-prioritised</strong> — urgent wording but Low/Medium priority:</p>
+      <div>{% for t in text.urgency.underprioritized %}<a class="rp-kw" style="text-decoration:none" href="{{ url_for('agent.ticket_detail', ref=t.ref) }}">{{ t.ref }}</a>{% endfor %}</div>
+      {% endif %}
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Frustration signals</h2><p class="rp-sub">“still”, “again”, “no response”, “any update”, “relance”…</p></div></div>
+      <p class="rp-big">{{ text.frustration.count }} <span class="rp-sub" style="font-size:.8rem">tickets · {{ pct(text.frustration.share) }} of tickets with customer text</span></p>
+      <div style="margin:.5rem 0 .75rem">{% for w, n in text.frustration.terms %}<span class="rp-kw">{{ w }}<em>{{ n }}</em></span>{% endfor %}</div>
+      <p class="rp-note">Scans the description and every customer follow-up. A keyword signal, not a verdict — open a few tickets before drawing conclusions.</p>
+    </div>
+    <div class="rp-card">
+      <div class="rp-card-head"><div><h2>Language &amp; error codes</h2><p class="rp-sub">Detected per ticket</p></div></div>
+      {% if text.languages %}
+      {% set ltop = text.languages[0].value %}
+      <ul class="rp-rank" style="margin-bottom:1rem">{% for l in text.languages %}<li><span>{{ l.name }}</span><span class="val">{{ l.value }} · {{ (l.value / text.analysed * 100)|round|int }}%</span><div class="bar"><span style="width:{{ (l.value / ltop * 100)|round(1) }}%"></span></div></li>{% endfor %}</ul>
+      {% endif %}
+      <h2>Error codes &amp; exceptions</h2>
+      <div style="margin-top:.5rem">{% for c, n in text.codes %}<span class="rp-kw" style="font-family:ui-monospace,Consolas,monospace">{{ c }}<em>{{ n }}</em></span>{% else %}<span class="rp-note">None detected (ORA-…, HTTP 500, …Exception, error 1234).</span>{% endfor %}</div>
+    </div>
+  </div>
+  {% else %}
+  <div class="rp-card">{{ empty('No tickets created in this range to analyse.') }}</div>
+  {% endif %}
+</section>
+
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-const PALETTE = ['#1B4F8A','#0EA5A0','#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#EC4899'];
+(function () {
+  const D = {
+    labels: {{ ov.labels|tojson }},
+    created: {{ ov.created_series|tojson }},
+    resolved: {{ ov.resolved_series|tojson }},
+    closed: {{ ov.closed_series|tojson }},
+    tat: {{ ov.tat_series|tojson }},
+    frt: {{ ov.frt_series|tojson }},
+    tatHist: {{ ov.tat_hist|tojson }}, tatHistLabels: {{ ov.tat_hist_labels|tojson }},
+    heat: {{ ov.heatmap|tojson }}, heatMax: {{ ov.heat_max|tojson }},
+    backlogAge: {{ ov.backlog_age|tojson }}, backlogAgeLabels: {{ ov.backlog_age_labels|tojson }},
+    agents: {{ agents|tojson }},
+    outcomes: {{ outcomes|tojson }}, outcomeColors: {{ outcome_colors|tojson }},
+    acceptHist: {{ acc.accept_hist|tojson }}, rejectHist: {{ acc.reject_hist|tojson }}, respLabels: {{ acc.hist_labels|tojson }},
+    csat: {{ cust.csat_dist|tojson }},
+    keywords: {{ text.keywords|tojson }},
+    cloud: {{ text.cloud|tojson }},
+    descHist: {{ text.desc_hist|tojson }}, descLabels: {{ text.desc_hist_labels|tojson }},
+    lenTat: {{ text.len_tat|tojson }},
+  };
 
-// ── Volume line chart ────────────────────────────────────────────────────────
-const volumeChart = echarts.init(document.getElementById('chart-volume'));
-volumeChart.setOption({
-  tooltip: { trigger: 'axis' },
-  grid: { left: 40, right: 16, top: 12, bottom: 32 },
-  xAxis: {
-    type: 'category',
-    data: {{ chart_dates | tojson }},
-    axisLabel: { fontSize: 10, rotate: {{ '45' if days == 90 else '0' }} },
-    boundaryGap: false,
-  },
-  yAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
-  series: [{
-    type: 'line',
-    data: {{ chart_values | tojson }},
-    smooth: true,
-    areaStyle: { opacity: 0.12, color: '#1B4F8A' },
-    lineStyle: { color: '#1B4F8A', width: 2 },
-    itemStyle: { color: '#1B4F8A' },
-    symbol: 'circle',
-    symbolSize: 5,
-  }],
-});
+  // Chart chrome: hairline solid grid, muted axis text, thin marks.
+  const C = { ink: '#0f172a', ink2: '#475569', muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7',
+              s1: '#2a78d6', s2: '#eb6834', s3: '#1baf7a', surface: '#ffffff' };
+  const fmtH = (h) => h == null ? '—' : h < 1 ? Math.round(h * 60) + 'm' : h < 48 ? h.toFixed(1) + 'h' : (h / 24).toFixed(1) + 'd';
+  const BASE = {
+    textStyle: { fontFamily: 'Montserrat, system-ui, sans-serif', color: C.ink2 },
+    animationDuration: 350,
+    tooltip: { backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: C.ink, fontSize: 12 } },
+  };
+  const catAxis = (data, extra) => Object.assign({
+    type: 'category', data,
+    axisLine: { lineStyle: { color: C.axis } }, axisTick: { show: false },
+    axisLabel: { color: C.muted, fontSize: 10, hideOverlap: true },
+  }, extra || {});
+  const valAxis = (fmt, extra) => Object.assign({
+    type: 'value', minInterval: 1,
+    splitLine: { lineStyle: { color: C.grid, width: 1 } },
+    axisLabel: { color: C.muted, fontSize: 10, formatter: fmt },
+  }, extra || {});
+  const line = (name, data, color) => ({
+    name, type: 'line', data, smooth: false, connectNulls: true,
+    lineStyle: { width: 2, color, cap: 'round', join: 'round' },
+    itemStyle: { color, borderColor: C.surface, borderWidth: 2 },
+    // Markers only when sparse; otherwise an isolated point would draw nothing.
+    symbol: 'circle', symbolSize: 8, showSymbol: data.filter((v) => v != null && v !== 0).length <= 16,
+  });
+  const legend = (extra) => Object.assign({ top: 0, left: 0, icon: 'roundRect', itemWidth: 14, itemHeight: 3, itemGap: 18,
+                                            textStyle: { color: C.ink2, fontSize: 11 } }, extra || {});
+  const colBar = (name, data, color) => ({ name, type: 'bar', data, barMaxWidth: 24, barGap: '8%',
+                                           itemStyle: { color, borderRadius: [4, 4, 0, 0] } });
+  const BLUES = ['#f1f6fd', '#cde2fb', '#86b6ef', '#3987e5', '#1c5cab', '#0d366b'];
 
-// ── Incident Severity donut ──────────────────────────────────────────────────
-{% if incident_severity %}
-const severityChart = echarts.init(document.getElementById('chart-severity'));
-severityChart.setOption({
-  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 10 }, itemGap: 8 },
-  series: [{
-    type: 'pie',
-    radius: ['50%', '72%'],
-    center: ['50%', '44%'],
-    data: {{ incident_severity | tojson }},
-    label: { show: false },
-    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
-  }],
-});
-{% endif %}
+  // ── Registry: charts are built the first time their tab is shown ────────
+  const registry = {}, built = {}, live = [];
+  function chart(tab, id, build) {
+    (registry[tab] = registry[tab] || []).push(function () {
+      const el = document.getElementById(id);
+      if (!el || !window.echarts) return;
+      try {
+        const c = echarts.init(el);
+        c.setOption(Object.assign({}, BASE, build()));
+        live.push(c);
+      } catch (e) { el.innerHTML = '<div class="rp-empty">Chart unavailable.</div>'; }
+    });
+  }
 
-// ── Resolution Time Trend line chart ─────────────────────────────────────────
-{% if tat_weeks %}
-const tatChart = echarts.init(document.getElementById('chart-tat'));
-tatChart.setOption({
-  tooltip: { trigger: 'axis', valueFormatter: (v) => v + 'h' },
-  grid: { left: 44, right: 16, top: 12, bottom: 32 },
-  xAxis: {
-    type: 'category',
-    data: {{ tat_weeks | tojson }},
-    axisLabel: { fontSize: 10 },
-    boundaryGap: false,
-  },
-  yAxis: { type: 'value', axisLabel: { fontSize: 10, formatter: '{value}h' } },
-  series: [{
-    type: 'line',
-    data: {{ tat_values | tojson }},
-    smooth: true,
-    areaStyle: { opacity: 0.1, color: '#0EA5A0' },
-    lineStyle: { color: '#0EA5A0', width: 2 },
-    itemStyle: { color: '#0EA5A0' },
-    symbol: 'circle',
-    symbolSize: 5,
-  }],
-});
-{% endif %}
+  // Overview
+  chart('overview', 'ch-flow', () => ({
+    legend: legend(),
+    grid: { left: 36, right: 12, top: 32, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'line', lineStyle: { color: C.axis } } }),
+    xAxis: catAxis(D.labels, { boundaryGap: false }),
+    yAxis: valAxis(),
+    series: [line('Created', D.created, C.s1), line('Resolved', D.resolved, C.s2), line('Closed', D.closed, C.s3)],
+  }));
+  chart('overview', 'ch-tat-trend', () => ({
+    legend: legend(),
+    grid: { left: 44, right: 12, top: 32, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', valueFormatter: fmtH }),
+    xAxis: catAxis(D.labels, { boundaryGap: false }),
+    yAxis: valAxis((v) => fmtH(v), { minInterval: 0 }),
+    series: [line('Median time to resolve', D.tat, C.s1), line('Median first response', D.frt, C.s2)],
+  }));
+  chart('overview', 'ch-tat-hist', () => ({
+    grid: { left: 36, right: 12, top: 16, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+    xAxis: catAxis(D.tatHistLabels),
+    yAxis: valAxis(),
+    series: [Object.assign(colBar('Tickets', D.tatHist, C.s1), { label: { show: true, position: 'top', color: C.ink2, fontSize: 10, formatter: (p) => p.value || '' } })],
+  }));
+  chart('overview', 'ch-heat', () => ({
+    grid: { left: 40, right: 12, top: 8, bottom: 56 },
+    tooltip: Object.assign({}, BASE.tooltip, {
+      formatter: (p) => ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][p.value[1]] + ' ' + String(p.value[0]).padStart(2, '0') + ':00 — <b>' + p.value[2] + '</b> ticket' + (p.value[2] === 1 ? '' : 's'),
+    }),
+    xAxis: catAxis(Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0')), { splitArea: { show: false } }),
+    yAxis: catAxis(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'], { inverse: true, axisLine: { show: false } }),
+    visualMap: { min: 0, max: Math.max(1, D.heatMax), calculable: false, orient: 'horizontal', left: 'center', bottom: 0,
+                 itemHeight: 140, itemWidth: 10, textStyle: { color: C.muted, fontSize: 10 }, inRange: { color: BLUES } },
+    series: [{ type: 'heatmap', data: D.heat, itemStyle: { borderColor: C.surface, borderWidth: 2, borderRadius: 2 },
+               emphasis: { itemStyle: { borderColor: C.ink, borderWidth: 1 } } }],
+  }));
+  chart('overview', 'ch-backlog', () => ({
+    grid: { left: 36, right: 12, top: 16, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+    xAxis: catAxis(D.backlogAgeLabels),
+    yAxis: valAxis(),
+    series: [Object.assign(colBar('Open tickets', D.backlogAge, C.s1), { label: { show: true, position: 'top', color: C.ink2, fontSize: 10, formatter: (p) => p.value || '' } })],
+  }));
 
-// ── Status donut chart ───────────────────────────────────────────────────────
-const statusChart = echarts.init(document.getElementById('chart-status'));
-statusChart.setOption({
-  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 10 }, itemGap: 8 },
-  color: PALETTE,
-  series: [{
-    type: 'pie',
-    radius: ['50%', '72%'],
-    center: ['50%', '44%'],
-    data: {{ status_data | tojson }},
-    label: { show: false },
-    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
-  }],
-});
+  // Agents
+  chart('agents', 'ch-agent-tat', () => {
+    const rows = D.agents.filter((a) => a.resolved).sort((a, b) => (b.tat.median || 0) - (a.tat.median || 0));
+    return {
+      grid: { left: 8, right: 56, top: 8, bottom: 24, containLabel: true },
+      tooltip: Object.assign({}, BASE.tooltip, {
+        trigger: 'axis', axisPointer: { type: 'shadow' },
+        formatter: (ps) => { const a = rows[ps[0].dataIndex];
+          return '<b>' + echarts.format.encodeHTML(a.name) + '</b><br>Median ' + fmtH(a.tat.median) + ' · Avg ' + fmtH(a.tat.avg) +
+                 ' · P90 ' + fmtH(a.tat.p90) + '<br>' + a.resolved + ' resolved'; },
+      }),
+      xAxis: valAxis((v) => fmtH(v), { minInterval: 0 }),
+      yAxis: catAxis(rows.map((a) => a.name), { axisLabel: { color: C.ink2, fontSize: 11 } }),
+      series: [{ type: 'bar', data: rows.map((a) => a.tat.median), barMaxWidth: 20,
+                 itemStyle: { color: C.s1, borderRadius: [0, 4, 4, 0] },
+                 label: { show: true, position: 'right', color: C.ink2, fontSize: 10, formatter: (p) => fmtH(p.value) } }],
+    };
+  });
+  chart('agents', 'ch-agent-outcomes', () => {
+    const rows = D.agents.filter((a) => a.resolutions).sort((a, b) => a.resolutions - b.resolutions);
+    const used = D.outcomes.filter(([k]) => rows.some((a) => a.outcomes[k]));
+    return {
+      legend: legend({ itemWidth: 10, itemHeight: 10 }),
+      grid: { left: 8, right: 16, top: 56, bottom: 24, containLabel: true },
+      tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+      xAxis: valAxis(),
+      yAxis: catAxis(rows.map((a) => a.name), { axisLabel: { color: C.ink2, fontSize: 11 } }),
+      series: used.map(([k, label]) => ({
+        name: label, type: 'bar', stack: 'o', barMaxWidth: 20,
+        data: rows.map((a) => a.outcomes[k] || 0),
+        itemStyle: { color: D.outcomeColors[k], borderColor: C.surface, borderWidth: 1 },
+      })),
+    };
+  });
 
-// ── Hospitals horizontal bar ─────────────────────────────────────────────────
-const hospChart = echarts.init(document.getElementById('chart-hospitals'));
-hospChart.setOption({
-  tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-  grid: { left: 140, right: 20, top: 12, bottom: 28 },
-  xAxis: { type: 'value', minInterval: 1, axisLabel: { fontSize: 10 } },
-  yAxis: {
-    type: 'category',
-    data: {{ hosp_names | tojson }},
-    axisLabel: { fontSize: 10 },
-    inverse: false,
-  },
-  series: [{
-    type: 'bar',
-    data: {{ hosp_values | tojson }},
-    itemStyle: { color: '#0EA5A0', borderRadius: [0, 4, 4, 0] },
-    barMaxWidth: 24,
-  }],
-});
+  // Acceptance
+  chart('acceptance', 'ch-response', () => ({
+    legend: legend({ itemWidth: 10, itemHeight: 10 }),
+    grid: { left: 36, right: 12, top: 32, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+    xAxis: catAxis(D.respLabels),
+    yAxis: valAxis(),
+    series: [colBar('Accepted', D.acceptHist, D.outcomeColors.accepted), colBar('Rejected', D.rejectHist, D.outcomeColors.rejected)],
+  }));
 
-// ── Source pie chart ─────────────────────────────────────────────────────────
-const sourceChart = echarts.init(document.getElementById('chart-source'));
-sourceChart.setOption({
-  tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 10 } },
-  color: ['#1B4F8A', '#0EA5A0', '#3B82F6', '#F59E0B'],
-  series: [{
-    type: 'pie',
-    radius: ['50%', '72%'],
-    center: ['50%', '44%'],
-    data: {{ source_data | tojson }},
-    label: { show: false },
-    emphasis: { label: { show: true, fontSize: 12, fontWeight: 'bold' } },
-  }],
-});
+  // Customers
+  chart('customers', 'ch-csat', () => ({
+    grid: { left: 36, right: 12, top: 16, bottom: 28 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+    xAxis: catAxis(['1 ★', '2 ★', '3 ★', '4 ★', '5 ★']),
+    yAxis: valAxis(),
+    series: [Object.assign(colBar('Responses', D.csat, C.s1), { label: { show: true, position: 'top', color: C.ink2, fontSize: 10, formatter: (p) => p.value || '' } })],
+  }));
 
-// ── Resize handler ───────────────────────────────────────────────────────────
-window.addEventListener('resize', function () {
-  volumeChart.resize();
-  {% if incident_severity %}severityChart.resize();{% endif %}
-  {% if tat_weeks %}tatChart.resize();{% endif %}
-  statusChart.resize();
-  hospChart.resize();
-  sourceChart.resize();
-});
+  // Text analytics
+  chart('text', 'ch-keywords', () => {
+    const rows = D.keywords.slice().reverse();
+    return {
+      grid: { left: 16, right: 40, top: 4, bottom: 20, containLabel: true },
+      tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+      xAxis: valAxis(),
+      yAxis: catAxis(rows.map((r) => r[0]), { axisLabel: { color: C.ink2, fontSize: 11, interval: 0 } }),
+      series: [{ name: 'Tickets mentioning', type: 'bar', data: rows.map((r) => r[1]), barMaxWidth: 14,
+                 itemStyle: { color: C.s1, borderRadius: [0, 4, 4, 0] },
+                 label: { show: true, position: 'right', color: C.ink2, fontSize: 10 } }],
+    };
+  });
+  chart('text', 'ch-cloud', () => {
+    if (!window.__wordcloudReady) throw new Error('word cloud plugin not loaded');
+    const max = Math.max(1, ...D.cloud.map((w) => w.value));
+    const ramp = ['#86b6ef', '#3987e5', '#256abf', '#1c5cab', '#0d366b'];
+    return {
+      tooltip: Object.assign({}, BASE.tooltip, { formatter: (p) => echarts.format.encodeHTML(p.name) + ': <b>' + p.value + '</b> tickets' }),
+      series: [{
+        type: 'wordCloud', shape: 'circle', left: 'center', top: 'center', width: '96%', height: '96%',
+        sizeRange: [11, 40], rotationRange: [0, 0], gridSize: 6, drawOutOfBound: false, layoutAnimation: false,
+        textStyle: { fontFamily: 'Montserrat, system-ui, sans-serif', fontWeight: 600,
+                     color: (p) => ramp[Math.min(ramp.length - 1, Math.floor((p.value / max) * ramp.length))] },
+        emphasis: { textStyle: { color: C.ink } },
+        data: D.cloud,
+      }],
+    };
+  });
+  chart('text', 'ch-desc-hist', () => ({
+    grid: { left: 36, right: 12, top: 16, bottom: 40 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' } }),
+    xAxis: catAxis(D.descLabels, { name: 'words', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: C.muted, fontSize: 10 } }),
+    yAxis: valAxis(),
+    series: [Object.assign(colBar('Tickets', D.descHist, C.s1), { label: { show: true, position: 'top', color: C.ink2, fontSize: 10, formatter: (p) => p.value || '' } })],
+  }));
+  chart('text', 'ch-len-tat', () => ({
+    grid: { left: 44, right: 12, top: 16, bottom: 40 },
+    tooltip: Object.assign({}, BASE.tooltip, { trigger: 'axis', axisPointer: { type: 'shadow' }, valueFormatter: fmtH }),
+    xAxis: catAxis(D.descLabels, { name: 'words in description', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: C.muted, fontSize: 10 } }),
+    yAxis: valAxis((v) => fmtH(v), { minInterval: 0 }),
+    series: [Object.assign(colBar('Median time to resolve', D.lenTat, C.s1), { label: { show: true, position: 'top', color: C.ink2, fontSize: 10, formatter: (p) => fmtH(p.value) } })],
+  }));
+
+  // ── Tabs (state kept in the URL hash so filters and reloads keep your place) ──
+  const tabs = Array.from(document.querySelectorAll('.rp-tab'));
+  // ECharts measures label widths once; wait for Montserrat so legends don't overlap.
+  const fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
+  function show(name) {
+    if (!document.getElementById('panel-' + name)) name = 'overview';
+    tabs.forEach((t) => {
+      const on = t.dataset.tab === name;
+      t.setAttribute('aria-selected', on ? 'true' : 'false');
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById('panel-' + t.dataset.tab).hidden = !on;
+    });
+    fontsReady.then(() => {
+      if (!built[name]) {
+        built[name] = true;
+        (registry[name] || []).forEach((fn) => fn());
+      }
+      live.forEach((c) => c.resize());
+    });
+    if (location.hash.slice(1) !== name) history.replaceState(null, '', '#' + name);
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => show(t.dataset.tab));
+    t.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return;
+      const next = tabs[(i + (e.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+      next.focus(); show(next.dataset.tab);
+    });
+  });
+  show(location.hash.slice(1) || 'overview');
+  window.addEventListener('resize', () => live.forEach((c) => c.resize()));
+
+  // ── Filter form ─────────────────────────────────────────────────────────
+  const form = document.getElementById('rp-form');
+  // Editing a date switches to a custom range (the inputs only submit once touched).
+  ['rp-start', 'rp-end'].forEach((id) => {
+    document.getElementById(id).addEventListener('change', () => {
+      ['rp-start', 'rp-end'].forEach((x) => { const el = document.getElementById(x); el.name = el.dataset.name; });
+      const r = document.getElementById('rp-range'); if (r) r.remove();
+    });
+  });
+  form.querySelectorAll('[data-autosubmit]').forEach((el) => el.addEventListener('change', () => form.requestSubmit()));
+  form.addEventListener('submit', () => { form.action = location.pathname + location.hash; });
+  document.querySelectorAll('a[data-keep-hash]').forEach((a) => a.addEventListener('click', () => {
+    a.href = a.href.split('#')[0] + location.hash;
+  }));
+  // Close the export menu when clicking elsewhere.
+  document.addEventListener('click', (e) => {
+    const m = document.querySelector('.rp-export');
+    if (m && m.open && !m.contains(e.target)) m.open = false;
+  });
+})();
 </script>
 {% endblock %}

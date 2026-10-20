@@ -256,7 +256,7 @@ def _create_ticket(sender_email, sender_name, subject, body, conversation_id, db
 
 
 def _append_reply(ticket, sender_email, sender_name, body, db):
-    from app.models.ticket import Ticket, TicketMessage
+    from app.models.ticket import Ticket, TicketMessage, TicketHistory
     from app.models.user import User
 
     sender_user = User.query.filter_by(email=sender_email).first()
@@ -271,8 +271,16 @@ def _append_reply(ticket, sender_email, sender_name, body, db):
     db.session.add(msg)
 
     if ticket.status in ("resolved", "awaiting_info", "closed"):
+        old_status = ticket.status
         ticket.status = "in_progress"
         ticket.closed_at = None
+        db.session.add(TicketHistory(
+            ticket_id=ticket.id,
+            changed_by=sender_user.id if sender_user else None,
+            action="status_change",
+            old_value=old_status,
+            new_value="in_progress",
+        ))
 
     ticket.updated_at = datetime.utcnow()
 
