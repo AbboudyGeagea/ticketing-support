@@ -9,11 +9,20 @@
 } %}
 {% set PM_LABEL = {'normal': 'Normal', 'attention': 'Needs attention', 'alert': 'Alert', 'na': 'N/A'} %}
 {% set STATE_STYLE = {
-  'done':        ('#dcfce7', '#166534', 'Done this month'),
+  'done':        ('#dcfce7', '#166534', 'Up to date'),
   'in_progress': ('#dbeafe', '#1e40af', 'In progress'),
-  'due':         ('#f1f5f9', '#475569', 'Due'),
+  'due':         ('#fef3c7', '#92400e', 'Due soon'),
   'overdue':     ('#fee2e2', '#b91c1c', 'Overdue'),
 } %}
+
+{# "never done" / "12 days overdue" / "due today" / "in 5 days" for an overview row. #}
+{% macro due_text(row) -%}
+{%- if row.days_left is none -%}never done
+{%- elif row.days_left < 0 -%}{{ row.days_left|abs }} day{{ '' if row.days_left == -1 else 's' }} overdue
+{%- elif row.days_left == 0 -%}due today
+{%- else -%}in {{ row.days_left }} day{{ '' if row.days_left == 1 else 's' }}
+{%- endif -%}
+{%- endmacro %}
 
 {% macro status_badge(status) -%}
 {%- set s = PM_STYLE.get(status) -%}

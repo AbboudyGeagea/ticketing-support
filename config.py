@@ -32,8 +32,10 @@ class Config:
 
     EMAIL_POLL_INTERVAL_SECONDS = int(os.environ.get("EMAIL_POLL_INTERVAL_SECONDS", 60))
 
-    # Preventive maintenance: day of the month responsible agents get a reminder
-    PM_REMINDER_DAY = int(os.environ.get("PM_REMINDER_DAY", 20))
+    # Preventive maintenance: each hospital is due PM_INTERVAL_DAYS after its last
+    # submitted checkup; agents get a heads-up PM_WARN_DAYS before, then daily once due
+    PM_INTERVAL_DAYS = int(os.environ.get("PM_INTERVAL_DAYS", 40))
+    PM_WARN_DAYS = int(os.environ.get("PM_WARN_DAYS", 7))
 
     # All timestamps are stored in UTC; this is the timezone used to display them.
     LOCAL_TZ_NAME = os.environ.get("LOCAL_TZ_NAME", "Asia/Beirut")

@@ -38,7 +38,7 @@ def make_celery(app):
             },
             "pm-reminders": {
                 "task": "app.tasks.pm_tasks.send_pm_reminders",
-                "schedule": crontab(hour=5, minute=0),  # 05:00 UTC daily; acts only on PM_REMINDER_DAY
+                "schedule": crontab(hour=5, minute=0),  # 05:00 UTC daily; 40-day PM alerts
             },
         },
     )

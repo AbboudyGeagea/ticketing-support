@@ -460,14 +460,24 @@ def notify_agents_pm_alert(checkup, alerts):
         )
 
 
-def send_pm_reminder(owner, rows, month_label):
-    """Remind a hospital's responsible agent which PM checkups are still due this month."""
-    if not owner.email:
+def send_pm_alert(agent, rows):
+    """Daily PM digest for one agent: hospitals whose PM is overdue, due today
+    or due soon (pm_service.alert_rows), the ones they're responsible for first."""
+    from app.services.pm_service import interval_days, warn_days
+    if not agent.email:
         return
-    html = _render("pm_reminder.html", owner=owner, rows=rows, month_label=month_label,
-                   pm_url=f"{_base_url()}/pm/")
+    mine = [r for r in rows if r.owner and r.owner.id == agent.id]
+    others = [r for r in rows if not (r.owner and r.owner.id == agent.id)]
+    warn = warn_days()
+    parts = []
+    for kind, label in (("overdue", "overdue"), ("due_today", "due today"), ("heads_up", f"due in {warn} days")):
+        n = sum(1 for r in rows if r.alert == kind)
+        if n:
+            parts.append(f"{n} {label}")
+    html = _render("pm_reminder.html", agent=agent, mine=mine, others=others,
+                   interval_days=interval_days(), warn_days=warn, pm_url=f"{_base_url()}/pm/")
     if html:
-        _send([owner.email], f"[PM] {len(rows)} checkup(s) still due for {month_label}", html=html)
+        _send([agent.email], f"[PM] {' · '.join(parts)}", html=html)
 
 
 def notify_all_agents_activity(ticket, event, actor_name=None, message=None):

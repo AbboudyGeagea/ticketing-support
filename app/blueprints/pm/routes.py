@@ -5,7 +5,7 @@ from functools import wraps
 
 from flask import (
     render_template, redirect, url_for, flash, request, abort, send_file,
-    send_from_directory, jsonify,
+    send_from_directory, jsonify, has_request_context, current_app,
 )
 from flask_login import login_required, current_user
 from sqlalchemy import func
@@ -54,6 +54,17 @@ def _parse_date(value):
         return None
 
 
+@bp.app_context_processor
+def inject_pm_alerts():
+    """PM due counts for the nav-bar badge on agent pages."""
+    if has_request_context() and current_user.is_authenticated and current_user.is_agent:
+        try:
+            return {"pm_alerts": pm_service.alert_summary()}
+        except Exception:
+            current_app.logger.exception("PM alert summary failed")
+    return {"pm_alerts": None}
+
+
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 @bp.route("/")
@@ -62,6 +73,10 @@ def _parse_date(value):
 def overview():
     today = pm_service.local_today()
     rows, skipped = pm_service.overview(today)
+    rows = pm_service.by_urgency(rows)
+    warn = pm_service.warn_days()
+    due_now = [r for r in rows if r.days_left is None or r.days_left <= 0]
+    due_soon = [r for r in rows if r.days_left is not None and 0 < r.days_left <= warn]
     state_counts = {}
     for row in rows:
         state_counts[row.state] = state_counts.get(row.state, 0) + 1
@@ -91,6 +106,8 @@ def overview():
         "pm/overview.html", rows=shown, all_count=len(rows), state_counts=state_counts,
         state_filter=state_filter, skipped=skipped, open_counts=open_counts,
         recent=recent, agents=_agents(), today=today,
+        due_now=due_now, due_soon=due_soon,
+        interval_days=pm_service.interval_days(), warn_days=warn,
     )
 
 

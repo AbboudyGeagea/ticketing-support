@@ -19,7 +19,7 @@
         <option value="">— Choose —</option>
         {% for row in rows %}
         <option value="{{ row.hospital.id }}" {% if selected_id == row.hospital.id %}selected{% endif %}>
-          {{ row.hospital.name }}{% if row.draft %} — draft in progress{% elif row.state == 'done' %} — done this month{% endif %}
+          {{ row.hospital.name }}{% if row.draft %} — draft in progress{% elif row.state == 'done' %} — up to date{% elif row.state == 'overdue' %} — overdue{% endif %}
         </option>
         {% endfor %}
       </select>

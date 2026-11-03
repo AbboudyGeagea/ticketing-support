@@ -1,8 +1,9 @@
-"""Preventive maintenance (PM) logic shared by the PM blueprint, the agent
-dashboard and the reminder task."""
+"""Preventive maintenance (PM) logic shared by the PM blueprint, the nav-bar
+alert badge and the daily alert task."""
 import io
 import logging
 from datetime import date, datetime, time, timedelta
+from time import monotonic
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -25,6 +26,20 @@ STATE_IN_PROGRESS = "in_progress"
 STATE_DUE = "due"
 STATE_OVERDUE = "overdue"
 
+ALERT_OVERDUE = "overdue"
+ALERT_DUE_TODAY = "due_today"
+ALERT_HEADS_UP = "heads_up"
+
+
+def interval_days() -> int:
+    """A hospital's PM is due this many days after its last submitted checkup."""
+    return current_app.config.get("PM_INTERVAL_DAYS", 40)
+
+
+def warn_days() -> int:
+    """How many days before the due date the heads-up goes out."""
+    return current_app.config.get("PM_WARN_DAYS", 7)
+
 
 # ── Dates ─────────────────────────────────────────────────────────────────────
 
@@ -37,14 +52,6 @@ def _local_tz():
 
 def local_today() -> date:
     return datetime.now(_local_tz()).date()
-
-
-def month_start(d: date) -> date:
-    return d.replace(day=1)
-
-
-def prev_month_start(d: date) -> date:
-    return (d.replace(day=1) - timedelta(days=1)).replace(day=1)
 
 
 def local_end_of_day_utc(d: date) -> datetime:
@@ -172,11 +179,14 @@ def flagged_streaks(results):
 # ── Overview ──────────────────────────────────────────────────────────────────
 
 def overview(today):
-    """Per-hospital PM state for the month containing `today`.
+    """Per-hospital PM state as of `today`, ordered by hospital name.
 
-    Returns (rows, hospitals_without_checks). A hospital is "done" once a
-    checkup dated this month is submitted, "overdue" when it also missed last
-    month, and only appears at all if one of its products has active checks.
+    Returns (rows, hospitals_without_checks). A hospital's PM is due
+    interval_days() after its last submitted checkup. It is "done" until the
+    last warn_days() before that, then "due" ("in_progress" with a draft), and
+    "overdue" once the due date has passed — or straight away if it has never
+    had a submitted checkup. Only hospitals with a product that has active
+    checks appear at all.
     """
     catalog = _active_catalog()
     pm_product_ids = {p.id for c in catalog for p in c.products}
@@ -200,7 +210,7 @@ def overview(today):
     for d in PMCheckup.query.filter_by(status=CHECKUP_DRAFT).order_by(PMCheckup.updated_at.desc()).all():
         drafts.setdefault(d.hospital_id, d)
 
-    this_month, last_month = month_start(today), prev_month_start(today)
+    interval, warn = interval_days(), warn_days()
     rows, skipped = [], 0
     for h in hospitals:
         products = sorted(
@@ -211,19 +221,27 @@ def overview(today):
             skipped += 1
             continue
         last = last_submitted.get(h.id)
-        if last and last >= this_month:
+        due_date = last + timedelta(days=interval) if last else None
+        days_left = (due_date - today).days if due_date else None
+        if days_left is None or days_left < 0:
+            state = STATE_OVERDUE
+        elif days_left > warn:
             state = STATE_DONE
         elif h.id in drafts:
             state = STATE_IN_PROGRESS
-        elif last and last < last_month:
-            state = STATE_OVERDUE
         else:
             state = STATE_DUE
         rows.append(SimpleNamespace(
             hospital=h, products=products, owner=owners.get(h.id),
-            last_date=last, draft=drafts.get(h.id), state=state,
+            last_date=last, due_date=due_date, days_left=days_left,
+            draft=drafts.get(h.id), state=state,
         ))
     return rows, skipped
+
+
+def by_urgency(rows):
+    """Never-done hospitals first, then the most overdue, then the next due."""
+    return sorted(rows, key=lambda r: (r.days_left is not None, r.days_left or 0, r.hospital.name.lower()))
 
 
 def set_owner(hospital_id, owner_id):
@@ -276,7 +294,8 @@ def submit_checkup(checkup):
     checkup.status = CHECKUP_SUBMITTED
     checkup.submitted_at = datetime.utcnow()
     db.session.commit()
-    alerts = [r for r in checkup.results if r.status == PM_ALERT]
+    clear_alert_cache()
+    alerts =[r for r in checkup.results if r.status == PM_ALERT]
     if alerts:
         try:
             from app.services.email_outbound import notify_agents_pm_alert
@@ -345,17 +364,52 @@ def resolve_findings_for_task(task, user):
     return len(rows)
 
 
-# ── Reminders ─────────────────────────────────────────────────────────────────
+# ── Alerts ────────────────────────────────────────────────────────────────────
 
-def due_by_owner(today):
-    """{owner: [overview rows not yet done this month]} for hospitals with an active owner."""
+def alert_kind(row):
+    """The alert `row` triggers today, if any: a heads-up exactly warn_days()
+    before the due date, one on the due date, then one every day while overdue."""
+    if row.days_left is None or row.days_left < 0:
+        return ALERT_OVERDUE
+    if row.days_left == 0:
+        return ALERT_DUE_TODAY
+    if row.days_left == warn_days():
+        return ALERT_HEADS_UP
+    return None
+
+
+def alert_rows(today):
+    """Overview rows that alert today, most urgent first, each with `.alert` set."""
     rows, _ = overview(today)
-    out = {}
-    for row in rows:
-        owner = row.owner
-        if row.state != STATE_DONE and owner and owner.active and owner.email:
-            out.setdefault(owner, []).append(row)
+    out = []
+    for row in by_urgency(rows):
+        row.alert = alert_kind(row)
+        if row.alert:
+            out.append(row)
     return out
+
+
+_alert_cache = {"data": None, "ts": 0.0}
+
+
+def alert_summary():
+    """{"now": hospitals overdue or due today, "soon": due within warn_days()}.
+    The nav bar shows this on every agent page, so it is cached for a minute."""
+    ts = monotonic()
+    if _alert_cache["data"] is not None and ts - _alert_cache["ts"] < 60.0:
+        return _alert_cache["data"]
+    rows, _ = overview(local_today())
+    warn = warn_days()
+    data = {
+        "now": sum(1 for r in rows if r.days_left is None or r.days_left <= 0),
+        "soon": sum(1 for r in rows if r.days_left is not None and 0 < r.days_left <= warn),
+    }
+    _alert_cache.update(data=data, ts=ts)
+    return data
+
+
+def clear_alert_cache():
+    _alert_cache["data"] = None
 
 
 # ── Excel ─────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 {% extends 'base_agent.html' %}
-{% from 'pm/_macros.html' import pm_styles, state_badge with context %}
+{% from 'pm/_macros.html' import pm_styles, state_badge, due_text with context %}
 {% block title %}Preventive Maintenance{% endblock %}
 {% block page_title %}Preventive Maintenance{% endblock %}
 {% block head_extra %}{{ pm_styles() }}{% endblock %}
@@ -10,6 +10,30 @@
 {% endblock %}
 
 {% block content %}
+
+<!-- 40-day alerts -->
+{% if due_now or due_soon %}
+<div style="display:flex; flex-direction:column; gap:0.75rem; margin-bottom:1.25rem;">
+  {% if due_now %}
+  <div class="rounded-xl" style="padding:1rem 1.25rem; background:#fef2f2; border:1px solid #fecaca;" role="alert">
+    <p class="text-sm font-semibold" style="color:#991b1b;">
+      {{ due_now|length }} hospital{{ '' if due_now|length == 1 else 's' }} need{{ 's' if due_now|length == 1 else '' }} a PM checkup now
+    </p>
+    <p class="text-xs mt-1" style="color:#7f1d1d;">
+      {% for row in due_now %}<strong>{{ row.hospital.name }}</strong> ({{ due_text(row) }}){% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+  </div>
+  {% endif %}
+  {% if due_soon %}
+  <div class="rounded-xl" style="padding:0.75rem 1.25rem; background:#fffbeb; border:1px solid #fde68a;">
+    <p class="text-xs" style="color:#92400e;">
+      <strong>Due within {{ warn_days }} days:</strong>
+      {% for row in due_soon %}{{ row.hospital.name }} ({{ due_text(row) }}){% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
 
 <!-- Open findings -->
 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
@@ -42,13 +66,16 @@
   </a>
 </div>
 
-<!-- This month -->
+<!-- Schedule -->
 <div class="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
   <div class="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-    <h2 class="text-sm font-semibold text-slate-800">{{ today.strftime('%B %Y') }}</h2>
+    <div>
+      <h2 class="text-sm font-semibold text-slate-800">PM schedule</h2>
+      <p class="text-xs text-slate-500 mt-0.5">Due every {{ interval_days }} days after the last submitted checkup</p>
+    </div>
     <div class="flex flex-wrap gap-2">
       <a href="{{ url_for('pm.overview') }}" class="pm-chip {% if not state_filter %}is-active{% endif %}">All · {{ all_count }}</a>
-      {% for key, label in [('overdue', 'Overdue'), ('due', 'Due'), ('in_progress', 'In progress'), ('done', 'Done')] %}
+      {% for key, label in [('overdue', 'Overdue'), ('due', 'Due soon'), ('in_progress', 'In progress'), ('done', 'Up to date')] %}
       <a href="{{ url_for('pm.overview', state=key) }}" class="pm-chip {% if state_filter == key %}is-active{% endif %}">{{ label }} · {{ state_counts.get(key, 0) }}</a>
       {% endfor %}
     </div>
@@ -63,6 +90,7 @@
         <th>Products checked</th>
         <th>Responsible</th>
         <th>Last checkup</th>
+        <th>Next due</th>
         <th>Status</th>
         <th></th>
       </tr>
@@ -88,6 +116,10 @@
         </td>
         <td class="text-xs text-slate-600 whitespace-nowrap">
           {% if row.last_date %}{{ row.last_date.strftime('%d %b %Y') }}{% else %}<span class="text-slate-400">Never</span>{% endif %}
+        </td>
+        <td class="text-xs whitespace-nowrap">
+          {% if row.due_date %}<span class="text-slate-600">{{ row.due_date.strftime('%d %b %Y') }}</span><br>{% endif %}
+          <span style="font-weight:600; color:{% if row.days_left is none or row.days_left <= 0 %}#b91c1c{% elif row.days_left <= warn_days %}#b45309{% else %}#64748b{% endif %};">{{ due_text(row) }}</span>
         </td>
         <td>{{ state_badge(row.state) }}</td>
         <td class="text-right whitespace-nowrap">

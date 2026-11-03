@@ -74,8 +74,9 @@
          class="nav-link {% if request.endpoint and 'agent.task' in request.endpoint %}active{% endif %}">Tasks</a>
       <a href="{{ url_for('projects.list_projects') }}"
          class="nav-link {% if request.endpoint and 'projects.' in request.endpoint %}active{% endif %}">Projects</a>
-      <a href="{{ url_for('pm.overview') }}" title="Preventive maintenance"
-         class="nav-link {% if request.endpoint and request.endpoint.startswith('pm.') and not request.endpoint.startswith('pm.catalog') %}active{% endif %}">PM</a>
+      <a href="{{ url_for('pm.overview') }}"
+         title="Preventive maintenance{% if pm_alerts and pm_alerts.now %} — {{ pm_alerts.now }} hospital{{ '' if pm_alerts.now == 1 else 's' }} overdue or due today{% endif %}"
+         class="nav-link {% if request.endpoint and request.endpoint.startswith('pm.') and not request.endpoint.startswith('pm.catalog') %}active{% endif %}">PM{% if pm_alerts and pm_alerts.now %}<span style="margin-left:0.35rem; min-width:1.1rem; padding:0 0.35rem; border-radius:9999px; background:#dc2626; color:#fff; font-size:0.65rem; font-weight:700; line-height:1.1rem; text-align:center;">{{ pm_alerts.now }}</span>{% endif %}</a>
       <a href="{{ url_for('agent.kb_list') }}"
          class="nav-link {% if request.endpoint and 'agent.kb' in request.endpoint %}active{% endif %}">Knowledge Base</a>
       <a href="{{ url_for('reports.dashboard') }}"

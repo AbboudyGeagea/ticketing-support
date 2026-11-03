@@ -1,4 +1,5 @@
-"""Preventive maintenance (PM): monthly server checkups per hospital.
+"""Preventive maintenance (PM): server checkups per hospital, due every
+PM_INTERVAL_DAYS (40) days after the last submitted one.
 
 PMCheck / PMCheckField are the admin-managed catalog. A PMCheckup is one visit
 to a hospital; it gets one PMResult per (check, product) the hospital has, and
