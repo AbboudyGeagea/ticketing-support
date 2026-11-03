@@ -1411,12 +1411,12 @@ def ticket_add_collaborator(ref):
         from app.services.email_outbound import notify_collaborator_added
         notify_collaborator_added(ticket, collab)
     except Exception:
-        logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
+        current_app.logger.exception("Failed to notify collaborator %s on ticket %s", email, ref)
     try:
         from app.services.email_outbound import notify_all_agents_activity
         notify_all_agents_activity(ticket, f"Collaborator Added: {email}", actor_name=current_user.name)
     except Exception:
-        logger.exception("notify_all_agents_activity failed for %s", ref)
+        current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
     flash(f"{email} added as a {collab_type} collaborator.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
@@ -1460,7 +1460,7 @@ def ticket_phi_flag(ref):
         from app.services.email_outbound import notify_customer_phi_flagged
         notify_customer_phi_flagged(ticket)
     except Exception:
-        logger.exception("Failed to send PHI violation notice for ticket %s", ticket.ref)
+        current_app.logger.exception("Failed to send PHI violation notice for ticket %s", ticket.ref)
     flash(f"Ticket {ticket.ref} has been flagged as PHI and archived. It is no longer accessible.", "success")
     return redirect(url_for("agent.tickets"))
 
