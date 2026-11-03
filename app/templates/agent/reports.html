@@ -227,7 +227,9 @@
     {{ tile('Resolved', kpis.resolved, sub=kpis.closed ~ ' closed', d=deltas.get('resolved'), better='up',
             hint='Tickets whose first resolution (or close, if never resolved) falls in this range') }}
     {{ tile('Median time to resolve', dur(kpis.median_tat), sub='avg ' ~ dur(kpis.avg_tat), d=deltas.get('median_tat'), better='down',
-            hint='Created → first marked resolved (or closed). Calendar time.') }}
+            hint='Our time: created → first marked resolved (or closed). Calendar time. The clock stops at Resolved — the customer delay after that is not counted.') }}
+    {{ tile('Customer delay after resolved', dur(kpis.median_delay), sub='median · total ' ~ dur(kpis.total_delay), d=deltas.get('median_delay'), better='down',
+            hint="How long tickets sat in Resolved waiting on the customer to accept, reject or let it auto-close — for resolutions set in range. This is the customer's delay, not ours.") }}
     {{ tile('Median first response', dur(kpis.median_frt), d=deltas.get('median_frt'), better='down',
             hint='Created → first public reply from an agent, for tickets created in range') }}
     {{ tile('Acceptance rate', pct(kpis.acceptance_rate), d=deltas.get('acceptance_rate'), better='up',
@@ -355,7 +357,7 @@
 
   <div class="rp-card" style="padding:0">
     <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Agent scorecard</h2>
-      <p class="rp-sub">TAT = turnaround time (calendar). FRT = first response time. Acceptance = accepted ÷ (accepted + rejected).</p></div></div>
+      <p class="rp-sub">TAT = turnaround time (calendar), created → marked resolved; the customer's delay afterwards is not counted. FRT = first response time. Acceptance = accepted ÷ (accepted + rejected).</p></div></div>
     <div class="rp-table-wrap" style="margin-top:.75rem">
       <table class="rp-table">
         <thead>
@@ -363,7 +365,7 @@
             <th class="sticky"></th>
             <th class="grp" colspan="3">Workload</th>
             <th class="grp" colspan="4">Speed</th>
-            <th class="grp" colspan="6">Customer verdict on resolutions</th>
+            <th class="grp" colspan="7">Customer verdict on resolutions</th>
             <th class="grp" colspan="4">Activity</th>
             <th class="grp" colspan="2">Quality</th>
           </tr>
@@ -382,10 +384,11 @@
             <th class="num">Acceptance</th>
             <th class="num" title="Median time for the customer to accept">To accept</th>
             <th class="num" title="Median time for the customer to reject / reopen">To reject</th>
+            <th class="num" title="Median time this agent's resolutions waited in Resolved on the customer — not counted in TAT">Cust. delay</th>
             <th class="num gl">Replies</th>
             <th class="num">Notes</th>
             <th class="num" title="Average words per public reply">Words/reply</th>
-            <th class="num" title="From the Time Report, logged in range">Hours</th>
+            <th class="num" title="Time logged on tasks in range">Hours</th>
             <th class="num gl">CSAT</th>
             <th class="num" title="Tickets created in range, assigned to agent, flagged SLA-breached">SLA breached</th>
           </tr>
@@ -407,6 +410,7 @@
             <td class="num">{{ pct(a.acceptance_rate) }}</td>
             <td class="num">{{ dur(a.accept_median) }}</td>
             <td class="num">{{ dur(a.reject_median) }}</td>
+            <td class="num">{{ dur(a.delay_median) }}</td>
             <td class="num gl">{{ a.replies }}</td>
             <td class="num">{{ a.notes }}</td>
             <td class="num">{{ num(a.avg_reply_words) }}</td>
@@ -415,7 +419,7 @@
             <td class="num">{{ a.sla_breached }}</td>
           </tr>
         {% else %}
-          <tr><td colspan="20">{{ empty('No agent activity for this range.') }}</td></tr>
+          <tr><td colspan="21">{{ empty('No agent activity for this range.') }}</td></tr>
         {% endfor %}
         </tbody>
       </table>
@@ -433,6 +437,8 @@
     {{ tile('First-time fix', pct(acc.first_fix_rate), hint="A ticket's first resolution stuck: accepted, auto-closed or closed — not rejected or reopened") }}
     {{ tile('Median time to accept', dur(acc.accept.median), sub='avg ' ~ dur(acc.accept.avg) ~ ' · P90 ' ~ dur(acc.accept.p90)) }}
     {{ tile('Median time to reject', dur(acc.reject.median), sub='avg ' ~ dur(acc.reject.avg) ~ ' · P90 ' ~ dur(acc.reject.p90)) }}
+    {{ tile('Customer delay', dur(acc.delay.median), sub='avg ' ~ dur(acc.delay.avg) ~ ' · total ' ~ dur(acc.delay_total),
+            hint='Time each resolution sat in Resolved until the customer answered or it auto-closed (still-pending ones count up to now). Not counted in our time to resolve.') }}
     {{ tile('Awaiting customer now', acc.awaiting|length, sub='auto-close after 48h', hint='Tickets sitting in "resolved" right now') }}
   </div>
 
@@ -468,12 +474,12 @@
     <div class="rp-card" style="padding:0">
       <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>By hospital</h2><p class="rp-sub">Who confirms, who rejects, who stays silent</p></div></div>
       <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
-        <thead><tr><th>Hospital</th><th class="num">Resolutions</th><th class="num">Accepted</th><th class="num">Rejected</th><th class="num">Auto-closed</th><th class="num">Pending</th><th class="num">Acceptance</th><th class="num" title="Explicit answers ÷ concluded resolutions">Engagement</th><th class="num" title="Median time to accept or reject">Median response</th></tr></thead>
+        <thead><tr><th>Hospital</th><th class="num">Resolutions</th><th class="num">Accepted</th><th class="num">Rejected</th><th class="num">Auto-closed</th><th class="num">Pending</th><th class="num">Acceptance</th><th class="num" title="Explicit answers ÷ concluded resolutions">Engagement</th><th class="num" title="Median time to accept or reject">Median response</th><th class="num" title="Median time a resolution waited in Resolved on this hospital (incl. auto-closed and still pending)">Median delay</th><th class="num" title="Sum of the time this hospital's resolutions waited in Resolved">Total delay</th></tr></thead>
         <tbody>
         {% for h in acc.hospital_rows %}
-          <tr><td>{{ h.name }}</td><td class="num">{{ h.total }}</td><td class="num">{{ h.accepted }}</td><td class="num">{{ h.rejected }}</td><td class="num">{{ h.auto_closed }}</td><td class="num">{{ h.pending }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ pct(h.engagement) }}</td><td class="num">{{ dur(h.resp_median) }}</td></tr>
+          <tr><td>{{ h.name }}</td><td class="num">{{ h.total }}</td><td class="num">{{ h.accepted }}</td><td class="num">{{ h.rejected }}</td><td class="num">{{ h.auto_closed }}</td><td class="num">{{ h.pending }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ pct(h.engagement) }}</td><td class="num">{{ dur(h.resp_median) }}</td><td class="num">{{ dur(h.delay_median) }}</td><td class="num">{{ dur(h.delay_total) }}</td></tr>
         {% else %}
-          <tr><td colspan="9">{{ empty() }}</td></tr>
+          <tr><td colspan="11">{{ empty() }}</td></tr>
         {% endfor %}
         </tbody>
       </table></div>
@@ -503,12 +509,12 @@
   <div class="rp-card" style="padding:0;margin-bottom:1rem">
     <div class="rp-card-head" style="padding:1rem 1.25rem 0"><div><h2>Hospitals</h2><p class="rp-sub">Volume and experience per site in this range</p></div></div>
     <div class="rp-table-wrap" style="margin-top:.75rem"><table class="rp-table">
-      <thead><tr><th>Hospital</th><th class="num">Created</th><th class="num" title="Created in range and not yet resolved">Still open</th><th class="num">High / urgent</th><th class="num">Resolved</th><th class="num">Median TAT</th><th class="num">Acceptance</th><th class="num">CSAT</th><th class="num" title="Average words in the ticket description">Words / description</th></tr></thead>
+      <thead><tr><th>Hospital</th><th class="num">Created</th><th class="num" title="Created in range and not yet resolved">Still open</th><th class="num">High / urgent</th><th class="num">Resolved</th><th class="num" title="Our time: created → marked resolved">Median TAT</th><th class="num" title="Median time resolutions then waited in Resolved for this hospital's answer — their delay, not ours">Customer delay</th><th class="num">Acceptance</th><th class="num">CSAT</th><th class="num" title="Average words in the ticket description">Words / description</th></tr></thead>
       <tbody>
       {% for h in cust.hospitals %}
-        <tr><td>{{ h.name }}</td><td class="num"><strong>{{ h.created }}</strong></td><td class="num">{{ h.still_open }}</td><td class="num">{{ pct(h.high_share) }}</td><td class="num">{{ h.resolved }}</td><td class="num">{{ dur(h.tat_median) }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ num(h.csat) }}</td><td class="num">{{ num(h.words) }}</td></tr>
+        <tr><td>{{ h.name }}</td><td class="num"><strong>{{ h.created }}</strong></td><td class="num">{{ h.still_open }}</td><td class="num">{{ pct(h.high_share) }}</td><td class="num">{{ h.resolved }}</td><td class="num">{{ dur(h.tat_median) }}</td><td class="num">{{ dur(h.delay_median) }}</td><td class="num">{{ pct(h.acceptance_rate) }}</td><td class="num">{{ num(h.csat) }}</td><td class="num">{{ num(h.words) }}</td></tr>
       {% else %}
-        <tr><td colspan="9">{{ empty() }}</td></tr>
+        <tr><td colspan="10">{{ empty() }}</td></tr>
       {% endfor %}
       </tbody>
     </table></div>

@@ -57,7 +57,7 @@
   <div style="display:flex; align-items:center; height:4rem; padding:0 1rem; gap:0.5rem;">
 
     <!-- Logo -->
-    <a href="{{ url_for('agent.dashboard') }}"
+    <a href="{{ url_for('agent.tickets') }}"
        style="display:flex; align-items:center; gap:0.5rem; flex-shrink:0; text-decoration:none; margin-right:0.25rem;">
       <img src="{{ url_for('static', filename='INTERMEDIC LOGO-1.png') }}"
            alt="Intermedic" style="height:1.75rem; width:auto; filter:brightness(0) invert(1);">
@@ -68,14 +68,10 @@
 
     <!-- Nav links -->
     <div style="display:flex; align-items:center; gap:0.125rem; flex:1; overflow-x:auto; padding:0 0.5rem; scrollbar-width:none;">
-      <a href="{{ url_for('agent.dashboard') }}"
-         class="nav-link {% if request.endpoint == 'agent.dashboard' %}active{% endif %}">Dashboard</a>
       <a href="{{ url_for('agent.tickets') }}"
          class="nav-link {% if request.endpoint and 'agent.ticket' in request.endpoint %}active{% endif %}">Tickets</a>
       <a href="{{ url_for('agent.tasks') }}"
-         class="nav-link {% if request.endpoint and 'agent.task' in request.endpoint and request.endpoint != 'agent.workload' %}active{% endif %}">Tasks</a>
-      <a href="{{ url_for('agent.workload') }}"
-         class="nav-link {% if request.endpoint == 'agent.workload' %}active{% endif %}">Workload</a>
+         class="nav-link {% if request.endpoint and 'agent.task' in request.endpoint %}active{% endif %}">Tasks</a>
       <a href="{{ url_for('projects.list_projects') }}"
          class="nav-link {% if request.endpoint and 'projects.' in request.endpoint %}active{% endif %}">Projects</a>
       <a href="{{ url_for('pm.overview') }}" title="Preventive maintenance"
@@ -84,8 +80,6 @@
          class="nav-link {% if request.endpoint and 'agent.kb' in request.endpoint %}active{% endif %}">Knowledge Base</a>
       <a href="{{ url_for('reports.dashboard') }}"
          class="nav-link {% if request.endpoint == 'reports.dashboard' %}active{% endif %}">Reports</a>
-      <a href="{{ url_for('reports.time_report') }}"
-         class="nav-link {% if request.endpoint == 'reports.time_report' %}active{% endif %}">Time Report</a>
     </div>
 
     <!-- Right side -->

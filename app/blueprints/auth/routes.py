@@ -59,7 +59,7 @@ def change_password():
 
 def _redirect_url(user):
     if user.is_admin or user.is_agent:
-        return url_for("agent.dashboard")
+        return url_for("agent.tickets")
     if user.is_customer:
         return url_for("portal.dashboard")
     return url_for("auth.login")

@@ -408,7 +408,7 @@
         </div>
         <h4 class="text-sm font-semibold text-slate-700">Reply as {{ current_user.name }}</h4>
       </div>
-      <form method="POST" action="{{ url_for('agent.ticket_reply', ref=ticket.ref) }}" enctype="multipart/form-data" novalidate
+      <form id="reply-form" method="POST" action="{{ url_for('agent.ticket_reply', ref=ticket.ref) }}" enctype="multipart/form-data" novalidate
             onsubmit="var btn=this.querySelector('#reply-submit'); btn.disabled=true; btn.textContent='Sending…';">
         {{ reply_form.hidden_tag() }}
         <div class="mb-2 flex items-center gap-2">
@@ -428,10 +428,13 @@
             {{ reply_form.is_internal(id="is_internal", class="rounded border-slate-300 text-amber-500") }}
             <span>Internal note <span class="text-slate-400 text-xs font-normal">(not visible to customer)</span></span>
           </label>
-          <button type="submit" id="reply-submit"
-                  class="bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-            Send Reply
-          </button>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-slate-400">Ctrl + Enter to send</span>
+            <button type="submit" id="reply-submit"
+                    class="bg-primary hover:bg-primary-dark text-white font-semibold px-5 py-2 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              Send Reply
+            </button>
+          </div>
         </div>
       </form>
     </div>
@@ -749,5 +752,18 @@ function closeLightbox() {
 document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape') closeLightbox();
 });
+
+// Ctrl+Enter (Cmd+Enter on Mac) in the reply box sends the reply
+(function() {
+  const form = document.getElementById('reply-form');
+  const body = form && form.querySelector('textarea[name="body"]');
+  if (!body) return;
+  body.addEventListener('keydown', function(e) {
+    if (e.key !== 'Enter' || !(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    const btn = document.getElementById('reply-submit');
+    if (btn && !btn.disabled) form.requestSubmit(btn);
+  });
+})();
 </script>
 {% endblock %}

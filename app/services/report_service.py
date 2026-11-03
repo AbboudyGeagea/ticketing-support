@@ -9,11 +9,15 @@ Definitions (also surfaced as tooltips in the template):
 - Resolution moment: the first time a ticket reached "resolved", or its
   closed_at if it was closed without ever being resolved. A ticket counts as
   resolved in the period that contains its resolution moment.
-- Resolution TAT: resolution moment − created_at (calendar hours).
+- Resolution TAT: resolution moment − created_at (calendar hours). Our clock
+  stops at "resolved", so whatever the customer takes afterwards is never
+  counted against us.
 - Resolver: the agent who set "resolved" (falls back to the assignee).
 - Resolution outcome: what happened next to a "resolved" status change —
   customer accepted, customer rejected/reopened, auto-closed with no answer,
   closed or reopened by an agent, or still awaiting the customer.
+- Customer delay: how long a ticket sat in "resolved" waiting on the customer,
+  per resolution — until the next transition, or until now while still pending.
 """
 import statistics
 from collections import Counter, defaultdict
@@ -448,6 +452,8 @@ class ReportBuilder:
                 waited=_hours(self.now - r.created_at) if outcome == "pending" else None,
             ))
         self._resolve_untracked(events)
+        for e in events:
+            e.delay = e.hours if e.hours is not None else e.waited
         return events
 
     def _classify(self, ev, nxt, t):
@@ -625,6 +631,7 @@ class ReportBuilder:
         ev = Counter(e.outcome for e in self.resolution_events)
         decided = ev["accepted"] + ev["rejected"]
         ratings = [c.rating for c in self.csat]
+        delays = [e.delay for e in self.resolution_events if e.delay is not None]
         return {
             "created": len(self.created),
             "resolved": len(self.resolved),
@@ -632,6 +639,8 @@ class ReportBuilder:
             "median_tat": _round(statistics.median(res_hours)) if res_hours else None,
             "avg_tat": _round(sum(res_hours) / len(res_hours)) if res_hours else None,
             "median_frt": _round(statistics.median(frt)) if frt else None,
+            "median_delay": _round(statistics.median(delays)) if delays else None,
+            "total_delay": _round(sum(delays)) if delays else None,
             "acceptance_rate": rate(ev["accepted"], decided),
             "reopen_rate": rate(ev["rejected"] + ev["agent_reopened"], len(self.resolution_events)),
             "csat": _round(sum(ratings) / len(ratings), 2) if ratings else None,
@@ -774,7 +783,7 @@ class ReportBuilder:
     def agents(self) -> list:
         S = defaultdict(lambda: {
             "assigned": 0, "open_now": 0, "tat": [], "frt": [], "outcomes": Counter(),
-            "accept_h": [], "reject_h": [], "replies": 0, "notes": 0, "reply_words": [],
+            "accept_h": [], "reject_h": [], "delay_h": [], "replies": 0, "notes": 0, "reply_words": [],
             "ratings": [], "sla_breached": 0,
         })
         for t in self.created:
@@ -798,6 +807,8 @@ class ReportBuilder:
                     S[e.resolver]["accept_h"].append(e.hours)
                 elif e.outcome == "rejected" and e.hours is not None:
                     S[e.resolver]["reject_h"].append(e.hours)
+                if e.delay is not None:
+                    S[e.resolver]["delay_h"].append(e.delay)
         for m in self.period_messages:
             if m.sender_id in self.agent_names and m.id not in self.description_ids:
                 s = S[m.sender_id]
@@ -832,6 +843,7 @@ class ReportBuilder:
                 "acceptance_rate": rate(oc["accepted"], decided),
                 "accept_median": summary(s["accept_h"])["median"],
                 "reject_median": summary(s["reject_h"])["median"],
+                "delay_median": summary(s["delay_h"])["median"],
                 "replies": s["replies"], "notes": s["notes"],
                 "avg_reply_words": summary(s["reply_words"])["avg"],
                 "csat": _round(sum(s["ratings"]) / len(s["ratings"]), 2) if s["ratings"] else None,
@@ -850,18 +862,21 @@ class ReportBuilder:
         counts = Counter(e.outcome for e in ev)
         accept_h = [e.hours for e in ev if e.outcome == "accepted"]
         reject_h = [e.hours for e in ev if e.outcome == "rejected" and e.hours is not None]
+        delays = [e.delay for e in ev if e.delay is not None]
         decided = counts["accepted"] + counts["rejected"]
         concluded = len(ev) - counts["pending"] - counts["untracked"]
         firsts = [e for e in ev if e.is_first and e.outcome not in ("pending", "untracked")]
         first_fix = sum(1 for e in firsts if e.outcome in ("accepted", "auto_closed", "closed_by_agent"))
 
-        by_h = defaultdict(lambda: {"total": 0, "c": Counter(), "resp": []})
+        by_h = defaultdict(lambda: {"total": 0, "c": Counter(), "resp": [], "delay": []})
         for e in ev:
             h = by_h[e.t.hospital_id]
             h["total"] += 1
             h["c"][e.outcome] += 1
             if e.outcome in ("accepted", "rejected") and e.hours is not None:
                 h["resp"].append(e.hours)
+            if e.delay is not None:
+                h["delay"].append(e.delay)
         hospital_rows = sorted((
             {
                 "id": hid, "name": self.hospital_names.get(hid, "—"), "total": v["total"],
@@ -871,6 +886,8 @@ class ReportBuilder:
                 "engagement": rate(v["c"]["accepted"] + v["c"]["rejected"],
                                    v["total"] - v["c"]["pending"] - v["c"]["untracked"]),
                 "resp_median": summary(v["resp"])["median"],
+                "delay_median": summary(v["delay"])["median"],
+                "delay_total": _round(sum(v["delay"])) if v["delay"] else None,
             }
             for hid, v in by_h.items()
         ), key=lambda r: -r["total"])
@@ -885,6 +902,8 @@ class ReportBuilder:
             "first_fix_rate": rate(first_fix, len(firsts)),
             "accept": summary(accept_h),
             "reject": summary(reject_h),
+            "delay": summary(delays),
+            "delay_total": _round(sum(delays)) if delays else None,
             "accept_hist": bucketize(accept_h, RESPONSE_BUCKETS),
             "reject_hist": bucketize(reject_h, RESPONSE_BUCKETS),
             "hist_labels": [b[0] for b in RESPONSE_BUCKETS],
@@ -919,6 +938,7 @@ class ReportBuilder:
                 "resolved": len(res_by_h.get(hid, [])),
                 "tat_median": summary(res_by_h.get(hid, []))["median"],
                 "acceptance_rate": (acc_by_h.get(hid) or {}).get("acceptance_rate"),
+                "delay_median": (acc_by_h.get(hid) or {}).get("delay_median"),
                 "csat": _round(sum(ratings) / len(ratings), 2) if ratings else None,
                 "words": self.text["desc_words_by_hospital"].get(hid),
             })
@@ -1077,8 +1097,8 @@ class ReportBuilder:
         """Signed change vs the previous period for each KPI (None when not comparable)."""
         out = {}
         cur, old = self.kpis, prev.kpis
-        for k in ("created", "resolved", "closed", "median_tat", "median_frt", "acceptance_rate",
-                  "reopen_rate", "csat"):
+        for k in ("created", "resolved", "closed", "median_tat", "median_frt", "median_delay",
+                  "acceptance_rate", "reopen_rate", "csat"):
             a, b = cur.get(k), old.get(k)
             if a is None or b is None:
                 out[k] = None

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, time as dt_time
 from urllib.parse import urlparse
 from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
 from flask_login import login_required, current_user
-from sqlalchemy import or_, and_, func, nulls_last
+from sqlalchemy import or_, func, nulls_last
 from sqlalchemy.orm import joinedload
 from app.blueprints.agent import bp
 from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
@@ -38,150 +38,13 @@ def _is_safe_url(url: str) -> bool:
     return parsed.scheme in ("http", "https", "")
 
 
-# ── Dashboard ─────────────────────────────────────────────────────────────────
+# ── Index ─────────────────────────────────────────────────────────────────────
 
 @bp.route("/")
 @login_required
 @agent_required
-def dashboard():
-    now = datetime.utcnow()
-    thirty_days_ago = now - timedelta(days=30)
-
-    # Stat cards
-    open_count = Ticket.query.filter(
-        Ticket.phi_flagged == False,
-        Ticket.status.notin_(["closed", "resolved"])
-    ).count()
-    my_count = Ticket.query.filter_by(assigned_to=current_user.id).filter(
-        Ticket.status.notin_(["closed"])
-    ).count()
-    overdue_tasks = Task.query.filter_by(assigned_to=current_user.id).filter(
-        Task.status != TASK_DONE,
-        Task.deadline < now,
-    ).count()
-    sla_window = now + timedelta(hours=1)
-    sla_at_risk = Ticket.query.filter(
-        Ticket.status.notin_(["closed", "resolved"]),
-        or_(
-            and_(
-                Ticket.sla_response_due.isnot(None),
-                Ticket.sla_response_due > now,
-                Ticket.sla_response_due <= sla_window,
-                Ticket.first_response_at.is_(None),
-            ),
-            and_(
-                Ticket.sla_resolve_due.isnot(None),
-                Ticket.sla_resolve_due > now,
-                Ticket.sla_resolve_due <= sla_window,
-            ),
-        ),
-    ).count()
-    closed_today = Ticket.query.filter(
-        Ticket.status == "closed",
-        Ticket.updated_at >= now.replace(hour=0, minute=0, second=0),
-    ).count()
-    close_requested_count = Ticket.query.filter(
-        Ticket.close_requested == True,
-        Ticket.status.notin_(["closed"]),
-    ).count()
-    from app.services.pm_service import open_alert_count
-    pm_open_alerts = open_alert_count()
-
-    # ECharts: ticket volume last 30 days
-    daily_counts = (
-        db.session.query(func.date(Ticket.created_at), func.count(Ticket.id))
-        .filter(Ticket.created_at >= thirty_days_ago)
-        .group_by(func.date(Ticket.created_at))
-        .order_by(func.date(Ticket.created_at))
-        .all()
-    )
-    chart_dates = [str(r[0]) for r in daily_counts]
-    chart_values = [r[1] for r in daily_counts]
-
-    # ECharts: by status
-    status_counts = (
-        db.session.query(Ticket.status, func.count(Ticket.id))
-        .group_by(Ticket.status)
-        .all()
-    )
-    status_data = [{"name": s, "value": c} for s, c in status_counts]
-
-    # ECharts: by hospital
-    hosp_counts = (
-        db.session.query(Hospital.name, func.count(Ticket.id))
-        .join(Ticket, Ticket.hospital_id == Hospital.id)
-        .filter(
-            Ticket.phi_flagged == False,
-            Ticket.status.notin_(["closed", "resolved"])
-        )
-        .group_by(Hospital.name)
-        .order_by(func.count(Ticket.id).desc())
-        .limit(8)
-        .all()
-    )
-    hosp_names = [r[0] for r in hosp_counts]
-    hosp_values = [r[1] for r in hosp_counts]
-
-    # Tickets awaiting closure approval
-    closure_tickets = (
-        Ticket.query
-        .filter(Ticket.close_requested == True, Ticket.status.notin_(["closed"]))
-        .options(joinedload(Ticket.hospital))
-        .order_by(Ticket.updated_at.desc())
-        .all()
-    )
-
-    # Recent tickets
-    recent_tickets = (
-        Ticket.query
-        .filter(Ticket.status.notin_(["closed"]))
-        .options(joinedload(Ticket.hospital))
-        .order_by(Ticket.updated_at.desc())
-        .limit(10)
-        .all()
-    )
-
-    # Last public message per recent ticket
-    dash_last_msg_map = {}
-    _rt_ids = [t.id for t in recent_tickets]
-    if _rt_ids:
-        _subq = (
-            db.session.query(TicketMessage.ticket_id, func.max(TicketMessage.id).label("max_id"))
-            .filter(TicketMessage.ticket_id.in_(_rt_ids), TicketMessage.is_internal == False)
-            .group_by(TicketMessage.ticket_id)
-            .subquery()
-        )
-        for _m in db.session.query(TicketMessage).join(_subq, TicketMessage.id == _subq.c.max_id).all():
-            dash_last_msg_map[_m.ticket_id] = _m
-
-    # My tasks
-    my_tasks = (
-        Task.query.filter_by(assigned_to=current_user.id)
-        .filter(Task.status != TASK_DONE)
-        .order_by(nulls_last(Task.deadline.asc()), Task.created_at.desc())
-        .limit(10)
-        .all()
-    )
-
-    return render_template(
-        "agent/dashboard.html",
-        open_count=open_count,
-        my_count=my_count,
-        overdue_tasks=overdue_tasks,
-        sla_at_risk=sla_at_risk,
-        closed_today=closed_today,
-        pm_open_alerts=pm_open_alerts,
-        chart_dates=chart_dates,
-        chart_values=chart_values,
-        status_data=status_data,
-        hosp_names=hosp_names,
-        hosp_values=hosp_values,
-        recent_tickets=recent_tickets,
-        closure_tickets=closure_tickets,
-        dash_last_msg_map=dash_last_msg_map,
-        my_tasks=my_tasks,
-        close_requested_count=close_requested_count,
-    )
+def index():
+    return redirect(url_for("agent.tickets"))
 
 
 # ── Ticket List ───────────────────────────────────────────────────────────────
@@ -1649,7 +1512,7 @@ def toggle_availability():
     db.session.commit()
     status = "available" if current_user.is_available else "away"
     flash(f"You are now marked as {status}.", "info")
-    return redirect(request.referrer or url_for("agent.dashboard"))
+    return redirect(request.referrer or url_for("agent.tickets"))
 
 
 # ── Knowledge Base ────────────────────────────────────────────────────────────
@@ -2086,78 +1949,6 @@ def task_delete_dependency(task_id, dep_id):
     db.session.commit()
     flash("Dependency removed.", "success")
     return redirect(url_for("agent.task_detail", task_id=task_id))
-
-
-# ── Workload ──────────────────────────────────────────────────────────────────
-
-@bp.route("/workload")
-@login_required
-@agent_required
-def workload():
-    from app.models.project import ProjectTask
-
-    week_offset = request.args.get("week", 0, type=int)
-    today = datetime.utcnow().date()
-    week_start = today - timedelta(days=today.weekday()) + timedelta(weeks=week_offset)
-    week_end = week_start + timedelta(days=6)
-
-    week_start_dt = datetime.combine(week_start, dt_time.min)
-    week_end_dt = datetime.combine(week_end, dt_time.max)
-
-    agents = User.query.filter(
-        User.role.in_(["agent", "admin"]),
-        User.active == True,
-    ).order_by(User.name).all()
-
-    agent_ids = [a.id for a in agents]
-
-    # Tasks with deadline in the selected week, not done
-    week_tasks = Task.query.filter(
-        Task.status != TASK_DONE,
-        Task.deadline >= week_start_dt,
-        Task.deadline <= week_end_dt,
-    ).all()
-
-    tasks_by_agent = {a.id: [] for a in agents}
-    for task in week_tasks:
-        if task.assigned_to in tasks_by_agent:
-            tasks_by_agent[task.assigned_to].append(task)
-
-    # Open tickets per agent (not closed / resolved)
-    ticket_counts = dict(
-        db.session.query(Ticket.assigned_to, func.count(Ticket.id))
-        .filter(Ticket.assigned_to.in_(agent_ids), Ticket.status.notin_(["closed", "resolved"]))
-        .group_by(Ticket.assigned_to)
-        .all()
-    )
-
-    # Open ticket-tasks per agent (not done)
-    open_task_counts = dict(
-        db.session.query(Task.assigned_to, func.count(Task.id))
-        .filter(Task.assigned_to.in_(agent_ids), Task.status != TASK_DONE)
-        .group_by(Task.assigned_to)
-        .all()
-    )
-
-    # Active projects per agent (distinct projects with a non-done ProjectTask assigned to them)
-    project_counts = dict(
-        db.session.query(ProjectTask.assigned_to, func.count(func.distinct(ProjectTask.project_id)))
-        .filter(ProjectTask.assigned_to.in_(agent_ids), ProjectTask.status != "done")
-        .group_by(ProjectTask.assigned_to)
-        .all()
-    )
-
-    return render_template(
-        "agent/workload.html",
-        agents=agents,
-        tasks_by_agent=tasks_by_agent,
-        week_start=week_start,
-        week_end=week_end,
-        week_offset=week_offset,
-        ticket_counts=ticket_counts,
-        open_task_counts=open_task_counts,
-        project_counts=project_counts,
-    )
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -226,18 +226,6 @@ def overview(today):
     return rows, skipped
 
 
-def open_alert_count():
-    return (
-        PMResult.query.join(PMCheckup)
-        .filter(
-            PMCheckup.status == CHECKUP_SUBMITTED,
-            PMResult.status == PM_ALERT,
-            PMResult.resolved_at.is_(None),
-        )
-        .count()
-    )
-
-
 def set_owner(hospital_id, owner_id):
     row = db.session.get(PMHospitalSettings, hospital_id)
     if row is None:
