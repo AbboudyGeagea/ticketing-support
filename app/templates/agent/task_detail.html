@@ -340,6 +340,9 @@
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">Assign To</label>
             {{ form.assigned_to(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
+            {% if form.assigned_to.errors %}
+              <p class="text-red-500 text-xs mt-1">{{ form.assigned_to.errors[0] }}</p>
+            {% endif %}
           </div>
           <div>
             <label class="block text-xs font-medium text-slate-600 mb-1">
@@ -359,6 +362,17 @@
             <label class="block text-xs font-medium text-slate-600 mb-1">Product</label>
             {{ form.product_id(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary") }}
           </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="block text-xs font-medium text-slate-600 mb-1">
+            Linked Ticket
+            <span class="text-slate-400 font-normal">(optional)</span>
+          </label>
+          {{ form.ticket_link(class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="Ticket number or link") }}
+          {% if form.ticket_link.errors %}
+            <p class="text-red-500 text-xs mt-1">{{ form.ticket_link.errors[0] }}</p>
+          {% endif %}
         </div>
 
         <div class="grid grid-cols-2 gap-2 mb-3">

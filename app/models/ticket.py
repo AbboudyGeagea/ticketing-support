@@ -1,5 +1,7 @@
+import re
 import uuid
 from datetime import datetime
+from urllib.parse import unquote
 from app.extensions import db
 
 
@@ -70,6 +72,24 @@ def status_label_for(slug):
     if row:
         return row.label
     return STATUS_LABELS.get(slug, (slug or "").replace("_", " ").title())
+
+
+def find_ticket_by_ref_or_link(value):
+    """Ticket for a pasted ticket number ("0042", "42", "#0042") or a ticket link
+    (".../tickets/0042" — agent or portal URL). None if nothing matches."""
+    value = (value or "").strip()
+    if not value:
+        return None
+    m = re.search(r"/tickets/([^/?#\s]+)", value)
+    ref = unquote(m.group(1)) if m else value.lstrip("#").strip()
+    candidates = [ref, ref.upper()]
+    if ref.isdigit():
+        candidates.append(f"{int(ref):04d}")
+    for candidate in dict.fromkeys(candidates):
+        ticket = Ticket.query.filter_by(ref=candidate).first()
+        if ticket:
+            return ticket
+    return None
 
 
 class Ticket(db.Model):

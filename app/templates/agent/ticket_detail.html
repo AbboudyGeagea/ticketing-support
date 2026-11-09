@@ -52,12 +52,15 @@
         Back to tickets
       </a>
       <script>
+      // Return to the ticket list the agent last viewed (filters/page kept), saved by
+      // tickets.html. document.referrer can't be used: after a reply or status change
+      // it is this ticket page itself.
       (function () {
-        var ref = document.referrer;
-        if (ref && ref.startsWith(window.location.origin) && ref.indexOf('/tickets') !== -1) {
+        try {
+          var url = sessionStorage.getItem('agentTicketsListUrl');
           var a = document.getElementById('back-to-tickets');
-          if (a) a.href = ref;
-        }
+          if (a && url && new URL(url).pathname === '{{ url_for('agent.tickets') }}') a.href = url;
+        } catch (e) {}
       })();
       </script>
       <div class="flex flex-wrap items-baseline gap-3">
@@ -88,14 +91,13 @@
         </button>
       </form>
 
-      <button type="button"
-              onclick="document.getElementById('create-task-panel').classList.toggle('hidden')"
-              class="inline-flex items-center gap-1.5 text-sm font-medium bg-secondary/10 hover:bg-secondary/20 text-secondary px-3.5 py-2 rounded-lg transition-colors">
+      <a href="{{ url_for('agent.task_new', ticket_ref=ticket.ref) }}"
+         class="inline-flex items-center gap-1.5 text-sm font-medium bg-secondary/10 hover:bg-secondary/20 text-secondary px-3.5 py-2 rounded-lg transition-colors">
         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
         </svg>
         Create task
-      </button>
+      </a>
       {% endif %}
 
 
@@ -152,33 +154,6 @@
 
     </div>
   </div>
-
-  <!-- Create task collapsible panel (open tickets only) -->
-  {% if ticket.status != 'closed' %}
-  <div id="create-task-panel" class="hidden mt-4 border-t border-slate-100 pt-4">
-    <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Create &amp; Link Task</p>
-    <form method="POST" action="{{ url_for('agent.ticket_create_task', ref=ticket.ref) }}" class="flex flex-wrap gap-2 items-end">
-      {{ reply_form.hidden_tag() }}
-      <div class="flex-1 min-w-[200px]">
-        <label for="task-title" class="block text-xs font-medium text-slate-600 mb-1">Task title</label>
-        <input id="task-title" type="text" name="title" value="{{ ticket.subject }}"
-               class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-               placeholder="Task title" required>
-      </div>
-      <div class="w-44">
-        <label for="task-agent" class="block text-xs font-medium text-slate-600 mb-1">Assign to</label>
-        <select id="task-agent" name="agent_id" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-          {% for a in agents %}
-          <option value="{{ a.id }}" {% if ticket.assigned_to == a.id %}selected{% endif %}>{{ a.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <button type="submit" class="bg-secondary hover:bg-secondary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-        Create &amp; Link
-      </button>
-    </form>
-  </div>
-  {% endif %}
 </div>
 
 <!-- ── 3-column grid ───────────────────────────────────────────────────── -->
@@ -690,6 +665,10 @@
 
 {% block scripts %}
 <script>
+// If Back/Forward restored this page from the browser's memory cache, it may be
+// from before a reply/status change — reload to show the current ticket.
+window.addEventListener('pageshow', function (e) { if (e.persisted) location.reload(); });
+
 // Show/hide escalation number field when status changes to/from "escalated"
 function toggleEscalationField(val) {
   var field = document.getElementById('escalation-number-field');

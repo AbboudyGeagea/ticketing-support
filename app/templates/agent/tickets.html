@@ -395,6 +395,9 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
 
 {% block scripts %}
 <script>
+// Remembered so a ticket's "Back to tickets" link returns to this exact view.
+try { sessionStorage.setItem('agentTicketsListUrl', location.href); } catch (e) {}
+
 function toggleStatusDropdown() {
   document.getElementById('status-dropdown-panel').classList.toggle('hidden');
 }

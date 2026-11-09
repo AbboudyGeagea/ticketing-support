@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import StringField, TextAreaField, SelectField, BooleanField, SubmitField, DateTimeLocalField, DateField
-from wtforms.validators import DataRequired, Optional, Length
+from wtforms.validators import DataRequired, Optional, Length, ValidationError
 
 
 class NewTicketForm(FlaskForm):
@@ -72,7 +72,9 @@ class SprintForm(FlaskForm):
 class TaskForm(FlaskForm):
     title = StringField("Title", validators=[DataRequired(), Length(max=500)])
     description = TextAreaField("Description", validators=[Optional()])
-    assigned_to = SelectField("Assign To", coerce=int)
+    # 0 = the "— Select —" placeholder offered on the new-task form
+    assigned_to = SelectField("Assign To", coerce=int,
+                              validators=[DataRequired(message="Choose who this task is assigned to.")])
     assigned_to_2 = SelectField("Secondary Assignee", coerce=int, validators=[Optional()], validate_choice=False)
     hospital_id = SelectField("Hospital", coerce=int, validators=[Optional()], validate_choice=False)
     product_id = SelectField("Product", coerce=int, validators=[Optional()], validate_choice=False)
@@ -89,4 +91,13 @@ class TaskForm(FlaskForm):
     ], default="todo")
     deadline = DateTimeLocalField("Deadline", validators=[Optional()], format="%Y-%m-%dT%H:%M")
     reminder_at = DateTimeLocalField("Reminder", validators=[Optional()], format="%Y-%m-%dT%H:%M")
+    ticket_link = StringField("Linked Ticket", validators=[Optional(), Length(max=1000)])
     submit = SubmitField("Save Task")
+
+    linked_ticket = None  # set by validate_ticket_link when a ticket is entered
+
+    def validate_ticket_link(self, field):
+        from app.models.ticket import find_ticket_by_ref_or_link
+        self.linked_ticket = find_ticket_by_ref_or_link(field.data)
+        if self.linked_ticket is None:
+            raise ValidationError("No ticket found for that number or link.")

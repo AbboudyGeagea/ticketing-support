@@ -3,7 +3,7 @@ import json
 import uuid
 from datetime import datetime, timedelta, time as dt_time
 from urllib.parse import urlparse
-from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory
+from flask import render_template, redirect, url_for, flash, request, abort, jsonify, current_app, send_from_directory, make_response
 from flask_login import login_required, current_user
 from sqlalchemy import or_, func, nulls_last
 from sqlalchemy.orm import joinedload
@@ -70,6 +70,9 @@ def _apply_ticket_scope(query, scope):
 @login_required
 @agent_required
 def tickets():
+    # Landing on the Tickets tab with no filters → the "All Open" card.
+    if not request.args:
+        return redirect(url_for("agent.tickets", scope="active"))
     page = request.args.get("page", 1, type=int)
     status_filters = request.args.getlist("status")
     priority_filter = request.args.get("priority", "")
@@ -463,7 +466,7 @@ def ticket_detail(ref):
     from app.models.ticket import TicketCollaborator
     collaborators = TicketCollaborator.query.filter_by(ticket_id=ticket.id).all()
 
-    return render_template(
+    response = make_response(render_template(
         "agent/ticket_detail.html",
         ticket=ticket,
         messages=messages,
@@ -478,7 +481,12 @@ def ticket_detail(ref):
         assign_form=assign_form,
         rustdesk_logs=rustdesk_logs,
         collaborators=collaborators,
-    )
+    ))
+    # Every action on this page (reply, status, assign…) redirects back here, so the
+    # browser's Back button lands on the copy from *before* the action. no-store makes
+    # the browser re-fetch it instead of showing a stale page without the new reply.
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @bp.route("/tickets/<ref>/reply", methods=["POST"])
@@ -774,30 +782,6 @@ def ticket_close(ref):
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
-# ── Ticket → Task conversion ──────────────────────────────────────────────────
-
-@bp.route("/tickets/<ref>/create-task", methods=["POST"])
-@login_required
-@agent_required
-def ticket_create_task(ref):
-    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
-    agent_id = request.form.get("agent_id", type=int) or current_user.id
-    title = request.form.get("title", ticket.subject).strip() or ticket.subject
-    task = Task(
-        ticket_id=ticket.id,
-        created_by=current_user.id,
-        assigned_to=agent_id,
-        title=title,
-        description=f"Created from ticket {ticket.ref}",
-        priority=ticket.priority,
-        status=TASK_TODO,
-    )
-    db.session.add(task)
-    db.session.commit()
-    flash(f'Task "{task.title}" created and linked to {ticket.ref}.', "success")
-    return redirect(url_for("agent.ticket_detail", ref=ref))
-
-
 # ── Tasks ─────────────────────────────────────────────────────────────────────
 
 @bp.route("/tasks")
@@ -914,17 +898,31 @@ def task_new():
     products = Product.query.filter_by(active=True).order_by(Product.name).all()
     hospital_products_map = {h.id: [p.id for p in h.products] for h in hospitals}
     agent_choices = [(a.id, a.name) for a in agents]
-    form.assigned_to.choices = agent_choices
+    form.assigned_to.choices = [(0, "— Select —")] + agent_choices
     form.assigned_to_2.choices = [(0, "— None —")] + agent_choices
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
+    # Opened from a ticket's "Create task" button (?ticket_ref=…)
     ticket_ref = request.args.get("ticket_ref")
-    linked_ticket = Ticket.query.filter_by(ref=ticket_ref).first() if ticket_ref else None
+    source_ticket = Ticket.query.filter_by(ref=ticket_ref).first() if ticket_ref else None
 
     if request.method == "GET":
-        form.assigned_to.data = current_user.id
+        if source_ticket:
+            # Prefill from the ticket (all editable); both assignees stay blank on purpose.
+            form.title.data = source_ticket.subject
+            form.hospital_id.data = source_ticket.hospital_id
+            form.product_id.data = source_ticket.product_id or 0
+            form.priority.data = source_ticket.priority
+            form.ticket_link.data = source_ticket.ref
+            lines = [f"Ticket #{source_ticket.ref}: {source_ticket.subject}"]
+            if source_ticket.creator:
+                lines.append(f"Customer: {source_ticket.creator.name} <{source_ticket.creator.email}>")
+            form.description.data = "\n".join(lines)
+        else:
+            form.assigned_to.data = current_user.id
 
     if form.validate_on_submit():
+        linked_ticket = form.linked_ticket
         task = Task(
             ticket_id=linked_ticket.id if linked_ticket else None,
             created_by=current_user.id,
@@ -944,10 +942,11 @@ def task_new():
         if task.assigned_to_2:
             notify_secondary_assignee(task)
         flash("Task created.", "success")
-        if linked_ticket:
+        if source_ticket and linked_ticket:
             return redirect(url_for("agent.ticket_detail", ref=linked_ticket.ref))
         return redirect(url_for("agent.tasks"))
 
+    linked_ticket = form.linked_ticket if form.is_submitted() else source_ticket
     return render_template("agent/task_form.html", form=form, task=None, linked_ticket=linked_ticket,
                            hospital_products_map=hospital_products_map)
 
@@ -967,10 +966,13 @@ def task_detail(task_id):
     form.assigned_to_2.choices = [(0, "— None —")] + agent_choices
     form.hospital_id.choices = [(0, "— None —")] + [(h.id, h.name) for h in hospitals]
     form.product_id.choices = [(0, "— None —")] + [(p.id, p.name) for p in products]
+    if request.method == "GET":
+        form.ticket_link.data = task.ticket.ref if task.ticket else ""
 
     if form.validate_on_submit():
         prev_secondary = task.assigned_to_2
         prev_status = task.status
+        task.ticket_id = form.linked_ticket.id if form.linked_ticket else None
         task.title = form.title.data
         task.description = form.description.data
         task.assigned_to = form.assigned_to.data
