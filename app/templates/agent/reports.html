@@ -380,7 +380,7 @@
             <th class="num">P90 TAT</th>
             <th class="num gl">Accepted</th>
             <th class="num">Rejected</th>
-            <th class="num" title="Closed automatically after 48h without an answer">Auto-closed</th>
+            <th class="num" title="Closed automatically after 72h without an answer">Auto-closed</th>
             <th class="num">Acceptance</th>
             <th class="num" title="Median time for the customer to accept">To accept</th>
             <th class="num" title="Median time for the customer to reject / reopen">To reject</th>
@@ -439,7 +439,7 @@
     {{ tile('Median time to reject', dur(acc.reject.median), sub='avg ' ~ dur(acc.reject.avg) ~ ' · P90 ' ~ dur(acc.reject.p90)) }}
     {{ tile('Customer delay', dur(acc.delay.median), sub='avg ' ~ dur(acc.delay.avg) ~ ' · total ' ~ dur(acc.delay_total),
             hint='Time each resolution sat in Resolved until the customer answered or it auto-closed (still-pending ones count up to now). Not counted in our time to resolve.') }}
-    {{ tile('Awaiting customer now', acc.awaiting|length, sub='auto-close after 48h', hint='Tickets sitting in "resolved" right now') }}
+    {{ tile('Awaiting customer now', acc.awaiting|length, sub='auto-close after 72h', hint='Tickets sitting in "resolved" right now') }}
   </div>
 
   <div class="rp-cols rp-cols-2">
@@ -453,7 +453,7 @@
       <p class="rp-note" style="margin-top:1rem">
         <strong>Accepted</strong>: customer clicked “accept” in the portal or the “Yes, close it” email link.
         <strong>Rejected</strong>: customer rejected, replied (portal or email) or used the reopen link.
-        <strong>Auto-closed</strong>: no answer within 48h (Friday resolutions wait until Monday).
+        <strong>Auto-closed</strong>: no answer within 72h of being marked resolved.
       </p>
       {% else %}{{ empty('No tickets were marked resolved in this range.') }}{% endif %}
     </div>

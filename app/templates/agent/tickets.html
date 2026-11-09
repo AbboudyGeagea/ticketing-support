@@ -62,8 +62,8 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
   {% endfor %}
   {{ flag_tile(url_for('agent.tickets', flag='customer_replied'), customer_replied_count, 'Customer Replied', '#F97316',
                filters.flag == 'customer_replied') }}
-  {{ flag_tile(url_for('agent.tickets', scope='open'), all_open_count, 'All Open', '#6366F1',
-               filters.scope == 'open' and not filters.assigned and no_other_filters) }}
+  {{ flag_tile(url_for('agent.tickets', scope='active'), all_open_count, 'All Open', '#6366F1',
+               filters.scope == 'active' and not filters.assigned and no_other_filters) }}
   {% set closed_s = ticket_status_map.get('closed') %}
   {{ flag_tile(url_for('agent.tickets', scope='recently_closed'), recently_closed_count,
                'Closed · Last ' ~ recently_closed_days ~ ' Days', closed_s.color if closed_s else '#64748B',
@@ -195,6 +195,7 @@ tr[data-status="{{ slug }}"]:hover { background-color: {{ s.color }}30; }
       <select name="scope" class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
         <option value="" {% if not filters.scope %}selected{% endif %}>All tickets</option>
         <option value="open" {% if filters.scope == 'open' %}selected{% endif %}>Open (not closed)</option>
+        <option value="active" {% if filters.scope == 'active' %}selected{% endif %}>Open, excluding resolved</option>
         <option value="recently_closed" {% if filters.scope == 'recently_closed' %}selected{% endif %}>Closed last {{ recently_closed_days }} days</option>
       </select>
     </div>

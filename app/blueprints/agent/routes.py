@@ -53,9 +53,13 @@ RECENTLY_CLOSED_DAYS = 7
 
 
 def _apply_ticket_scope(query, scope):
-    """'open' = every status except closed; 'recently_closed' = closed in the last RECENTLY_CLOSED_DAYS days."""
+    """'open' = every status except closed; 'active' = also excludes resolved (the All Open
+    card — resolved tickets have their own card); 'recently_closed' = closed in the last
+    RECENTLY_CLOSED_DAYS days."""
     if scope == "open":
         return query.filter(Ticket.status != STATUS_CLOSED)
+    if scope == "active":
+        return query.filter(~Ticket.status.in_([STATUS_RESOLVED, STATUS_CLOSED]))
     if scope == "recently_closed":
         cutoff = datetime.utcnow() - timedelta(days=RECENTLY_CLOSED_DAYS)
         return query.filter(Ticket.status == STATUS_CLOSED, Ticket.closed_at >= cutoff)
@@ -181,7 +185,7 @@ def tickets():
     status_tile_counts = dict(
         _open_base.with_entities(Ticket.status, func.count(Ticket.id)).group_by(Ticket.status).all()
     )
-    all_open_count = sum(status_tile_counts.values())
+    all_open_count = sum(n for status, n in status_tile_counts.items() if status != STATUS_RESOLVED)
     assigned_to_me_count = _open_base.filter_by(assigned_to=current_user.id).count()
     recently_closed_count = _apply_ticket_scope(_tile_base, "recently_closed").count()
     _tile_last_pub_subq = (

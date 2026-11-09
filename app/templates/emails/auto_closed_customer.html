@@ -9,7 +9,7 @@
   <div style="padding:28px;">
     <p style="color:#374151; margin:0 0 16px;">Hello {{ ticket.creator.name }},</p>
     <p style="color:#374151; margin:0 0 8px;">Your support ticket <strong>{{ ticket.ref }}</strong> — {{ ticket.subject }} — was marked as <strong>Resolved</strong> on {{ resolved_at | localtime('%d %b %Y') }}.</p>
-    <p style="color:#374151; margin:0 0 24px;">We didn't receive a response from you within 2 days, so the ticket has been <strong>closed automatically</strong>.</p>
+    <p style="color:#374151; margin:0 0 24px;">We didn't receive a response from you within 72 hours, so the ticket has been <strong>closed automatically</strong>.</p>
     <p style="color:#374151; margin:0 0 12px;">If the issue is not fixed, you can reopen it:</p>
     <div style="margin:0 0 24px;">
       <a href="{{ reopen_url }}" style="display:inline-block; background:#F59E0B; color:#fff; text-decoration:none; padding:10px 24px; border-radius:6px; font-size:14px; font-weight:600;">&#8617; Reopen my ticket</a>

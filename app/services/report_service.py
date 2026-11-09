@@ -47,7 +47,7 @@ OPEN_EXCLUDED = ("resolved", "closed")
 CHUNK = 900                 # keeps IN (...) lists well under every driver's parameter cap
 DESC_CAP = 20000            # chars of a ticket description analysed
 MSG_CAP = 6000              # chars of a follow-up message analysed (quoted history is cut anyway)
-AUTO_CLOSE_HOURS = 48       # see reminder_tasks.auto_close_resolved_tickets
+LEGACY_AUTO_CLOSE_HOURS = 48  # auto-closes logged before the "auto_close" action ran on a 48h rule
 
 # ── Date ranges ───────────────────────────────────────────────────────────────
 
@@ -471,7 +471,7 @@ class ReportBuilder:
             # Before auto-close got its own history action it logged a plain
             # system status_change; the 48h floor tells it apart from the
             # customer's emailed "Yes, close it" link.
-            if nxt.changed_by is None and gap >= AUTO_CLOSE_HOURS:
+            if nxt.changed_by is None and gap >= LEGACY_AUTO_CLOSE_HOURS:
                 return "auto_closed", gap
             return "accepted", gap
         return ("agent_reopened" if by_agent else "rejected"), gap

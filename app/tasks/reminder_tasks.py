@@ -87,27 +87,20 @@ def check_sla_escalations():
         logger.info("Marked %d ticket(s) as SLA breached", len(breached))
 
 
-def auto_close_at(resolved_at, tz):
-    """When a ticket resolved at `resolved_at` (naive UTC) is auto-closed: 48h later,
-    except that a Friday resolution (local time) waits until Monday 00:00 local."""
-    from datetime import timedelta
-    from zoneinfo import ZoneInfo
+AUTO_CLOSE_HOURS = 72
 
-    utc = ZoneInfo("UTC")
-    due = resolved_at + timedelta(hours=48)
-    local = resolved_at.replace(tzinfo=utc).astimezone(tz)
-    if local.weekday() == 4:
-        monday = (local + timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
-        due = max(due, monday.astimezone(utc).replace(tzinfo=None))
-    return due
+
+def auto_close_at(resolved_at):
+    """When a ticket resolved at `resolved_at` (naive UTC) is auto-closed. 72h
+    already carries a Friday resolution over the weekend to Monday."""
+    from datetime import timedelta
+    return resolved_at + timedelta(hours=AUTO_CLOSE_HOURS)
 
 
 @celery.task(name="app.tasks.reminder_tasks.auto_close_resolved_tickets")
 def auto_close_resolved_tickets():
-    """Auto-close tickets the customer hasn't answered 48h after they were marked
-    resolved (Friday resolutions wait until Monday), and tell the customer why."""
-    from zoneinfo import ZoneInfo
-    from flask import current_app
+    """Auto-close tickets the customer hasn't answered AUTO_CLOSE_HOURS after they
+    were marked resolved, and tell the customer why."""
     from sqlalchemy import func
     from app.models.ticket import Ticket, TicketHistory
     from app.extensions import db
@@ -125,16 +118,12 @@ def auto_close_resolved_tickets():
         .group_by(TicketHistory.ticket_id)
         .all()
     )
-    try:
-        tz = ZoneInfo(current_app.config.get("LOCAL_TZ_NAME", "UTC"))
-    except Exception:
-        tz = ZoneInfo("UTC")
     now = datetime.utcnow()
     closed_count = 0
 
     for ticket in resolved_tickets:
         since = resolved_at.get(ticket.id) or ticket.updated_at
-        if now >= auto_close_at(since, tz):
+        if now >= auto_close_at(since):
             try:
                 ticket.status = "closed"
                 ticket.closed_at = now
@@ -150,7 +139,7 @@ def auto_close_resolved_tickets():
                 ))
                 db.session.commit()
                 closed_count += 1
-                logger.info("Auto-closed ticket %s (resolved >48h)", ticket.ref)
+                logger.info("Auto-closed ticket %s (resolved >%dh)", ticket.ref, AUTO_CLOSE_HOURS)
 
                 try:
                     from app.services.email_outbound import notify_customer_auto_closed
