@@ -331,6 +331,21 @@ def notify_customer_resolved_confirmation(ticket):
         _send([ticket.creator.email], f"[{ticket.ref}] {ticket.subject}", html=html)
 
 
+def notify_customer_auto_closed(ticket, resolved_at):
+    """Tell the creator their resolved ticket was closed because they didn't answer,
+    with a link to reopen it (same 7-day token as the resolved confirmation)."""
+    if not ticket.creator or not ticket.creator.email or not ticket.creator.email_notifications_enabled:
+        return
+    from itsdangerous import URLSafeTimedSerializer
+    s = URLSafeTimedSerializer(current_app.config["SECRET_KEY"])
+    token = s.dumps(ticket.ref, salt="ticket-confirm")
+    reopen_url = f"{_base_url()}/portal/tickets/{ticket.ref}/confirm?token={token}&action=reopen"
+    html = _render("auto_closed_customer.html", ticket=ticket, resolved_at=resolved_at,
+                   reopen_url=reopen_url, ticket_url=f"{_base_url()}/portal/tickets/{ticket.ref}")
+    if html:
+        _send([ticket.creator.email], f"[{ticket.ref}] {ticket.subject}", html=html)
+
+
 def notify_customer_phi_flagged(ticket):
     """Notify the creator that their ticket was removed for containing PHI."""
     if not ticket.creator or not ticket.creator.email:

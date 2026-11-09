@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><title>Your ticket has been closed</title></head>
+<body style="font-family: Arial, sans-serif; background:#f8fafc; margin:0; padding:20px;">
+<div style="max-width:560px; margin:0 auto; background:#fff; border-radius:8px; border:1px solid #e2e8f0; overflow:hidden;">
+  <div style="background:#334155; padding:24px 28px;">
+    <h1 style="color:#fff; margin:0; font-size:18px; font-weight:600;">Your ticket has been closed</h1>
+  </div>
+  <div style="padding:28px;">
+    <p style="color:#374151; margin:0 0 16px;">Hello {{ ticket.creator.name }},</p>
+    <p style="color:#374151; margin:0 0 8px;">Your support ticket <strong>{{ ticket.ref }}</strong> — {{ ticket.subject }} — was marked as <strong>Resolved</strong> on {{ resolved_at | localtime('%d %b %Y') }}.</p>
+    <p style="color:#374151; margin:0 0 24px;">We didn't receive a response from you within 2 days, so the ticket has been <strong>closed automatically</strong>.</p>
+    <p style="color:#374151; margin:0 0 12px;">If the issue is not fixed, you can reopen it:</p>
+    <div style="margin:0 0 24px;">
+      <a href="{{ reopen_url }}" style="display:inline-block; background:#F59E0B; color:#fff; text-decoration:none; padding:10px 24px; border-radius:6px; font-size:14px; font-weight:600;">&#8617; Reopen my ticket</a>
+      <a href="{{ ticket_url }}" style="display:inline-block; margin-left:8px; color:#00A651; text-decoration:none; padding:10px 8px; font-size:14px; font-weight:600;">View ticket</a>
+    </div>
+    <p style="color:#94a3b8; font-size:12px; margin:0;">The reopen link is valid for 7 days. After that, please open a new ticket and mention {{ ticket.ref }}.</p>
+  </div>
+</div>
+</body>
+</html>

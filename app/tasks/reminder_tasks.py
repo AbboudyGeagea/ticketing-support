@@ -87,32 +87,54 @@ def check_sla_escalations():
         logger.info("Marked %d ticket(s) as SLA breached", len(breached))
 
 
+def auto_close_at(resolved_at, tz):
+    """When a ticket resolved at `resolved_at` (naive UTC) is auto-closed: 48h later,
+    except that a Friday resolution (local time) waits until Monday 00:00 local."""
+    from datetime import timedelta
+    from zoneinfo import ZoneInfo
+
+    utc = ZoneInfo("UTC")
+    due = resolved_at + timedelta(hours=48)
+    local = resolved_at.replace(tzinfo=utc).astimezone(tz)
+    if local.weekday() == 4:
+        monday = (local + timedelta(days=3)).replace(hour=0, minute=0, second=0, microsecond=0)
+        due = max(due, monday.astimezone(utc).replace(tzinfo=None))
+    return due
+
+
 @celery.task(name="app.tasks.reminder_tasks.auto_close_resolved_tickets")
 def auto_close_resolved_tickets():
-    """Auto-close tickets resolved for 48+ hours, or until Monday if resolved on Friday."""
-    from datetime import timedelta
+    """Auto-close tickets the customer hasn't answered 48h after they were marked
+    resolved (Friday resolutions wait until Monday), and tell the customer why."""
+    from zoneinfo import ZoneInfo
+    from flask import current_app
+    from sqlalchemy import func
     from app.models.ticket import Ticket, TicketHistory
     from app.extensions import db
 
     resolved_tickets = Ticket.query.filter(Ticket.status == "resolved").all()
+    if not resolved_tickets:
+        return 0
+    # Count from the moment it was (last) marked resolved, not from its last update:
+    # an internal note or a reassignment must not push the auto-close back.
+    resolved_at = dict(
+        db.session.query(TicketHistory.ticket_id, func.max(TicketHistory.created_at))
+        .filter(TicketHistory.ticket_id.in_([t.id for t in resolved_tickets]),
+                TicketHistory.action == "status_change",
+                TicketHistory.new_value == "resolved")
+        .group_by(TicketHistory.ticket_id)
+        .all()
+    )
+    try:
+        tz = ZoneInfo(current_app.config.get("LOCAL_TZ_NAME", "UTC"))
+    except Exception:
+        tz = ZoneInfo("UTC")
     now = datetime.utcnow()
     closed_count = 0
 
     for ticket in resolved_tickets:
-        time_since_resolved = now - ticket.updated_at
-        should_close = False
-
-        if time_since_resolved >= timedelta(hours=48):
-            resolved_day = ticket.updated_at.weekday()
-            if resolved_day == 4:
-                next_monday = ticket.updated_at + timedelta(days=3)
-                next_monday = next_monday.replace(hour=0, minute=0, second=0, microsecond=0)
-                if now >= next_monday:
-                    should_close = True
-            else:
-                should_close = True
-
-        if should_close:
+        since = resolved_at.get(ticket.id) or ticket.updated_at
+        if now >= auto_close_at(since, tz):
             try:
                 ticket.status = "closed"
                 ticket.closed_at = now
@@ -130,6 +152,11 @@ def auto_close_resolved_tickets():
                 closed_count += 1
                 logger.info("Auto-closed ticket %s (resolved >48h)", ticket.ref)
 
+                try:
+                    from app.services.email_outbound import notify_customer_auto_closed
+                    notify_customer_auto_closed(ticket, since)
+                except Exception:
+                    logger.exception("notify_customer_auto_closed failed for %s", ticket.ref)
                 try:
                     from app.services.webhook_service import fire_ticket_status_changed
                     fire_ticket_status_changed(ticket, "resolved", "closed")
