@@ -49,6 +49,29 @@ TYPE_LABELS = {
 }
 
 
+# Statuses are admin-managed (Admin → Ticket Statuses, table ticket_statuses).
+# ALL_STATUSES / STATUS_LABELS above are only the built-in defaults; code that
+# validates or labels a ticket status must use these helpers so custom
+# statuses (e.g. "pending") work too.
+
+def valid_status_slugs() -> set:
+    from app.models.ticket_status import TicketStatus
+    return set(ALL_STATUSES) | {slug for (slug,) in db.session.query(TicketStatus.slug).all()}
+
+
+def ticket_status_labels() -> dict:
+    from app.models.ticket_status import TicketStatus
+    return {**STATUS_LABELS, **{s.slug: s.label for s in TicketStatus.query.all()}}
+
+
+def status_label_for(slug):
+    from app.models.ticket_status import TicketStatus
+    row = db.session.get(TicketStatus, slug) if slug else None
+    if row:
+        return row.label
+    return STATUS_LABELS.get(slug, (slug or "").replace("_", " ").title())
+
+
 class Ticket(db.Model):
     __tablename__ = "tickets"
 
@@ -99,7 +122,7 @@ class Ticket(db.Model):
 
     @property
     def status_label(self):
-        return STATUS_LABELS.get(self.status, self.status)
+        return status_label_for(self.status)
 
     @property
     def priority_label(self):

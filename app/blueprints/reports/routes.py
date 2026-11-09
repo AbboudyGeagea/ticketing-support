@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from flask import render_template, request, abort, current_app, Response
 from flask_login import login_required, current_user
 from app.blueprints.reports import bp
-from app.models.ticket import ALL_PRIORITIES, PRIORITY_LABELS, STATUS_LABELS, TYPE_LABELS
+from app.models.ticket import ALL_PRIORITIES, PRIORITY_LABELS, TYPE_LABELS, ticket_status_labels
 from app.models.user import User
 from app.models.hospital import Hospital
 from app.models.product import Product
@@ -122,6 +122,7 @@ def export_csv(kind):
                     "Status", "First response (h)", "Resolution (h)", "Closed", "SLA breached",
                     "Subject", "Subject words", "Description words", "Language", "Urgent language"])
         frt = rb.first_responses
+        status_labels = ticket_status_labels()
         for t in rb.created:
             msgs = rb.created_messages.get(t.id, [])
             desc = "" if t.phi_flagged or not msgs else ta.strip_quoted(msgs[0].body or "", is_reply=False)
@@ -129,7 +130,7 @@ def export_csv(kind):
             w.writerow([_cell(x) for x in (
                 t.ref, fmt(t.created_at), hosp(t.hospital_id), rb.product_names.get(t.product_id, ""),
                 agent(t.assigned_to), PRIORITY_LABELS.get(t.priority, t.priority),
-                TYPE_LABELS.get(t.type, t.type), t.source, STATUS_LABELS.get(t.status, t.status),
+                TYPE_LABELS.get(t.type, t.type), t.source, status_labels.get(t.status, t.status),
                 round(frt[t.id][0], 2) if t.id in frt else None,
                 round(rb.created_resolution[t.id], 2) if t.id in rb.created_resolution else None,
                 fmt(t.closed_at), "yes" if t.sla_breached else "no",

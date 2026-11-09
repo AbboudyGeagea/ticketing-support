@@ -134,7 +134,7 @@ class TicketStatusForm(FlaskForm):
 
 class NewTicketStatusForm(FlaskForm):
     slug = StringField("Slug", validators=[
-        DataRequired(), Length(max=50),
+        DataRequired(), Length(max=20),  # tickets.status is VARCHAR(20)
         Regexp(r'^[a-z0-9_]+$', message="Lowercase letters, numbers, and underscores only."),
     ])
     label = StringField("Display Label", validators=[DataRequired(), Length(max=100)])

@@ -36,7 +36,7 @@ from app.models.product import Product
 from app.models.task import TimeEntry
 from app.models.ticket import (
     Ticket, TicketHistory, TicketMessage,
-    ALL_PRIORITIES, PRIORITY_LABELS, STATUS_LABELS, TYPE_LABELS,
+    ALL_PRIORITIES, PRIORITY_LABELS, TYPE_LABELS, ticket_status_labels,
 )
 from app.models.user import User
 from app.services import text_analytics as ta
@@ -731,6 +731,7 @@ class ReportBuilder:
         ]
 
         backlog_age = bucketize([_hours(self.now - b.created_at) for b in self.backlog], AGE_BUCKETS)
+        status_labels = ticket_status_labels()
 
         def mix(attr, labels):
             c = Counter(getattr(t, attr) or "unknown" for t in created)
@@ -760,7 +761,7 @@ class ReportBuilder:
             ),
             "type_mix": mix("type", TYPE_LABELS),
             "source_mix": mix("source", {"portal": "Portal", "email": "Email", "agent": "Agent"}),
-            "status_mix": mix("status", STATUS_LABELS),
+            "status_mix": mix("status", status_labels),
             "sla": {
                 "resp_met": resp_met, "resp_missed": resp_missed, "resp_rate": rate(resp_met, resp_met + resp_missed),
                 "res_met": res_met, "res_missed": res_missed, "res_rate": rate(res_met, res_met + res_missed),
@@ -772,7 +773,7 @@ class ReportBuilder:
             "backlog_age": backlog_age,
             "backlog_age_labels": [b[0] for b in AGE_BUCKETS],
             "backlog_status": [
-                {"name": STATUS_LABELS.get(s, s), "value": c}
+                {"name": status_labels.get(s, s), "value": c}
                 for s, c in Counter(b.status for b in self.backlog).most_common()
             ],
         }

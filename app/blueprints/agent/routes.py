@@ -11,7 +11,7 @@ from app.blueprints.agent import bp
 from app.blueprints.agent.forms import ReplyForm, StatusForm, AssignForm, PriorityForm, TaskForm, NewTicketForm, SprintForm
 from app.models.ticket import (
     Ticket, TicketMessage, TicketHistory, ALL_STATUSES, ALL_PRIORITIES, ALL_TYPES, TYPE_LABELS,
-    STATUS_RESOLVED, STATUS_CLOSED,
+    STATUS_RESOLVED, STATUS_CLOSED, valid_status_slugs, status_label_for,
 )
 from app.models.task import Task, TaskChecklist, TaskDependency, TimeEntry, Sprint, TASK_TODO, TASK_IN_PROGRESS, TASK_DONE, ALL_TASK_STATUSES
 from app.models.product import Product
@@ -593,6 +593,9 @@ def ticket_status(ref):
         flash("Closed tickets cannot be reopened. Open a new ticket instead.", "warning")
         return redirect(url_for("agent.ticket_detail", ref=ref))
     new_status = request.form.get("status")
+    if new_status not in valid_status_slugs():
+        flash(f'Unknown status "{new_status}".', "danger")
+        return redirect(url_for("agent.ticket_detail", ref=ref))
 
     if new_status == "escalated":
         esc_ref = request.form.get("escalation_ref", "").strip()
@@ -607,7 +610,7 @@ def ticket_status(ref):
             flash("A vendor ticket URL or reference number is required when escalating.", "danger")
             return redirect(url_for("agent.ticket_detail", ref=ref))
 
-    if new_status in ALL_STATUSES and new_status != ticket.status:
+    if new_status != ticket.status:
         old = ticket.status
         ticket.status = new_status
         ticket.updated_at = datetime.utcnow()
@@ -627,10 +630,10 @@ def ticket_status(ref):
             current_app.logger.exception("notify_customer_status_change failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
-            notify_all_agents_activity(ticket, f"Status → {new_status.replace('_', ' ').title()}", actor_name=current_user.name)
+            notify_all_agents_activity(ticket, f"Status → {status_label_for(new_status)}", actor_name=current_user.name)
         except Exception:
             current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
-        flash(f"Status changed to {new_status.replace('_', ' ').title()}.", "success")
+        flash(f"Status changed to {status_label_for(new_status)}.", "success")
     return redirect(url_for("agent.ticket_detail", ref=ref))
 
 
