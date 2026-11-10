@@ -504,16 +504,15 @@ def ticket_reply(ref):
         return redirect(url_for("agent.ticket_detail", ref=ref))
 
     body = (form.body.data or "").strip()
-    uploaded_file = request.files.get("attachment")
-    has_attachment = bool(uploaded_file and uploaded_file.filename)
+    uploaded_files = [f for f in request.files.getlist("attachment") if f and f.filename]
 
-    if not body and not has_attachment:
+    if not body and not uploaded_files:
         flash("Please enter a message or attach a file.", "danger")
         return redirect(url_for("agent.ticket_detail", ref=ref))
 
-    if not body and has_attachment:
+    if not body:
         from werkzeug.utils import secure_filename as _sf
-        body = _sf(uploaded_file.filename) or "Attachment"
+        body = ", ".join(_sf(f.filename) for f in uploaded_files if _sf(f.filename)) or "Attachment"
 
     msg = TicketMessage(
         ticket_id=ticket.id,
@@ -526,25 +525,12 @@ def ticket_reply(ref):
     db.session.add(msg)
     db.session.flush()  # get msg.id
 
-    file = request.files.get("attachment")
-    if file and file.filename:
-        from app.services.file_service import save_attachment
-        from app.models.attachment import TicketAttachment
-        try:
-            stored_name, original_name, mimetype, size = save_attachment(file, ticket.id)
-            att = TicketAttachment(
-                ticket_id=ticket.id,
-                message_id=msg.id,
-                uploaded_by=current_user.id,
-                filename=stored_name,
-                original_name=original_name,
-                mimetype=mimetype,
-                size=size,
-            )
-            db.session.add(att)
-        except Exception as e:
-            current_app.logger.exception("Attachment save failed for ticket %s", ticket.ref)
-            flash("Attachment could not be saved — reply submitted without it.", "warning")
+    if uploaded_files:
+        from app.services.file_service import save_ticket_attachments
+        failed = save_ticket_attachments(uploaded_files, ticket.id, msg.id, current_user.id)
+        if failed:
+            flash(f"Could not save: {', '.join(failed)} — reply submitted without "
+                  f"{'it' if len(failed) == 1 else 'them'}.", "warning")
 
     _log_history(ticket, current_user.id, "reply", None,
                  "internal note" if form.is_internal.data else "public reply")

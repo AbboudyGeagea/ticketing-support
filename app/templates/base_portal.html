@@ -164,6 +164,18 @@
     var btn = e.target.querySelector('[type="submit"]:not([data-no-disable])');
     if (btn) { btn.disabled = true; btn.style.opacity = '0.6'; }
   });
+  /* Multi-file inputs: the server (and nginx) reject a whole request over 10 MB, losing the
+     typed message — so refuse an over-limit selection as soon as it is picked. */
+  document.addEventListener('change', function (e) {
+    var input = e.target;
+    if (!input.matches || !input.matches('input[type="file"][data-max-total]')) return;
+    var max = parseInt(input.dataset.maxTotal, 10), total = 0;
+    for (var i = 0; i < input.files.length; i++) total += input.files[i].size;
+    if (total > max) {
+      alert('Those files add up to ' + (total / 1e6).toFixed(1) + ' MB. The limit is ' + Math.round(max / 1e6) + ' MB per message, so please choose fewer or smaller files.');
+      input.value = '';
+    }
+  });
 })();
 </script>
 {% block scripts %}{% endblock %}

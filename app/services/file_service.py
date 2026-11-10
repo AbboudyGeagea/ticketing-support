@@ -28,6 +28,35 @@ def save_attachment(file, ticket_id):
     return stored_name, original_name, mimetype, size
 
 
+def save_ticket_attachments(files, ticket_id, message_id, uploaded_by):
+    """Save every non-empty upload in `files` and add a TicketAttachment row for each
+    to the session (caller commits). One bad file never blocks the others.
+    Returns the names of the files that could not be saved."""
+    from app.extensions import db
+    from app.models.attachment import TicketAttachment
+
+    failed = []
+    for file in files:
+        if not file or not file.filename:
+            continue
+        try:
+            stored_name, original_name, mimetype, size = save_attachment(file, ticket_id)
+        except Exception:
+            current_app.logger.exception("Attachment save failed for ticket id %s", ticket_id)
+            failed.append(secure_filename(file.filename) or "file")
+            continue
+        db.session.add(TicketAttachment(
+            ticket_id=ticket_id,
+            message_id=message_id,
+            uploaded_by=uploaded_by,
+            filename=stored_name,
+            original_name=original_name,
+            mimetype=mimetype,
+            size=size,
+        ))
+    return failed
+
+
 def delete_attachment(ticket_id, stored_filename):
     """Delete file from disk. Silently ignores if not found."""
     path = os.path.join(current_app.config["UPLOAD_FOLDER"], str(ticket_id), stored_filename)

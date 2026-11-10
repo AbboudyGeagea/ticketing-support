@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import MultipleFileField, FileAllowed
 from wtforms import StringField, TextAreaField, SelectField, BooleanField, SubmitField, DateTimeLocalField, DateField
 from wtforms.validators import DataRequired, Optional, Length, ValidationError
 
@@ -22,7 +22,7 @@ class NewTicketForm(FlaskForm):
 class ReplyForm(FlaskForm):
     body = TextAreaField("Message", validators=[Optional()])
     is_internal = BooleanField("Internal note (not visible to customer)")
-    attachment = FileField("Attach file", validators=[
+    attachment = MultipleFileField("Attach files", validators=[
         FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     submit = SubmitField("Send Reply")

@@ -1,5 +1,5 @@
 from flask_wtf import FlaskForm
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import MultipleFileField, FileAllowed
 from wtforms import StringField, TextAreaField, SelectField, SubmitField
 from wtforms.validators import DataRequired, Optional, Length
 
@@ -19,7 +19,7 @@ class NewTicketForm(FlaskForm):
         ("high", "High"),
         ("urgent", "Urgent"),
     ], default="medium")
-    attachment = FileField("Attach file", validators=[
+    attachment = MultipleFileField("Attach files", validators=[
         FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     rustdesk_peer_id = StringField("RustDesk Device ID (optional — for remote support)", validators=[Optional(), Length(max=100)])
@@ -28,7 +28,7 @@ class NewTicketForm(FlaskForm):
 
 class ReplyForm(FlaskForm):
     body = TextAreaField("Your Reply", validators=[DataRequired()])
-    attachment = FileField("Attach file", validators=[
+    attachment = MultipleFileField("Attach files", validators=[
         FileAllowed(["pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"], "Unsupported file type")
     ])
     submit = SubmitField("Send")
