@@ -28,6 +28,18 @@
         {% if form.title.errors %}<p class="text-red-500 text-xs mt-1">{{ form.title.errors[0] }}</p>{% endif %}
       </div>
       <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-700 mb-1.5" for="folder_id">Folder</label>
+        <select name="folder_id" id="folder_id"
+                class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+          <option value="0" data-customer="" {% if not form.folder_id.data %}selected{% endif %}>Unfiled</option>
+          {% for f in folders %}
+          <option value="{{ f.id }}" data-customer="{{ '1' if f.is_customer_facing else '0' }}"
+                  {% if form.folder_id.data == f.id %}selected{% endif %}>{{ f.name }}{% if f.is_customer_facing %} (customer-facing){% endif %}</option>
+          {% endfor %}
+        </select>
+        {% if form.folder_id.errors %}<p class="text-red-500 text-xs mt-1">{{ form.folder_id.errors[0] }}</p>{% endif %}
+      </div>
+      <div class="mb-4">
         <label class="block text-sm font-medium text-slate-700 mb-1.5">Category</label>
         {{ form.category(class="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary", placeholder="e.g. Hardware, Software, Network") }}
       </div>
@@ -76,12 +88,13 @@
       <div class="mb-6 space-y-2">
         <div class="flex items-center gap-2">
           {{ form.is_published_agent(class="rounded border-slate-300 text-primary") }}
-          <label class="text-sm text-slate-700">Published to agents</label>
+          <label class="text-sm text-slate-700" for="is_published_agent">Published to agents</label>
         </div>
-        <div class="flex items-center gap-2">
+        <div id="customer-unfiled" class="flex items-center gap-2">
           {{ form.is_published_customer(class="rounded border-slate-300 text-primary") }}
-          <label class="text-sm text-slate-700">Published to customers</label>
+          <label class="text-sm text-slate-700" for="is_published_customer">Published to customers</label>
         </div>
+        <p id="customer-folder" class="text-xs text-slate-500" style="display:none;"></p>
       </div>
 
       <div class="flex gap-3">
@@ -153,5 +166,20 @@ document.getElementById('btn-source').addEventListener('click', () => {
 document.querySelector('form').addEventListener('submit', () => {
   bodyHidden.value = (mode === 'visual') ? quill.root.innerHTML : sourceEl.value;
 });
+
+// Inside a folder, customer visibility comes from the folder, not the article checkbox.
+const folderSel = document.getElementById('folder_id');
+function syncCustomerVisibility() {
+  const opt = folderSel.options[folderSel.selectedIndex];
+  const inFolder = folderSel.value !== '0';
+  document.getElementById('customer-unfiled').style.display = inFolder ? 'none' : '';
+  const note = document.getElementById('customer-folder');
+  note.style.display = inFolder ? '' : 'none';
+  note.textContent = !inFolder ? '' : (opt.dataset.customer === '1'
+    ? 'Customer-facing folder: customers see this article once it is published.'
+    : 'Internal folder: customers never see this article.');
+}
+folderSel.addEventListener('change', syncCustomerVisibility);
+syncCustomerVisibility();
 </script>
 {% endblock %}

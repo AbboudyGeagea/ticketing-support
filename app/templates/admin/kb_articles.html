@@ -3,64 +3,230 @@
 {% block page_title %}Knowledge Base{% endblock %}
 
 {% block header_actions %}
-<a href="{{ url_for('admin.kb_article_new') }}"
+<a href="{{ url_for('admin.kb_article_new', folder=current_folder.id if current_folder else None) }}"
    class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
   + New Article
 </a>
 {% endblock %}
 
 {% block content %}
-<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-  <table class="w-full text-sm">
-    <thead class="bg-slate-50 border-b border-slate-200">
-      <tr>
-        <th class="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agents</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customers</th>
-        <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Views</th>
-        <th class="px-4 py-3 w-28"></th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-slate-100">
-      {% for a in articles %}
-      <tr class="hover:bg-slate-50 transition-colors">
-        <td class="px-5 py-3.5 font-medium text-slate-800">{{ a.title }}</td>
-        <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.category or '—' }}</td>
-        <td class="px-4 py-3.5">
-          {% if a.is_published_agent %}
-          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Published</span>
-          {% else %}
-          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Draft</span>
-          {% endif %}
-        </td>
-        <td class="px-4 py-3.5">
-          {% if a.is_published_customer %}
-          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Published</span>
-          {% else %}
-          <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Draft</span>
-          {% endif %}
-        </td>
-        <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.views }}</td>
-        <td class="px-4 py-3.5 text-right space-x-2">
-          <a href="{{ url_for('admin.kb_article_edit', article_id=a.id) }}"
-             class="text-primary hover:underline text-xs font-medium">Edit</a>
-          <form method="POST" action="{{ url_for('admin.kb_article_delete', article_id=a.id) }}"
-                class="inline" onsubmit="return confirm('Delete this article?')">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="text-red-500 hover:underline text-xs font-medium">Delete</button>
-          </form>
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="6" class="px-5 py-10 text-center text-slate-400 text-sm">
-          No articles yet.
-          <a href="{{ url_for('admin.kb_article_new') }}" class="text-primary hover:underline ml-1">Write the first one →</a>
-        </td>
-      </tr>
+{% set input_cls = "w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" %}
+<div class="flex gap-5 items-start">
+
+  <!-- Folder sidebar -->
+  <div class="flex-shrink-0 space-y-4" style="width:15rem;">
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Folders</p>
+      {% macro folder_link(label, value, count, customer=False) %}
+      <a href="{{ url_for('admin.kb_articles', folder=value) }}"
+         class="flex items-center justify-between gap-2 text-sm py-1 {% if selected == (value or '') %}text-primary font-medium{% else %}text-slate-600 hover:text-primary{% endif %}">
+        <span class="truncate">{{ label }}</span>
+        <span class="flex items-center gap-2 flex-shrink-0">
+          {% if customer %}<span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700" title="Customer-facing">Customers</span>{% endif %}
+          <span class="text-xs text-slate-400">{{ count }}</span>
+        </span>
+      </a>
+      {% endmacro %}
+      {{ folder_link('All articles', None, total_count) }}
+      {{ folder_link('Unfiled', 'unfiled', unfiled_count) }}
+      {% if folders %}<div class="border-t border-slate-100" style="margin:0.5rem 0;"></div>{% endif %}
+      {% for f in folders %}
+      {{ folder_link(f.name, f.id|string, counts.get(f.id, 0), f.is_customer_facing) }}
       {% endfor %}
-    </tbody>
-  </table>
+    </div>
+
+    <form method="POST" action="{{ url_for('admin.kb_folder_new') }}"
+          class="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <p class="text-xs font-semibold text-slate-500 uppercase tracking-wider">New folder</p>
+      <input type="text" name="name" required maxlength="200" placeholder="Folder name" class="{{ input_cls }}">
+      <label class="flex items-center gap-2 text-sm text-slate-700">
+        <input type="checkbox" name="is_customer_facing" value="1" class="rounded border-slate-300 text-primary">
+        Customer-facing
+      </label>
+      <button type="submit" class="w-full bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Create folder</button>
+    </form>
+  </div>
+
+  <!-- Main -->
+  <div class="flex-1 min-w-0 space-y-4">
+
+    {% if current_folder %}
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+      <form id="folder-edit" method="POST" action="{{ url_for('admin.kb_folder_edit', folder_id=current_folder.id) }}"
+            class="flex flex-wrap items-center gap-3"
+            data-was-customer="{{ '1' if current_folder.is_customer_facing else '0' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="text" name="name" value="{{ current_folder.name }}" required maxlength="200"
+               class="flex-1 border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary" style="min-width:12rem;">
+        <label class="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" name="is_customer_facing" value="1" class="rounded border-slate-300 text-primary"
+                 {% if current_folder.is_customer_facing %}checked{% endif %}>
+          Customer-facing
+        </label>
+        <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Save folder</button>
+      </form>
+      <div class="flex items-center justify-between gap-3 mt-3">
+        <p class="text-xs text-slate-500">
+          {% if current_folder.is_customer_facing %}
+          Customers can see every <strong>published</strong> article in this folder. Drafts stay hidden.
+          {% else %}
+          Internal only — customers can't see any article in this folder.
+          {% endif %}
+        </p>
+        <form method="POST" action="{{ url_for('admin.kb_folder_delete', folder_id=current_folder.id) }}"
+              data-confirm="{% if articles %}Its {{ articles|length }} article(s) will move to Unfiled and keep their current customer visibility.{% else %}This folder is empty.{% endif %}"
+              data-confirm-title="Delete folder &quot;{{ current_folder.name }}&quot;?"
+              data-confirm-ok="Delete" data-confirm-variant="danger">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="text-red-500 hover:underline text-xs font-medium">Delete folder</button>
+        </form>
+      </div>
+    </div>
+    {% elif selected == 'unfiled' %}
+    <p class="text-xs text-slate-500">Articles not in any folder. Their customer visibility is set per article. Select them and move them into a folder.</p>
+    {% endif %}
+
+    {% if articles %}
+    <form id="bulk-move" method="POST" action="{{ url_for('admin.kb_articles_move') }}"
+          class="flex flex-wrap items-center gap-3 bg-white rounded-xl border border-slate-200 shadow-sm px-4 py-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="back" value="{{ selected }}">
+      <span class="text-sm text-slate-600"><span id="kb-sel-count">0</span> selected</span>
+      <select name="folder_id" id="kb-move-target" required
+              class="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+        <option value="">Move to…</option>
+        <option value="unfiled">Unfiled</option>
+        {% for f in folders %}
+        <option value="{{ f.id }}" data-customer="{{ '1' if f.is_customer_facing else '0' }}">{{ f.name }}{% if f.is_customer_facing %} (customer-facing){% endif %}</option>
+        {% endfor %}
+      </select>
+      <button type="submit" class="bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">Move</button>
+    </form>
+    {% endif %}
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-slate-50 border-b border-slate-200">
+          <tr>
+            <th class="px-4 py-3" style="width:2.5rem;">
+              {% if articles %}<input type="checkbox" id="kb-select-all" class="rounded border-slate-300 text-primary" title="Select all">{% endif %}
+            </th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Title</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Folder</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Category</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Agents</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Customers</th>
+            <th class="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Views</th>
+            <th class="px-4 py-3 w-28"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {% for a in articles %}
+          <tr class="hover:bg-slate-50 transition-colors">
+            <td class="px-4 py-3.5">
+              <input type="checkbox" name="article_ids" value="{{ a.id }}" form="bulk-move"
+                     class="kb-select rounded border-slate-300 text-primary">
+            </td>
+            <td class="px-4 py-3.5 font-medium text-slate-800">{{ a.title }}</td>
+            <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.folder.name if a.folder else 'Unfiled' }}</td>
+            <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.category or '—' }}</td>
+            <td class="px-4 py-3.5">
+              {% if a.is_published_agent %}
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Published</span>
+              {% else %}
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Draft</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3.5" {% if a.folder %}title="Set by folder &quot;{{ a.folder.name }}&quot;"{% endif %}>
+              {% if a.is_customer_visible %}
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">Visible</span>
+              {% else %}
+              <span class="inline-flex text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Hidden</span>
+              {% endif %}
+            </td>
+            <td class="px-4 py-3.5 text-slate-500 text-xs">{{ a.views }}</td>
+            <td class="px-4 py-3.5 text-right space-x-2">
+              <a href="{{ url_for('admin.kb_article_edit', article_id=a.id) }}"
+                 class="text-primary hover:underline text-xs font-medium">Edit</a>
+              <form method="POST" action="{{ url_for('admin.kb_article_delete', article_id=a.id) }}"
+                    class="inline" onsubmit="return confirm('Delete this article?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="text-red-500 hover:underline text-xs font-medium">Delete</button>
+              </form>
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="8" class="px-5 py-10 text-center text-slate-400 text-sm">
+              {% if current_folder %}
+              This folder is empty. Open <a href="{{ url_for('admin.kb_articles', folder='unfiled') }}" class="text-primary hover:underline">Unfiled</a>
+              or <a href="{{ url_for('admin.kb_articles') }}" class="text-primary hover:underline">All articles</a>, select articles and move them here.
+              {% elif selected == 'unfiled' %}
+              Every article is in a folder.
+              {% else %}
+              No articles yet.
+              <a href="{{ url_for('admin.kb_article_new') }}" class="text-primary hover:underline ml-1">Write the first one →</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
+
+<script>
+(function () {
+  // Bulk selection
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('.kb-select'));
+  var all = document.getElementById('kb-select-all');
+  var count = document.getElementById('kb-sel-count');
+  function refresh() {
+    var n = boxes.filter(function (b) { return b.checked; }).length;
+    if (count) count.textContent = n;
+    if (all) { all.checked = n > 0 && n === boxes.length; all.indeterminate = n > 0 && n < boxes.length; }
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', refresh); });
+  if (all) all.addEventListener('change', function () {
+    boxes.forEach(function (b) { b.checked = all.checked; });
+    refresh();
+  });
+
+  // Ask before moving articles into a customer-facing folder
+  var moveForm = document.getElementById('bulk-move');
+  var target = document.getElementById('kb-move-target');
+  if (moveForm && target) {
+    target.addEventListener('change', function () {
+      var opt = target.options[target.selectedIndex];
+      if (opt && opt.dataset.customer === '1') {
+        moveForm.dataset.confirm = 'Published articles you move into "' + opt.text.replace(' (customer-facing)', '') +
+                                   '" will become visible to customers.';
+        moveForm.dataset.confirmTitle = 'Move into a customer-facing folder?';
+        moveForm.dataset.confirmOk = 'Move';
+        moveForm.dataset.confirmVariant = 'warning';
+      } else {
+        delete moveForm.dataset.confirm;
+      }
+    });
+  }
+
+  // Ask before switching a folder to customer-facing
+  var editForm = document.getElementById('folder-edit');
+  if (editForm) {
+    var cb = editForm.querySelector('[name="is_customer_facing"]');
+    cb.addEventListener('change', function () {
+      if (cb.checked && editForm.dataset.wasCustomer === '0') {
+        editForm.dataset.confirm = 'Customers will see every published article in this folder.';
+        editForm.dataset.confirmTitle = 'Make this folder customer-facing?';
+        editForm.dataset.confirmOk = 'Make customer-facing';
+        editForm.dataset.confirmVariant = 'warning';
+      } else {
+        delete editForm.dataset.confirm;
+      }
+    });
+  }
+})();
+</script>
 {% endblock %}

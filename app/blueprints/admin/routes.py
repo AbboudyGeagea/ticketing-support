@@ -21,6 +21,7 @@ from app.models.assignment_rule import AssignmentRule
 from app.models.webhook_config import WebhookConfig, WEBHOOK_EVENTS
 from app.models.project import ProjectTemplate, ProjectTemplateTask, ProjectTemplateRequirement
 from app.models.kb_article import KBArticle
+from app.models.kb_folder import KBFolder
 from app.models.ticket_template import TicketTemplate
 from app.models.sla_policy import SLAPolicy
 from app.models.shared_installation import SharedInstallation
@@ -888,8 +889,133 @@ def _save_template_requirements(tmpl):
 @login_required
 @admin_required
 def kb_articles():
-    articles = KBArticle.query.order_by(KBArticle.category, KBArticle.title).all()
-    return render_template("admin/kb_articles.html", articles=articles)
+    from sqlalchemy.orm import joinedload
+    folders = KBFolder.query.order_by(KBFolder.name).all()
+    counts = dict(
+        db.session.query(KBArticle.folder_id, func.count(KBArticle.id)).group_by(KBArticle.folder_id).all()
+    )
+    selected = request.args.get("folder", "")
+    current_folder = None
+    query = KBArticle.query.options(joinedload(KBArticle.folder))
+    if selected == "unfiled":
+        query = query.filter(KBArticle.folder_id.is_(None))
+    elif selected.isdigit():
+        current_folder = db.session.get(KBFolder, int(selected)) or abort(404)
+        selected = str(current_folder.id)
+        query = query.filter(KBArticle.folder_id == current_folder.id)
+    else:
+        selected = ""
+    articles = query.order_by(KBArticle.category, KBArticle.title).all()
+    return render_template(
+        "admin/kb_articles.html", articles=articles, folders=folders, counts=counts,
+        unfiled_count=counts.get(None, 0), total_count=sum(counts.values()),
+        selected=selected, current_folder=current_folder,
+    )
+
+
+# Folders are shared by every agent: no owner, no per-agent permissions.
+
+def _kb_folder_form_values():
+    name = (request.form.get("name") or "").strip()[:200]
+    return name, request.form.get("is_customer_facing") == "1"
+
+
+def _kb_folder_name_taken(name, exclude_id=None):
+    q = KBFolder.query.filter(func.lower(KBFolder.name) == name.lower())
+    if exclude_id:
+        q = q.filter(KBFolder.id != exclude_id)
+    return db.session.query(q.exists()).scalar()
+
+
+@bp.route("/kb/folders/new", methods=["POST"])
+@login_required
+@admin_required
+def kb_folder_new():
+    name, customer_facing = _kb_folder_form_values()
+    if not name:
+        flash("Folder name is required.", "danger")
+        return redirect(url_for("admin.kb_articles"))
+    if _kb_folder_name_taken(name):
+        flash(f'A folder named "{name}" already exists.', "danger")
+        return redirect(url_for("admin.kb_articles"))
+    folder = KBFolder(name=name, is_customer_facing=customer_facing)
+    db.session.add(folder)
+    db.session.commit()
+    flash(f'Folder "{name}" created.', "success")
+    return redirect(url_for("admin.kb_articles", folder=folder.id))
+
+
+@bp.route("/kb/folders/<int:folder_id>/edit", methods=["POST"])
+@login_required
+@admin_required
+def kb_folder_edit(folder_id):
+    folder = db.session.get(KBFolder, folder_id) or abort(404)
+    name, customer_facing = _kb_folder_form_values()
+    if not name:
+        flash("Folder name is required.", "danger")
+    elif _kb_folder_name_taken(name, exclude_id=folder.id):
+        flash(f'A folder named "{name}" already exists.', "danger")
+    else:
+        folder.name = name
+        folder.is_customer_facing = customer_facing
+        db.session.commit()
+        flash("Folder saved.", "success")
+    return redirect(url_for("admin.kb_articles", folder=folder.id))
+
+
+@bp.route("/kb/folders/<int:folder_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def kb_folder_delete(folder_id):
+    folder = db.session.get(KBFolder, folder_id) or abort(404)
+    moved = list(folder.articles)
+    for article in moved:
+        article.move_to(None)
+    db.session.flush()
+    db.session.delete(folder)
+    db.session.commit()
+    msg = f'Folder "{folder.name}" deleted.'
+    if moved:
+        msg += f" {len(moved)} article(s) moved to Unfiled."
+    flash(msg, "success")
+    return redirect(url_for("admin.kb_articles", folder="unfiled" if moved else None))
+
+
+@bp.route("/kb/move", methods=["POST"])
+@login_required
+@admin_required
+def kb_articles_move():
+    back = request.form.get("back", "")
+    back = back if back == "unfiled" or back.isdigit() else None
+    ids = [int(x) for x in request.form.getlist("article_ids") if x.isdigit()]
+    target = request.form.get("folder_id", "")
+    if not ids:
+        flash("Select at least one article to move.", "warning")
+        return redirect(url_for("admin.kb_articles", folder=back))
+    if target == "unfiled":
+        folder = None
+    elif target.isdigit():
+        folder = db.session.get(KBFolder, int(target)) or abort(404)
+    else:
+        flash("Choose a destination folder.", "warning")
+        return redirect(url_for("admin.kb_articles", folder=back))
+    articles = KBArticle.query.filter(KBArticle.id.in_(ids)).all()
+    for article in articles:
+        article.move_to(folder)
+    db.session.commit()
+    flash(f"Moved {len(articles)} article(s) to {folder.name if folder else 'Unfiled'}.", "success")
+    return redirect(url_for("admin.kb_articles", folder=back))
+
+
+def _kb_folder_choices(form):
+    folders = KBFolder.query.order_by(KBFolder.name).all()
+    form.folder_id.choices = [(0, "Unfiled")] + [(f.id, f.name) for f in folders]
+    return folders
+
+
+def _kb_folder_from_form(form):
+    folder_id = form.folder_id.data or 0
+    return db.session.get(KBFolder, folder_id) if folder_id else None
 
 
 def _save_kb_attachments(article, files):
@@ -919,15 +1045,21 @@ def _save_kb_attachments(article, files):
 @admin_required
 def kb_article_new():
     form = KBArticleForm()
+    folders = _kb_folder_choices(form)
+    if request.method == "GET":
+        form.folder_id.data = request.args.get("folder", 0, type=int)
     if form.validate_on_submit():
         slug = _make_slug(form.title.data)
+        folder = _kb_folder_from_form(form)
         article = KBArticle(
             title=form.title.data,
             slug=slug,
             body=form.body.data,
             category=form.category.data.strip() if form.category.data else None,
+            folder=folder,
             is_published_agent=form.is_published_agent.data,
-            is_published_customer=form.is_published_customer.data,
+            # Inside a folder, the folder decides customer visibility.
+            is_published_customer=form.is_published_customer.data if folder is None else False,
             created_by=current_user.id,
         )
         db.session.add(article)
@@ -935,8 +1067,8 @@ def kb_article_new():
         _save_kb_attachments(article, request.files.getlist("attachments"))
         db.session.commit()
         flash("Article saved.", "success")
-        return redirect(url_for("admin.kb_articles"))
-    return render_template("admin/kb_article_form.html", form=form, article=None)
+        return redirect(url_for("admin.kb_articles", folder=folder.id if folder else None))
+    return render_template("admin/kb_article_form.html", form=form, article=None, folders=folders)
 
 
 @bp.route("/kb/<int:article_id>/edit", methods=["GET", "POST"])
@@ -945,17 +1077,26 @@ def kb_article_new():
 def kb_article_edit(article_id):
     article = KBArticle.query.get_or_404(article_id)
     form = KBArticleForm(obj=article)
+    folders = _kb_folder_choices(form)
+    if request.method == "GET":
+        form.folder_id.data = article.folder_id or 0
+        # Pre-tick the unfiled checkbox with what customers see now, so switching the
+        # folder to "Unfiled" starts from the current visibility rather than a stale flag.
+        form.is_published_customer.data = article.is_customer_visible
     if form.validate_on_submit():
         article.title = form.title.data
         article.body = form.body.data
         article.category = form.category.data.strip() if form.category.data else None
         article.is_published_agent = form.is_published_agent.data
-        article.is_published_customer = form.is_published_customer.data
+        folder = _kb_folder_from_form(form)
+        article.folder = folder
+        if folder is None:
+            article.is_published_customer = form.is_published_customer.data
         _save_kb_attachments(article, request.files.getlist("attachments"))
         db.session.commit()
         flash("Article updated.", "success")
         return redirect(url_for("admin.kb_article_edit", article_id=article.id))
-    return render_template("admin/kb_article_form.html", form=form, article=article)
+    return render_template("admin/kb_article_form.html", form=form, article=article, folders=folders)
 
 
 @bp.route("/kb/<int:article_id>/delete", methods=["POST"])

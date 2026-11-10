@@ -106,6 +106,7 @@ class ProjectTemplateForm(FlaskForm):
 class KBArticleForm(FlaskForm):
     title = StringField("Title", validators=[Optional(), Length(max=500)])
     category = StringField("Category", validators=[Optional(), Length(max=100)])
+    folder_id = SelectField("Folder", coerce=int, default=0, validators=[Optional()])
     body = TextAreaField("Content", validators=[Optional()])
     is_published_agent = BooleanField("Published to agents", default=False)
     is_published_customer = BooleanField("Published to customers", default=False)

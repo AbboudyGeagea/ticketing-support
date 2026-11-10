@@ -515,22 +515,33 @@ def profile():
 @customer_required
 def kb_list():
     from app.models.kb_article import KBArticle
+    from app.models.kb_folder import KBFolder
     q = request.args.get("q", "").strip()
     category = request.args.get("category", "")
-    query = KBArticle.query.filter_by(is_published_customer=True)
+    folder_id = request.args.get("folder", type=int)
+    visible = KBArticle.customer_visible_clause()
+    query = KBArticle.query.options(joinedload(KBArticle.folder)).filter(visible)
     if q:
         query = query.filter(
             db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
         )
     if category:
         query = query.filter_by(category=category)
+    if folder_id:
+        query = query.filter(KBArticle.folder_id == folder_id)
     articles = query.order_by(KBArticle.category, KBArticle.title).all()
     categories = db.session.query(KBArticle.category).filter(
-        KBArticle.is_published_customer == True, KBArticle.category.isnot(None)
+        visible, KBArticle.category.isnot(None)
     ).distinct().order_by(KBArticle.category).all()
     categories = [c[0] for c in categories]
-    return render_template("portal/kb.html", articles=articles, q=q,
-                           category=category, categories=categories)
+    # Only customer-facing folders that actually hold something visible — internal folder
+    # names never reach the portal.
+    folders = KBFolder.query.filter(
+        KBFolder.is_customer_facing.is_(True),
+        KBFolder.articles.any(KBArticle.is_published_agent.is_(True)),
+    ).order_by(KBFolder.name).all()
+    return render_template("portal/kb.html", articles=articles, q=q, category=category,
+                           categories=categories, folders=folders, folder_id=folder_id)
 
 
 @bp.route("/kb/<int:article_id>")
@@ -539,7 +550,7 @@ def kb_list():
 def kb_article(article_id):
     from app.models.kb_article import KBArticle
     article = KBArticle.query.get_or_404(article_id)
-    if not article.is_published_customer:
+    if not article.is_customer_visible:
         abort(404)
     article.views += 1
     db.session.commit()
@@ -553,7 +564,7 @@ def kb_attachment_download(article_id, att_id):
     from app.models.kb_article import KBArticle
     from app.models.kb_article_attachment import KBArticleAttachment
     article = KBArticle.query.get_or_404(article_id)
-    if not article.is_published_customer:
+    if not article.is_customer_visible:
         abort(404)
     att = KBArticleAttachment.query.filter_by(id=att_id, kb_article_id=article_id).first_or_404()
     upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(article_id))

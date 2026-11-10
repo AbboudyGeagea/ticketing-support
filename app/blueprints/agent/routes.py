@@ -1516,23 +1516,31 @@ def toggle_availability():
 @login_required
 @agent_required
 def kb_list():
+    from sqlalchemy.orm import joinedload
     from app.models.kb_article import KBArticle
+    from app.models.kb_folder import KBFolder
     q = request.args.get("q", "").strip()
     category = request.args.get("category", "")
-    query = KBArticle.query.filter_by(is_published_agent=True)
+    folder_id = request.args.get("folder", type=int)
+    query = KBArticle.query.options(joinedload(KBArticle.folder)).filter_by(is_published_agent=True)
     if q:
         query = query.filter(
             db.or_(KBArticle.title.ilike(f"%{q}%"), KBArticle.body.ilike(f"%{q}%"))
         )
     if category:
         query = query.filter_by(category=category)
+    if folder_id:
+        query = query.filter(KBArticle.folder_id == folder_id)
     articles = query.order_by(KBArticle.category, KBArticle.title).all()
     categories = db.session.query(KBArticle.category).filter(
         KBArticle.is_published_agent == True, KBArticle.category.isnot(None)
     ).distinct().order_by(KBArticle.category).all()
     categories = [c[0] for c in categories]
-    return render_template("agent/kb.html", articles=articles, q=q,
-                           category=category, categories=categories)
+    folders = KBFolder.query.filter(
+        KBFolder.articles.any(KBArticle.is_published_agent.is_(True))
+    ).order_by(KBFolder.name).all()
+    return render_template("agent/kb.html", articles=articles, q=q, category=category,
+                           categories=categories, folders=folders, folder_id=folder_id)
 
 
 @bp.route("/kb/<int:article_id>")
