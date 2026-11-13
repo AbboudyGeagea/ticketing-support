@@ -26,31 +26,47 @@
     }
   </script>
   {% endif %}
+  <style>
+    .portal-links { margin-left: auto; }
+    /* Phones: page links drop to their own swipeable row under logo + actions.
+       Plain CSS because the bundled tailwind.css is not rebuilt on update. */
+    @media (max-width: 767px) {
+      .portal-nav { flex-wrap: wrap; height: auto !important; padding-top: 0.5rem; padding-bottom: 0.5rem; row-gap: 0.5rem; }
+      .portal-links { order: 3; flex: 1 0 100%; margin-left: 0; gap: 1.25rem !important; overflow-x: auto; scrollbar-width: none; }
+      .portal-links::-webkit-scrollbar { display: none; }
+      .portal-links a { white-space: nowrap; padding: 0.25rem 0; }
+      .portal-actions { margin-left: auto; }
+      .nav-hide-sm { display: none !important; }
+    }
+  </style>
+  {% block head_extra %}{% endblock %}
 </head>
 <body class="bg-slate-50 font-sans antialiased min-h-screen flex flex-col">
 
 <nav class="bg-primary shadow-md">
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between h-14">
+  <div class="portal-nav max-w-5xl mx-auto px-4 sm:px-6 flex items-center justify-between gap-4 h-14">
     <div class="flex items-center gap-3">
       <img src="{{ url_for('static', filename='INTERMEDIC LOGO-1.png') }}"
            alt="Intermedic" class="h-7 w-auto brightness-0 invert">
-      <span class="text-green-100 text-xs font-medium">Support Portal</span>
+      <span class="nav-hide-sm text-green-100 text-xs font-medium">Support Portal</span>
     </div>
 
     {% if current_user.is_authenticated %}
-    <div class="flex items-center gap-4">
+    <div class="portal-links flex items-center gap-4">
       <a href="{{ url_for('portal.tickets') }}" class="text-green-100 hover:text-white text-sm transition-colors">My Tickets</a>
       <a href="{{ url_for('portal.kb_list') }}" class="text-green-100 hover:text-white text-sm transition-colors">Help Center</a>
       {% if portal_has_projects %}
       <a href="{{ url_for('projects.portal_list') }}" class="text-green-100 hover:text-white text-sm transition-colors">Projects</a>
       {% endif %}
       <a href="{{ url_for('portal.profile') }}" class="text-green-100 hover:text-white text-sm transition-colors">Profile</a>
+    </div>
+    <div class="portal-actions flex items-center gap-4">
       <a href="{{ url_for('portal.ticket_new') }}"
          class="bg-white text-primary px-3 py-1.5 rounded-md text-sm font-medium hover:bg-green-50 transition-colors">
         + New Ticket
       </a>
       <div class="flex items-center gap-2 border-l border-green-400 pl-4">
-        <span class="text-green-100 text-xs">{{ current_user.name }}</span>
+        <span class="nav-hide-sm text-green-100 text-xs">{{ current_user.name }}</span>
         <a href="{{ url_for('auth.logout') }}" class="text-green-100 hover:text-white text-xs transition-colors">Sign out</a>
       </div>
     </div>

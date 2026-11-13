@@ -557,18 +557,37 @@ def kb_article(article_id):
     return render_template("portal/kb_article.html", article=article)
 
 
-@bp.route("/kb/<int:article_id>/attachments/<int:att_id>/download")
-@login_required
-@customer_required
-def kb_attachment_download(article_id, att_id):
+def _kb_attachment_or_404(article_id, att_id):
     from app.models.kb_article import KBArticle
     from app.models.kb_article_attachment import KBArticleAttachment
     article = KBArticle.query.get_or_404(article_id)
     if not article.is_customer_visible:
         abort(404)
     att = KBArticleAttachment.query.filter_by(id=att_id, kb_article_id=article_id).first_or_404()
-    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(article_id))
-    return send_from_directory(upload_dir, att.filename, as_attachment=True, download_name=att.original_name)
+    return article, att
+
+
+@bp.route("/kb/<int:article_id>/attachments/<int:att_id>/download")
+@login_required
+@customer_required
+def kb_attachment_download(article_id, att_id):
+    """?inline=1 serves it for viewing (used by the viewer) instead of as a download."""
+    from app.services.file_service import send_kb_attachment
+    _, att = _kb_attachment_or_404(article_id, att_id)
+    return send_kb_attachment(att, inline=request.args.get("inline") == "1")
+
+
+@bp.route("/kb/<int:article_id>/attachments/<int:att_id>/view")
+@login_required
+@customer_required
+def kb_attachment_view(article_id, att_id):
+    article, att = _kb_attachment_or_404(article_id, att_id)
+    return render_template(
+        "kb_pdf_viewer.html", att=att,
+        pdf_url=url_for("portal.kb_attachment_download", article_id=article.id, att_id=att.id, inline=1),
+        download_url=url_for("portal.kb_attachment_download", article_id=article.id, att_id=att.id),
+        back_url=url_for("portal.kb_article", article_id=article.id),
+    )
 
 
 @bp.route("/tickets/<ref>/collaborators/add", methods=["POST"])

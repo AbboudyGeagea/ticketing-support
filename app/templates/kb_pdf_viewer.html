@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ att.original_name }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      background: #525659; color: #f1f5f9; overflow: hidden;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    }
+    .bar {
+      position: fixed; top: 0; left: 0; right: 0; height: 3.25rem; z-index: 10;
+      display: flex; align-items: center; gap: 0.375rem; padding: 0 0.5rem;
+      background: #334155; box-shadow: 0 1px 3px rgba(0,0,0,.35);
+    }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.375rem;
+      min-width: 2.5rem; height: 2.5rem; padding: 0 0.625rem; flex-shrink: 0;
+      border: none; border-radius: 0.5rem; background: transparent; color: #e2e8f0;
+      font: inherit; font-size: 0.875rem; font-weight: 500; text-decoration: none; cursor: pointer;
+    }
+    .btn:hover { background: #475569; }
+    .btn:disabled { opacity: 0.35; cursor: default; background: transparent; }
+    .btn svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+    .btn.primary { background: #00A651; color: #fff; }
+    .btn.primary:hover { background: #008f45; }
+    .btn.zoom { font-size: 1.25rem; line-height: 1; }
+    .title {
+      flex: 1; min-width: 0; font-size: 0.875rem; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .pager { font-size: 0.8125rem; color: #cbd5e1; white-space: nowrap; padding: 0 0.25rem; font-variant-numeric: tabular-nums; }
+    #viewer {
+      position: fixed; top: 3.25rem; bottom: 0; left: 0; right: 0;
+      overflow: auto; -webkit-overflow-scrolling: touch;
+    }
+    #pages { padding: 0.75rem 0; }
+    .page { margin: 0 auto 0.75rem; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+    .page canvas { display: block; width: 100%; height: 100%; }
+    #status {
+      max-width: 26rem; margin: 3rem auto; padding: 0 1rem;
+      text-align: center; font-size: 0.9375rem; line-height: 1.5; color: #e2e8f0;
+    }
+    #status a { color: #86efac; }
+    @media (max-width: 520px) {
+      .label { display: none; }
+      .bar { gap: 0.125rem; padding: 0 0.25rem; }
+      #pages { padding: 0.5rem 0; }
+      .page { margin-bottom: 0.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="bar">
+  <a class="btn" href="{{ back_url }}" title="Back to the article" aria-label="Back to the article">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    <span class="label">Article</span>
+  </a>
+  <div class="title" title="{{ att.original_name }}">{{ att.original_name }}</div>
+  <div class="pager" aria-live="polite"><span id="page-num">–</span> / <span id="page-total">–</span></div>
+  <button class="btn zoom" id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out" disabled>&minus;</button>
+  <button class="btn zoom" id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in" disabled>+</button>
+  <a class="btn primary" href="{{ download_url }}" title="Download" aria-label="Download">
+    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+    <span class="label">Download</span>
+  </a>
+</header>
+
+<div id="viewer">
+  <div id="status">
+    Loading document…
+    <noscript><br>This viewer needs JavaScript. <a href="{{ download_url }}">Download the file</a> instead.</noscript>
+  </div>
+  <div id="pages"></div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/pdfjs-3.11.174/pdf.min.js') }}"></script>
+<script>
+(function () {
+  var PDF_URL = {{ pdf_url|tojson }};
+  var DOWNLOAD_URL = {{ download_url|tojson }};
+  var WORKER_URL = {{ url_for('static', filename='vendor/pdfjs-3.11.174/pdf.worker.min.js')|tojson }};
+  var ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3];   // 1 = fit to width
+  var MAX_CANVAS_PIXELS = 8e6;                    // iOS Safari blanks canvases above ~16.7M px
+
+  var viewer = document.getElementById('viewer');
+  var pagesEl = document.getElementById('pages');
+  var statusEl = document.getElementById('status');
+  var pageNumEl = document.getElementById('page-num');
+  var zoomOutBtn = document.getElementById('zoom-out');
+  var zoomInBtn = document.getElementById('zoom-in');
+
+  var pages = [];      // { page, el, viewport, canvas, task }
+  var zoomIdx = 2;
+  var lastWidth = 0;
+  var observer = null;
+
+  function showError() {
+    statusEl.style.display = '';
+    statusEl.innerHTML = '';
+    statusEl.appendChild(document.createTextNode('This document could not be displayed here. '));
+    var dl = document.createElement('a');
+    dl.href = DOWNLOAD_URL; dl.textContent = 'Download it';
+    var raw = document.createElement('a');
+    raw.href = PDF_URL; raw.textContent = "open it in the browser's own viewer";
+    statusEl.appendChild(dl);
+    statusEl.appendChild(document.createTextNode(' or '));
+    statusEl.appendChild(raw);
+    statusEl.appendChild(document.createTextNode('.'));
+  }
+
+  if (!window.pdfjsLib) { showError(); return; }
+  pdfjsLib.GlobalWorkerOptions.workerSrc = WORKER_URL;
+
+  function fitScale() {
+    var gutter = viewer.clientWidth < 640 ? 8 : 24;
+    var fit = Math.max(Math.min(viewer.clientWidth - gutter * 2, 1000), 200);
+    return fit / pages[0].page.getViewport({ scale: 1 }).width;
+  }
+
+  function release(p) {
+    if (p.task) { p.task.cancel(); p.task = null; }
+    if (p.canvas) {
+      p.canvas.width = 0; p.canvas.height = 0;   // frees the bitmap right away on iOS
+      p.el.removeChild(p.canvas);
+      p.canvas = null;
+    }
+  }
+
+  function render(p) {
+    if (p.canvas || p.task) return;
+    var vp = p.viewport;
+    var ratio = Math.min(window.devicePixelRatio || 1, 2);
+    if (vp.width * vp.height * ratio * ratio > MAX_CANVAS_PIXELS) {
+      ratio = Math.sqrt(MAX_CANVAS_PIXELS / (vp.width * vp.height));
+    }
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.floor(vp.width * ratio);
+    canvas.height = Math.floor(vp.height * ratio);
+    var task = p.page.render({
+      canvasContext: canvas.getContext('2d'),
+      viewport: vp,
+      transform: ratio !== 1 ? [ratio, 0, 0, ratio, 0, 0] : null,
+    });
+    p.task = task;
+    task.promise.then(function () {
+      if (p.task !== task) return;
+      p.task = null;
+      p.canvas = canvas;
+      p.el.appendChild(canvas);
+    }, function () {
+      if (p.task === task) p.task = null;   // cancelled (scrolled away / zoomed) or failed
+    });
+  }
+
+  function currentIndex() {
+    var mark = viewer.scrollTop + viewer.clientHeight / 3;
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i].el.offsetTop + pages[i].el.offsetHeight > mark) return i;
+    }
+    return pages.length - 1;
+  }
+
+  function layout() {
+    // Keep the reader on the same spot of the same page across zoom / rotation.
+    var anchor = pages[currentIndex()].el;
+    var frac = (viewer.scrollTop - anchor.offsetTop) / (anchor.offsetHeight || 1);
+
+    var scale = fitScale() * ZOOMS[zoomIdx];
+    pages.forEach(function (p) {
+      release(p);
+      p.viewport = p.page.getViewport({ scale: scale });
+      p.el.style.width = Math.floor(p.viewport.width) + 'px';
+      p.el.style.height = Math.floor(p.viewport.height) + 'px';
+    });
+    viewer.scrollTop = anchor.offsetTop + frac * anchor.offsetHeight;
+    viewer.scrollLeft = (viewer.scrollWidth - viewer.clientWidth) / 2;
+    lastWidth = viewer.clientWidth;
+
+    if (observer) {
+      // Re-observing delivers a fresh entry for every page, so visible ones re-render.
+      pages.forEach(function (p) { observer.unobserve(p.el); observer.observe(p.el); });
+    } else {
+      pages.forEach(render);   // very old browsers: no lazy rendering
+    }
+    zoomOutBtn.disabled = zoomIdx === 0;
+    zoomInBtn.disabled = zoomIdx === ZOOMS.length - 1;
+  }
+
+  function setZoom(idx) {
+    idx = Math.max(0, Math.min(ZOOMS.length - 1, idx));
+    if (idx === zoomIdx) return;
+    zoomIdx = idx;
+    layout();
+  }
+
+  var loadingTask = pdfjsLib.getDocument({
+    url: PDF_URL,
+    isEvalSupported: false,   // mitigates CVE-2024-4367 in this pdf.js version
+    disableRange: true,       // one plain GET, so the browser cache serves repeat opens
+  });
+  loadingTask.onProgress = function (p) {
+    if (p.total) statusEl.textContent = 'Loading document… ' + Math.min(100, Math.round(p.loaded / p.total * 100)) + '%';
+  };
+
+  loadingTask.promise.then(function (pdf) {
+    var loads = [];
+    for (var i = 1; i <= pdf.numPages; i++) loads.push(pdf.getPage(i));
+    return Promise.all(loads);
+  }).then(function (pdfPages) {
+    statusEl.style.display = 'none';
+    pdfPages.forEach(function (page, i) {
+      var el = document.createElement('div');
+      el.className = 'page';
+      el.setAttribute('data-idx', i);
+      el.setAttribute('aria-label', 'Page ' + (i + 1));
+      pagesEl.appendChild(el);
+      pages.push({ page: page, el: el, viewport: null, canvas: null, task: null });
+    });
+    document.getElementById('page-total').textContent = pages.length;
+    pageNumEl.textContent = '1';
+
+    if ('IntersectionObserver' in window) {
+      observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          var p = pages[+e.target.getAttribute('data-idx')];
+          if (e.isIntersecting) render(p); else release(p);
+        });
+      }, { root: viewer, rootMargin: '150% 0px' });
+    }
+    layout();
+
+    zoomOutBtn.addEventListener('click', function () { setZoom(zoomIdx - 1); });
+    zoomInBtn.addEventListener('click', function () { setZoom(zoomIdx + 1); });
+
+    var ticking = false;
+    viewer.addEventListener('scroll', function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () {
+        ticking = false;
+        pageNumEl.textContent = currentIndex() + 1;
+      });
+    });
+
+    var resizeTimer = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(function () {
+        if (viewer.clientWidth !== lastWidth) layout();
+      }, 150);
+    });
+  }).catch(showError);
+})();
+</script>
+</body>
+</html>

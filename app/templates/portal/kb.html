@@ -1,8 +1,9 @@
 {% extends 'base_portal.html' %}
 {% block title %}Help Center{% endblock %}
+{% block head_extra %}{% include '_kb_styles.html' %}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-4 py-8">
+<div class="kb-wrap max-w-3xl mx-auto px-4 py-8">
   <h1 class="text-2xl font-bold text-slate-800 mb-2">Help Center</h1>
   <p class="text-slate-500 mb-6 text-sm">Find answers to common questions before submitting a ticket.</p>
 

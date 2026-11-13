@@ -1,7 +1,7 @@
 import os
 import uuid
 from werkzeug.utils import secure_filename
-from flask import current_app
+from flask import current_app, send_from_directory
 
 ALLOWED_EXTENSIONS = {"pdf", "docx", "xlsx", "xls", "pptx", "ppt", "png", "jpg", "jpeg", "gif", "txt", "csv", "zip"}
 
@@ -79,6 +79,29 @@ def save_kb_attachment(file, article_id):
     size = os.path.getsize(file_path)
     mimetype = file.mimetype or "application/pdf"
     return stored_name, original_name, mimetype, size
+
+
+KB_ATTACHMENT_CACHE_SECONDS = 86400
+
+
+def send_kb_attachment(att, inline=False):
+    """Serve a KB PDF, inline (for the viewer / browser tab) or as a download.
+
+    Stored names are UUIDs and a replaced file gets a new attachment id, so a given URL
+    never changes content: the browser may keep it for a day instead of re-downloading
+    on every open. "private" keeps shared proxies from caching authenticated content.
+    """
+    upload_dir = os.path.join(current_app.config["UPLOAD_FOLDER"], "kb", str(att.kb_article_id))
+    resp = send_from_directory(
+        upload_dir, att.filename,
+        as_attachment=not inline,
+        download_name=att.original_name,
+        mimetype="application/pdf",
+        max_age=KB_ATTACHMENT_CACHE_SECONDS,
+    )
+    resp.cache_control.public = False
+    resp.cache_control.private = True
+    return resp
 
 
 def delete_kb_attachment(article_id, stored_filename):
