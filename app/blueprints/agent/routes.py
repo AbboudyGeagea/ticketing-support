@@ -20,6 +20,7 @@ from app.models.user import User
 from app.models.hospital import Hospital
 from app.extensions import db
 from app.services.email_outbound import notify_customer_reply, notify_secondary_assignee
+from app.utils.perf_log import step, timed_view
 from functools import wraps
 
 
@@ -490,10 +491,12 @@ def ticket_detail(ref):
 
 
 @bp.route("/tickets/<ref>/reply", methods=["POST"])
+@timed_view("agent.reply")
 @login_required
 @agent_required
 def ticket_reply(ref):
-    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    with step("load_ticket"):
+        ticket = Ticket.query.filter_by(ref=ref).first_or_404()
     if ticket.status == "closed":
         flash("Cannot reply to a closed ticket. Please open a new ticket.", "warning")
         return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -527,7 +530,8 @@ def ticket_reply(ref):
 
     if uploaded_files:
         from app.services.file_service import save_ticket_attachments
-        failed = save_ticket_attachments(uploaded_files, ticket.id, msg.id, current_user.id)
+        with step("save_attachments", files=len(uploaded_files)):
+            failed = save_ticket_attachments(uploaded_files, ticket.id, msg.id, current_user.id)
         if failed:
             flash(f"Could not save: {', '.join(failed)} — reply submitted without "
                   f"{'it' if len(failed) == 1 else 'them'}.", "warning")
@@ -548,7 +552,8 @@ def ticket_reply(ref):
         ticket.first_response_at = datetime.utcnow()
 
     try:
-        db.session.commit()
+        with step("db_commit"):
+            db.session.commit()
     except Exception:
         db.session.rollback()
         current_app.logger.exception("DB commit failed in ticket_reply for %s", ref)
@@ -557,17 +562,20 @@ def ticket_reply(ref):
 
     if not form.is_internal.data:
         try:
-            notify_customer_reply(ticket, msg)
+            with step("notify_customer_reply"):
+                notify_customer_reply(ticket, msg)
         except Exception:
             current_app.logger.exception("notify_customer_reply failed for %s", ref)
         try:
             from app.services.email_outbound import notify_collaborators_new_message
-            notify_collaborators_new_message(ticket, msg)
+            with step("notify_collaborators"):
+                notify_collaborators_new_message(ticket, msg)
         except Exception:
             current_app.logger.exception("notify_collaborators_new_message failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
-            notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name, message=msg)
+            with step("notify_all_agents"):
+                notify_all_agents_activity(ticket, "New Agent Reply", actor_name=current_user.name, message=msg)
         except Exception:
             current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
 
@@ -579,10 +587,12 @@ def ticket_reply(ref):
 
 
 @bp.route("/tickets/<ref>/status", methods=["POST"])
+@timed_view("agent.status")
 @login_required
 @agent_required
 def ticket_status(ref):
-    ticket = Ticket.query.filter_by(ref=ref).first_or_404()
+    with step("load_ticket"):
+        ticket = Ticket.query.filter_by(ref=ref).first_or_404()
     if ticket.status == "closed":
         flash("Closed tickets cannot be reopened. Open a new ticket instead.", "warning")
         return redirect(url_for("agent.ticket_detail", ref=ref))
@@ -614,17 +624,21 @@ def ticket_status(ref):
         elif old == "closed":
             ticket.closed_at = None
         _log_history(ticket, current_user.id, "status_change", old, new_status)
-        db.session.commit()
+        with step("db_commit", status=new_status):
+            db.session.commit()
         try:
             from app.services.email_outbound import notify_customer_status_change, notify_customer_resolved_confirmation
-            notify_customer_status_change(ticket)
+            with step("notify_customer_status_change"):
+                notify_customer_status_change(ticket)
             if new_status == "resolved":
-                notify_customer_resolved_confirmation(ticket)
+                with step("notify_customer_resolved_confirmation"):
+                    notify_customer_resolved_confirmation(ticket)
         except Exception:
             current_app.logger.exception("notify_customer_status_change failed for %s", ref)
         try:
             from app.services.email_outbound import notify_all_agents_activity
-            notify_all_agents_activity(ticket, f"Status → {status_label_for(new_status)}", actor_name=current_user.name)
+            with step("notify_all_agents"):
+                notify_all_agents_activity(ticket, f"Status → {status_label_for(new_status)}", actor_name=current_user.name)
         except Exception:
             current_app.logger.exception("notify_all_agents_activity failed for %s", ref)
         flash(f"Status changed to {status_label_for(new_status)}.", "success")

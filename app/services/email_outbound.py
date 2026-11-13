@@ -12,6 +12,7 @@ import logging
 import requests
 import msal
 from flask import current_app, render_template
+from app.utils.perf_log import step
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,12 @@ def _get_token(eff: dict) -> tuple[str | None, str | None]:
         return None, f"Missing credentials: {', '.join(missing)}"
     try:
         authority = f"https://login.microsoftonline.com/{eff['tenant_id']}"
-        msal_app = msal.ConfidentialClientApplication(
-            eff["client_id"], authority=authority, client_credential=eff["client_secret"],
-        )
-        result = msal_app.acquire_token_for_client(scopes=_SCOPES)
+        with step("email.msal_init"):  # does authority discovery over the network
+            msal_app = msal.ConfidentialClientApplication(
+                eff["client_id"], authority=authority, client_credential=eff["client_secret"],
+            )
+        with step("email.msal_token"):
+            result = msal_app.acquire_token_for_client(scopes=_SCOPES)
     except Exception as exc:
         return None, f"MSAL exception: {exc}"
     if "access_token" not in result:
@@ -63,7 +66,8 @@ def _log_email(recipients, subject, status, error=None, mailbox=None):
 
 def _report(status: str, recipients: list[str], subject: str, error: str = None, mailbox: str = None):
     """Single choke point: every send outcome is logged to email_log for /admin/email/test."""
-    _log_email(recipients, subject, status, error=error, mailbox=mailbox)
+    with step("email.log_write", result=status):
+        _log_email(recipients, subject, status, error=error, mailbox=mailbox)
 
 
 def _clean_subject(subject: str) -> str:
@@ -88,7 +92,8 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
 
     try:
         from app.services.email_settings import get_effective_config
-        eff = get_effective_config()
+        with step("email.config"):
+            eff = get_effective_config()
     except Exception as exc:
         _report("failed", valid, subject, error=f"Config lookup failed: {exc}")
         return
@@ -116,12 +121,13 @@ def _send(recipients: list[str], subject: str, html: str = None, text: str = Non
         "saveToSentItems": True,
     }
     try:
-        resp = requests.post(
-            f"{_GRAPH_BASE}/users/{mailbox}/sendMail",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=15,
-        )
+        with step("email.graph_post", recipients=len(valid)):
+            resp = requests.post(
+                f"{_GRAPH_BASE}/users/{mailbox}/sendMail",
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=15,
+            )
     except Exception as exc:
         _report("failed", valid, subject, error=f"HTTP request failed: {exc}", mailbox=mailbox)
         logger.error("email send failed to %s: %s", valid, exc)
